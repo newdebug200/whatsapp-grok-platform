@@ -1,0 +1,99 @@
+# Dépendances
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environnement
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Base de données
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+/data/
+!data/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Sessions WhatsApp
+.wwebjs_auth/
+.wwebjs_cache/
+auth_info_*/
+session-*/
+
+# Dossiers de build
+dist/
+build/
+out/
+.next/
+.vite/
+
+# Fichiers de cache
+.cache/
+.temp/
+*.tsbuildinfo
+.eslintcache
+.cache-loader
+
+# IDE et éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage de tests
+coverage/
+.nyc_output/
+
+# Fichiers temporaires
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Prisma
+prisma/migrations/
+!prisma/migrations/.gitkeep
+
+# Environnements de développement
+*.dev
+.dev/
+
+# Fichiers de configuration sensibles
+*.key
+*.pem
+*.crt
+*.p12
+secrets/
+
+# Dossiers spécifiques au projet
+backend/data/
+backend/.wwebjs_auth/
+backend/.env
+frontend/.env
+frontend/dist/
+frontend/build/
+
+# Garder les dossiers vides
+*/**/.gitkeep
+
+# Fichiers système Windows
+$RECYCLE.BIN/
+*.lnk
