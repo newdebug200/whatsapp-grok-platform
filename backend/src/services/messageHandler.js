@@ -4,6 +4,18 @@ const predefinedRules = require('../config/predefinedRules');
 class MessageHandler {
   async handleIncomingMessage(message, client, prisma) {
     try {
+      // IGNORER LES STATUTS WHATSAPP
+      if (message.from === 'status@broadcast' || message.from.includes('@broadcast')) {
+        console.log('📱 Statut WhatsApp ignoré:', message.body?.substring(0, 30));
+        return;
+      }
+
+      // IGNORER LES MESSAGES DES GROUPES
+      if (message.from.includes('@g.us')) {
+        console.log('👥 Message de groupe ignoré:', message.from);
+        return;
+      }
+
       // Vérifier/Créer l'utilisateur
       let user = await prisma.user.findUnique({
         where: { phone_number: message.from }
@@ -57,6 +69,45 @@ class MessageHandler {
   async processTextMessage(message, user, client, prisma) {
     const normalizedMessage = message.body.toLowerCase().trim();
     
+    // Récupérer la configuration
+    const config = await prisma.appConfig.findUnique({
+      where: { id: 1 }
+    });
+    
+    const iaEnabled = config?.ia_enabled !== false;
+    const whatsappConfirmEnabled = config?.whatsapp_confirm_enabled !== false;
+    
+    // LOGIQUE AMÉLIORÉE POUR CONFIRMATION WHATSAPP
+    
+    // 1. Vérifier si c'est un message de confirmation WhatsApp
+    const isWhatsAppConfirm = normalizedMessage.includes('confirmation whatsapp') || 
+                              normalizedMessage.includes('whatsapp confirmation');
+    
+    if (isWhatsAppConfirm) {
+      // Si la confirmation WhatsApp est activée, on la traite
+      if (whatsappConfirmEnabled) {
+        await this.handleWhatsAppConfirmation(message, user, client, prisma);
+        return;
+      } else {
+        // Si désactivée, on ignore complètement le message (pas de réponse)
+        console.log('🔕 WhatsApp Confirmation désactivée - message ignoré');
+        
+        // Optionnel: Sauvegarder que le message a été ignoré dans les logs
+        await prisma.message.create({
+          data: {
+            user_id: user.id,
+            content: `[MESSAGE IGNORÉ - WhatsApp Confirmation désactivée]`,
+            direction: 'system',
+            type: 'text',
+            created_at: new Date()
+          }
+        });
+        
+        // NE RIEN ENVOYER - on sort sans réponse
+        return;
+      }
+    }
+    
     // Vérifier les règles prédéfinies
     for (const rule of predefinedRules) {
       if (rule.triggers.some(trigger => 
@@ -77,32 +128,121 @@ class MessageHandler {
       }
     }
 
-    // Si aucune règle trouvée, utiliser Groq
-    await this.callGroqAPI(message, user, client, prisma);
+    // Si IA activée, utiliser Groq
+    if (iaEnabled) {
+      await this.callGroqAPI(message, user, client, prisma);
+    } else {
+      // Si IA désactivée, message par défaut
+      console.log('🤖 IA désactivée - envoi message par défaut');
+      const defaultMessage = "Merci pour votre message. Un conseiller vous répondra bientôt.";
+      await client.sendMessage(message.from, defaultMessage);
+      
+      await prisma.message.create({
+        data: {
+          user_id: user.id,
+          content: defaultMessage,
+          direction: 'sent',
+          type: 'text',
+          created_at: new Date()
+        }
+      });
+    }
+  }
+
+  async handleWhatsAppConfirmation(message, user, client, prisma) {
+    try {
+      console.log('📞 Traitement de WhatsApp Confirmation pour:', message.from);
+      
+      let phoneNumber = message.from.split('@')[0];
+      phoneNumber = phoneNumber.replace('+', '');
+      
+      console.log('🔢 Numéro formaté:', phoneNumber);
+      
+      const apiUrl = `https://dressur.site/crud/user/find_whatsapp_is_activatable/${phoneNumber}`;
+      console.log('🌐 Appel API:', apiUrl);
+      
+      const response = await axios.get(apiUrl, {
+        timeout: 10000,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'WhatsApp-Groq-Bot/1.0'
+        }
+      });
+      
+      console.log('✅ Réponse API reçue:', response.data);
+      
+      let messageToSend = "";
+      
+      if (response.data && typeof response.data === 'object') {
+        if (response.data.message) {
+          messageToSend = response.data.message;
+        } else if (response.data.status === 'success' && response.data.data) {
+          messageToSend = response.data.data.message || JSON.stringify(response.data.data);
+        } else if (response.data.response) {
+          messageToSend = response.data.response;
+        } else {
+          messageToSend = JSON.stringify(response.data);
+        }
+      } else {
+        messageToSend = response.data;
+      }
+      
+      await client.sendMessage(message.from, messageToSend);
+      
+      await prisma.message.create({
+        data: {
+          user_id: user.id,
+          content: messageToSend,
+          direction: 'sent',
+          type: 'text',
+          created_at: new Date()
+        }
+      });
+      
+      console.log('📨 Réponse WhatsApp Confirmation envoyée');
+      
+    } catch (error) {
+      console.error('❌ Erreur WhatsApp Confirmation:', error.message);
+      
+      if (error.response) {
+        console.error('Status:', error.response.status);
+        console.error('Data:', error.response.data);
+      } else if (error.request) {
+        console.error('Pas de réponse reçue de l\'API');
+      }
+      
+      const errorMessage = "Désolé, le service de confirmation WhatsApp est temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
+      
+      await client.sendMessage(message.from, errorMessage);
+      
+      await prisma.message.create({
+        data: {
+          user_id: user.id,
+          content: errorMessage,
+          direction: 'sent',
+          type: 'text',
+          created_at: new Date()
+        }
+      });
+    }
   }
 
   async callGroqAPI(message, user, client, prisma) {
     try {
       console.log('📞 Appel à l\'API Groq pour le message:', message.body.substring(0, 50));
       
-      // Récupérer les 50 derniers messages
       const recentMessages = await prisma.message.findMany({
         where: { user_id: user.id },
         orderBy: { created_at: 'desc' },
         take: 50
       });
 
-      // Récupérer toutes les FAQ
       const faqs = await prisma.fAQ.findMany();
-
-      // Récupérer la description Dressur
       const config = await prisma.appConfig.findUnique({
         where: { id: 1 }
       });
 
       const dressurDescription = config?.full_description || '';
-
-      // Construire le prompt
       const prompt = this.buildPrompt(
         message.body,
         recentMessages.reverse(),
@@ -112,9 +252,8 @@ class MessageHandler {
 
       console.log('🚀 Envoi de la requête à Groq...');
 
-      // Appel à l'API Groq (URL corrigée)
       const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-        model: 'llama-3.3-70b-versatile', // Modèle qui fonctionne avec votre test
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { 
             role: 'system', 
@@ -135,11 +274,8 @@ class MessageHandler {
       console.log('✅ Réponse reçue de Groq');
 
       const aiResponse = response.data.choices[0].message.content;
-
-      // Envoyer la réponse
       await client.sendMessage(message.from, aiResponse);
       
-      // Sauvegarder la réponse
       await prisma.message.create({
         data: {
           user_id: user.id,
@@ -160,17 +296,14 @@ class MessageHandler {
         console.error('Data:', error.response.data);
       }
       
-      // Utiliser le fallback en cas d'erreur
       await this.fallbackResponse(message, user, client, prisma);
     }
   }
 
-  // Nouvelle méthode de fallback en cas d'erreur API
   async fallbackResponse(message, user, client, prisma) {
     try {
       console.log('📋 Utilisation du mode fallback...');
       
-      // Récupérer les FAQ pour répondre intelligemment
       const faqs = await prisma.fAQ.findMany();
       const config = await prisma.appConfig.findUnique({
         where: { id: 1 }
@@ -178,7 +311,6 @@ class MessageHandler {
       
       let response = "";
       
-      // Chercher une FAQ correspondante
       const normalizedMessage = message.body.toLowerCase();
       const matchingFaq = faqs.find(faq => 
         normalizedMessage.includes(faq.question.toLowerCase().substring(0, 20))

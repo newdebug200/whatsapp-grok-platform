@@ -8,20 +8,20 @@ router.get('/dressur', async (req, res) => {
   try {
     console.log('Tentative de récupération de la configuration...');
     
-    // Vérifier si la table existe et récupérer la config
     let config = await prisma.appConfig.findUnique({
       where: { id: 1 }
     });
     
     console.log('Config trouvée:', config);
     
-    // Si aucune config n'existe, en créer une par défaut
     if (!config) {
       console.log('Aucune config trouvée, création...');
       config = await prisma.appConfig.create({
         data: { 
           id: 1,
-          full_description: '' 
+          full_description: '',
+          ia_enabled: true,
+          whatsapp_confirm_enabled: true
         }
       });
       console.log('Config créée:', config);
@@ -37,13 +37,12 @@ router.get('/dressur', async (req, res) => {
   }
 });
 
-// PUT mettre à jour description
+// PUT mettre à jour description Dressur
 router.put('/dressur', async (req, res) => {
   try {
     const { description } = req.body;
     console.log('Tentative de mise à jour avec description:', description);
     
-    // Vérifier d'abord si la config existe
     let config = await prisma.appConfig.findUnique({
       where: { id: 1 }
     });
@@ -51,18 +50,18 @@ router.put('/dressur', async (req, res) => {
     console.log('Config existante:', config);
     
     if (config) {
-      // Mise à jour
       config = await prisma.appConfig.update({
         where: { id: 1 },
         data: { full_description: description }
       });
       console.log('Config mise à jour:', config);
     } else {
-      // Création
       config = await prisma.appConfig.create({
         data: { 
           id: 1,
-          full_description: description 
+          full_description: description,
+          ia_enabled: true,
+          whatsapp_confirm_enabled: true
         }
       });
       console.log('Config créée:', config);
@@ -79,6 +78,73 @@ router.put('/dressur', async (req, res) => {
       error: error.message,
       details: error.stack 
     });
+  }
+});
+
+// NOUVELLE ROUTE : GET configuration du bot
+router.get('/bot', async (req, res) => {
+  try {
+    let config = await prisma.appConfig.findUnique({
+      where: { id: 1 }
+    });
+    
+    if (!config) {
+      config = await prisma.appConfig.create({
+        data: { 
+          id: 1,
+          full_description: '',
+          ia_enabled: true,
+          whatsapp_confirm_enabled: true
+        }
+      });
+    }
+    
+    res.json({
+      ia_enabled: config.ia_enabled,
+      whatsapp_confirm_enabled: config.whatsapp_confirm_enabled
+    });
+  } catch (error) {
+    console.error('Erreur GET bot config:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// NOUVELLE ROUTE : PUT configuration du bot
+router.put('/bot', async (req, res) => {
+  try {
+    const { ia_enabled, whatsapp_confirm_enabled } = req.body;
+    
+    let config = await prisma.appConfig.findUnique({
+      where: { id: 1 }
+    });
+    
+    if (config) {
+      config = await prisma.appConfig.update({
+        where: { id: 1 },
+        data: { 
+          ia_enabled: ia_enabled,
+          whatsapp_confirm_enabled: whatsapp_confirm_enabled
+        }
+      });
+    } else {
+      config = await prisma.appConfig.create({
+        data: { 
+          id: 1,
+          full_description: '',
+          ia_enabled: ia_enabled,
+          whatsapp_confirm_enabled: whatsapp_confirm_enabled
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      ia_enabled: config.ia_enabled,
+      whatsapp_confirm_enabled: config.whatsapp_confirm_enabled
+    });
+  } catch (error) {
+    console.error('Erreur PUT bot config:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

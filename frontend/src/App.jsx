@@ -5,6 +5,7 @@ import QRCode from './components/QRCode';
 import ChatInterface from './components/ChatInterface';
 import FAQManager from './components/FAQManager';
 import DressurConfig from './components/DressurConfig';
+import BotConfig from './components/BotConfig';
 import './App.css';
 
 const socket = io(import.meta.env.VITE_SOCKET_URL);
@@ -72,33 +73,40 @@ function App() {
           <h2>WhatsApp Grok</h2>
         </div>
         <nav className="nav-menu">
-          <button 
-            className={activeTab === 'chat' ? 'active' : ''} 
+          <button
+            className={activeTab === 'chat' ? 'active' : ''}
             onClick={() => setActiveTab('chat')}
           >
             Discussions
           </button>
-          <button 
-            className={activeTab === 'faq' ? 'active' : ''} 
+          <button
+            className={activeTab === 'faq' ? 'active' : ''}
             onClick={() => setActiveTab('faq')}
           >
             Gestion FAQ
           </button>
-          <button 
-            className={activeTab === 'config' ? 'active' : ''} 
+          <button
+            className={activeTab === 'config' ? 'active' : ''}
             onClick={() => setActiveTab('config')}
           >
             Configuration Dressur
+          </button>
+          <button
+            className={activeTab === 'bot' ? 'active' : ''}
+            onClick={() => setActiveTab('bot')}
+          >
+            Configuration Bot
           </button>
         </nav>
         <button className="logout-btn" onClick={handleLogout}>
           Déconnexion WhatsApp
         </button>
       </div>
-      
+
       <div className="main-content">
         {activeTab === 'chat' && <ChatInterface socket={socket} />}
         {activeTab === 'faq' && <FAQManager />}
+        {activeTab === 'bot' && <BotConfig />}
         {activeTab === 'config' && <DressurConfig />}
       </div>
     </div>

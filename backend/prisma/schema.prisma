@@ -36,4 +36,6 @@ model FAQ {
 model AppConfig {
   id              Int    @id @default(1)
   full_description String @default("")
+  ia_enabled      Boolean @default(true)        // Nouveau : activer/désactiver l'IA
+  whatsapp_confirm_enabled Boolean @default(true) // Nouveau : activer/désactiver WhatsApp Confirmation
 }
