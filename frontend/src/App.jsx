@@ -14,6 +14,7 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [qrCode, setQrCode] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
+  const [sidebarExpanded, setSidebarExpanded] = useState(true); // true = version complète, false = version icônes
 
   useEffect(() => {
     socket.on('qr', (qr) => {
@@ -31,7 +32,6 @@ function App() {
       setQrCode(null);
     });
 
-    // Vérifier le statut initial
     checkStatus();
 
     return () => {
@@ -62,48 +62,82 @@ function App() {
     }
   };
 
+  const toggleSidebar = () => {
+    setSidebarExpanded(!sidebarExpanded);
+  };
+
   if (!isConnected) {
     return <QRCode qrCode={qrCode} />;
   }
 
   return (
     <div className="app">
-      <div className="sidebar">
-        <div className="logo">
-          <h2>WhatsApp Grok</h2>
+      {/* Sidebar - peut être expanded ou mini */}
+      <div className={`sidebar ${sidebarExpanded ? 'expanded' : 'mini'}`}>
+        <div className="sidebar-header">
+          <div className="header-left">
+            <button className="hamburger-btn" onClick={toggleSidebar}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+            {sidebarExpanded && <h2 className="logo">WhatsApp Groq</h2>}
+            {!sidebarExpanded && <div className="logo-mini">WG</div>}
+          </div>
         </div>
+        
         <nav className="nav-menu">
-          <button
-            className={activeTab === 'chat' ? 'active' : ''}
+          <button 
+            className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`} 
             onClick={() => setActiveTab('chat')}
+            title={!sidebarExpanded ? "Discussions" : ""}
           >
-            Discussions
+            <span className="nav-icon">💬</span>
+            {sidebarExpanded && <span className="nav-text">Discussions</span>}
           </button>
-          <button
-            className={activeTab === 'faq' ? 'active' : ''}
+          
+          <button 
+            className={`nav-item ${activeTab === 'faq' ? 'active' : ''}`} 
             onClick={() => setActiveTab('faq')}
+            title={!sidebarExpanded ? "Gestion FAQ" : ""}
           >
-            Gestion FAQ
+            <span className="nav-icon">❓</span>
+            {sidebarExpanded && <span className="nav-text">Gestion FAQ</span>}
           </button>
-          <button
-            className={activeTab === 'config' ? 'active' : ''}
-            onClick={() => setActiveTab('config')}
-          >
-            Configuration Dressur
-          </button>
-          <button
-            className={activeTab === 'bot' ? 'active' : ''}
+          
+          <button 
+            className={`nav-item ${activeTab === 'bot' ? 'active' : ''}`} 
             onClick={() => setActiveTab('bot')}
+            title={!sidebarExpanded ? "Configuration Bot" : ""}
           >
-            Configuration Bot
+            <span className="nav-icon">🤖</span>
+            {sidebarExpanded && <span className="nav-text">Configuration Bot</span>}
+          </button>
+          
+          <button 
+            className={`nav-item ${activeTab === 'config' ? 'active' : ''}`} 
+            onClick={() => setActiveTab('config')}
+            title={!sidebarExpanded ? "Configuration Dressur" : ""}
+          >
+            <span className="nav-icon">⚙️</span>
+            {sidebarExpanded && <span className="nav-text">Configuration Dressur</span>}
           </button>
         </nav>
-        <button className="logout-btn" onClick={handleLogout}>
-          Déconnexion WhatsApp
-        </button>
+
+        <div className="sidebar-footer">
+          <button className="logout-btn" onClick={handleLogout} title={!sidebarExpanded ? "Déconnexion" : ""}>
+            <span className="nav-icon">🚪</span>
+            {sidebarExpanded && <span className="nav-text">Déconnexion WhatsApp</span>}
+          </button>
+        </div>
       </div>
 
-      <div className="main-content">
+      {/* Overlay pour mobile quand sidebar est ouverte (optionnel) */}
+      {!sidebarExpanded && window.innerWidth <= 768 && (
+        <div className="sidebar-overlay" onClick={toggleSidebar}></div>
+      )}
+      
+      <div className={`main-content ${sidebarExpanded ? '' : 'expanded'}`}>
         {activeTab === 'chat' && <ChatInterface socket={socket} />}
         {activeTab === 'faq' && <FAQManager />}
         {activeTab === 'bot' && <BotConfig />}
