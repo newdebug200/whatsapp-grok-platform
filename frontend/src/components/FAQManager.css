@@ -1,12 +1,41 @@
 .faq-manager {
-  padding: 20px;
   max-width: 800px;
   margin: 0 auto;
+  height: 100%;
+  overflow-y: auto; /* C'est TOUTE la page qui défile */
+  padding: 20px;
+  padding-bottom: 40px; /* Plus d'espace en bas pour bien scroller */
+}
+
+/* Style de la scrollbar pour toute la page */
+.faq-manager::-webkit-scrollbar {
+  width: 8px;
+}
+
+.faq-manager::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.faq-manager::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.faq-manager::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .faq-manager h2 {
   color: #333;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  background: white;
+  padding: 10px 0;
+  z-index: 10;
+  border-bottom: 2px solid #075e54;
+  margin-top: 0;
 }
 
 .faq-form {
@@ -42,8 +71,16 @@
   font-size: 14px;
 }
 
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #075e54;
+  box-shadow: 0 0 0 2px rgba(7, 94, 84, 0.2);
+}
+
 .form-group textarea {
   resize: vertical;
+  min-height: 100px;
 }
 
 .form-actions {
@@ -57,6 +94,7 @@
   border-radius: 5px;
   cursor: pointer;
   font-size: 14px;
+  transition: all 0.2s;
 }
 
 .form-actions button[type="submit"] {
@@ -64,14 +102,26 @@
   color: white;
 }
 
+.form-actions button[type="submit"]:hover {
+  background: #054d44;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(7, 94, 84, 0.3);
+}
+
 .form-actions button[type="button"] {
   background: #6c757d;
   color: white;
 }
 
+.form-actions button[type="button"]:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(108, 117, 125, 0.3);
+}
+
+/* Liste des FAQ - plus de scroll interne */
 .faq-list {
-  display: grid;
-  gap: 15px;
+  margin-top: 20px;
 }
 
 .faq-item {
@@ -79,36 +129,51 @@
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  margin-bottom: 15px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  transition: all 0.2s;
+  border-left: 4px solid #075e54;
+}
+
+.faq-item:hover {
+  transform: translateX(5px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.15);
 }
 
 .faq-content {
   flex: 1;
+  margin-right: 15px;
 }
 
 .faq-content h4 {
-  color: #333;
+  color: #075e54;
   margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .faq-content p {
   color: #666;
   line-height: 1.6;
+  font-size: 14px;
+  white-space: pre-wrap;
 }
 
 .faq-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .faq-actions button {
-  padding: 5px 15px;
+  padding: 6px 12px;
   border: none;
   border-radius: 5px;
   cursor: pointer;
   font-size: 13px;
+  transition: all 0.2s;
 }
 
 .faq-actions button:first-child {
@@ -116,7 +181,55 @@
   color: #333;
 }
 
+.faq-actions button:first-child:hover {
+  background: #e0a800;
+  transform: scale(1.05);
+}
+
 .faq-actions button:last-child {
   background: #dc3545;
   color: white;
+}
+
+.faq-actions button:last-child:hover {
+  background: #c82333;
+  transform: scale(1.05);
+}
+
+/* Message quand il n'y a pas de FAQ */
+.no-faqs {
+  text-align: center;
+  padding: 60px 40px;
+  color: #999;
+  font-style: italic;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px dashed #ddd;
+}
+
+.no-faqs p {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.no-faqs small {
+  color: #aaa;
+  font-size: 13px;
+}
+
+/* Animation d'entrée des éléments */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.faq-form,
+.faq-item {
+  animation: fadeInUp 0.3s ease;
 }
