@@ -45,7 +45,7 @@ class MessageHandler {
       if (message.hasMedia) {
         const response = "Nous ne traitons que les messages textes. Merci d'écrire votre message.";
         await client.sendMessage(message.from, response);
-        
+
         await prisma.message.create({
           data: {
             user_id: user.id,
@@ -68,21 +68,21 @@ class MessageHandler {
 
   async processTextMessage(message, user, client, prisma) {
     const normalizedMessage = message.body.toLowerCase().trim();
-    
+
     // Récupérer la configuration
     const config = await prisma.appConfig.findUnique({
       where: { id: 1 }
     });
-    
+
     const iaEnabled = config?.ia_enabled !== false;
     const whatsappConfirmEnabled = config?.whatsapp_confirm_enabled !== false;
-    
+
     // LOGIQUE AMÉLIORÉE POUR CONFIRMATION WHATSAPP
-    
+
     // 1. Vérifier si c'est un message de confirmation WhatsApp
-    const isWhatsAppConfirm = normalizedMessage.includes('confirmation whatsapp') || 
-                              normalizedMessage.includes('whatsapp confirmation');
-    
+    const isWhatsAppConfirm = normalizedMessage.includes('confirmation whatsapp') ||
+      normalizedMessage.includes('whatsapp confirmation');
+
     if (isWhatsAppConfirm) {
       // Si la confirmation WhatsApp est activée, on la traite
       if (whatsappConfirmEnabled) {
@@ -91,7 +91,7 @@ class MessageHandler {
       } else {
         // Si désactivée, on ignore complètement le message (pas de réponse)
         console.log('🔕 WhatsApp Confirmation désactivée - message ignoré');
-        
+
         // Optionnel: Sauvegarder que le message a été ignoré dans les logs
         await prisma.message.create({
           data: {
@@ -102,19 +102,19 @@ class MessageHandler {
             created_at: new Date()
           }
         });
-        
+
         // NE RIEN ENVOYER - on sort sans réponse
         return;
       }
     }
-    
+
     // Vérifier les règles prédéfinies
     for (const rule of predefinedRules) {
-      if (rule.triggers.some(trigger => 
+      if (rule.triggers.some(trigger =>
         normalizedMessage.includes(trigger.toLowerCase())
       )) {
         await client.sendMessage(message.from, rule.response);
-        
+
         await prisma.message.create({
           data: {
             user_id: user.id,
@@ -136,7 +136,7 @@ class MessageHandler {
       console.log('🤖 IA désactivée - envoi message par défaut');
       const defaultMessage = "Merci pour votre message. Un conseiller vous répondra bientôt.";
       await client.sendMessage(message.from, defaultMessage);
-      
+
       await prisma.message.create({
         data: {
           user_id: user.id,
@@ -152,15 +152,15 @@ class MessageHandler {
   async handleWhatsAppConfirmation(message, user, client, prisma) {
     try {
       console.log('📞 Traitement de WhatsApp Confirmation pour:', message.from);
-      
+
       let phoneNumber = message.from.split('@')[0];
       phoneNumber = phoneNumber.replace('+', '');
-      
+
       console.log('🔢 Numéro formaté:', phoneNumber);
-      
+
       const apiUrl = `https://dressur.site/crud/user/find_whatsapp_is_activatable/${phoneNumber}`;
       console.log('🌐 Appel API:', apiUrl);
-      
+
       const response = await axios.get(apiUrl, {
         timeout: 10000,
         headers: {
@@ -168,11 +168,11 @@ class MessageHandler {
           'User-Agent': 'WhatsApp-Groq-Bot/1.0'
         }
       });
-      
+
       console.log('✅ Réponse API reçue:', response.data);
-      
+
       let messageToSend = "";
-      
+
       if (response.data && typeof response.data === 'object') {
         if (response.data.message) {
           messageToSend = response.data.message;
@@ -186,9 +186,9 @@ class MessageHandler {
       } else {
         messageToSend = response.data;
       }
-      
+
       await client.sendMessage(message.from, messageToSend);
-      
+
       await prisma.message.create({
         data: {
           user_id: user.id,
@@ -198,23 +198,23 @@ class MessageHandler {
           created_at: new Date()
         }
       });
-      
+
       console.log('📨 Réponse WhatsApp Confirmation envoyée');
-      
+
     } catch (error) {
       console.error('❌ Erreur WhatsApp Confirmation:', error.message);
-      
+
       if (error.response) {
         console.error('Status:', error.response.status);
         console.error('Data:', error.response.data);
       } else if (error.request) {
         console.error('Pas de réponse reçue de l\'API');
       }
-      
+
       const errorMessage = "Désolé, le service de confirmation WhatsApp est temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
-      
+
       await client.sendMessage(message.from, errorMessage);
-      
+
       await prisma.message.create({
         data: {
           user_id: user.id,
@@ -230,7 +230,7 @@ class MessageHandler {
   async callGroqAPI(message, user, client, prisma) {
     try {
       console.log('📞 Appel à l\'API Groq pour le message:', message.body.substring(0, 50));
-      
+
       const recentMessages = await prisma.message.findMany({
         where: { user_id: user.id },
         orderBy: { created_at: 'desc' },
@@ -253,15 +253,56 @@ class MessageHandler {
       console.log('🚀 Envoi de la requête à Groq...');
 
       const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-        model: 'openai/gpt-oss-120b',
+        model: 'llama-3.3-70b-versatile',
         messages: [
-          { 
-            role: 'system', 
-            content: 'Vous êtes un assistant pour Dressur. Répondez en texte brut uniquement, sans HTML, JSON ou formatage spécial. Soyez naturel, amical et encouragez les services Dressur.Je veux que tu améliores le prompt le plus que possible, encore beaucoup plus que ça, et que tu... et que bon, il puisse savoir que oui, qu\'il doit répondre de façon précise, sans divaguer, tous ces trucs-là. Améliore le prompt de la bonne façon et je vais voir au fur et à mesure comment est-ce qu\'on va corriger cela.'
+          {
+            role: 'system',
+            content: `Tu es l’assistant commercial officiel de **Dressur** sur WhatsApp. Ton rôle est strictement limité à :
+
+                        🎯 **OBJECTIF UNIQUE** : Aider les utilisateurs à utiliser Dressur et les convertir en clients payants.
+
+                        📌 **CE QUE TU PEUX FAIRE** :
+                        - Répondre aux questions sur les fonctionnalités de Dressur
+                        - Expliquer comment utiliser Dressur (inscription, configuration, services)
+                        - Aider à résoudre les problèmes techniques liés à Dressur
+                        - Guider les utilisateurs vers les services payants (Boost Contact, promotions, etc.)
+                        - Expliquer les tarifs, les avantages, les programmes de récompense (#DS, VCF, points bonus)
+                        - Fournir des liens utiles vers la documentation Dressur, tutoriels YouTube, etc.
+
+                        🚫 **CE QUE TU NE DOIS ABSOLUMENT PAS FAIRE** :
+                        - ❌ Ne réponds JAMAIS aux questions qui ne concernent pas Dressur (programmation, design, autres sujets)
+                        - ❌ Ne donne pas de conseils techniques hors Dressur (PHP, JavaScript, WordPress, etc.)
+                        - ❌ Ne crée pas d'affiches, de designs, de contenu marketing hors Dressur
+                        - ❌ Ne sors pas du cadre de l'assistance Dressur
+
+                        📋 **RÈGLES DE RÉPONSE** :
+                        1. **Premier message** : "Bonjour [Nom] ! Je suis Dressur AI, votre assistant dédié sur WhatsApp. Comment puis-je vous aider aujourd’hui ?"
+                        2. **Messages suivants** : 
+                          - Si c'est une question sur Dressur → réponds de manière précise et structurée
+                          - Si c'est HORS SUJET → "Désolé, je suis spécialisé sur Dressur. Je ne peux pas répondre à cette question. Puis-je vous aider avec nos services (Boost Contact, promotions, configuration, etc.) ?"
+                        3. **Structure** : Reformule d'abord : "Si je comprends bien, vous avez un problème avec [résumé clair]…" puis réponds.
+                        4. **Tutoriels** : Utilise des étapes numérotées (1️⃣, 2️⃣, 3️⃣)
+                        5. **Liens utiles** : Propose des liens vers tarifs, tutoriels YouTube, documentation quand pertinent
+                        6. **Incitation commerciale** : Mentionne naturellement les services payants, les #DS, VCF, points bonus, validation admin
+                        7. **Empathie** : "Je suis désolé pour ce désagrément." en cas de problème
+                        8. **Escalade** : Si incertain ou cas complexe : "Je préfère vérifier avec l’équipe pour vous donner une réponse précise. Je reviens vers vous rapidement."
+                        9. **Hors champ** : "Pour ce type de cas, je vous mets en contact avec un membre de notre équipe humaine. Réponse sous 24h."
+                        10. **Fin** : Toujours terminer par "Avez-vous d’autres questions ? Je suis là pour vous aider !" (sauf escalade)
+
+                        ⚠️ **CONTRAINTES STRICTES** :
+                        - Maximum 200 mots (sauf tutoriel détaillé)
+                        - Texte brut uniquement (pas de HTML, JSON, formatage spécial)
+                        - Emojis uniquement pour empathie (✅ 🚀 💡) - jamais pour info critique
+                        - Jamais de mots de passe, données bancaires ou promesses non garanties
+                        - Respect RGPD
+
+                        💡 **SI LANGUE INCONNUE** : "Bonjour ! Votre message semble en [langue détectée]. Pouvez-vous reformuler en français ou anglais ?"
+
+                        🎯 **OBJECTIF COMMERCIAL** : Chaque réponse doit naturellement valoriser les services Dressur et encourager l'utilisation des fonctionnalités payantes.`
           },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.7,
+        temperature: 0.1,
         max_tokens: 500
       }, {
         headers: {
@@ -275,7 +316,7 @@ class MessageHandler {
 
       const aiResponse = response.data.choices[0].message.content;
       await client.sendMessage(message.from, aiResponse);
-      
+
       await prisma.message.create({
         data: {
           user_id: user.id,
@@ -290,12 +331,12 @@ class MessageHandler {
 
     } catch (error) {
       console.error('❌ Erreur API Groq:', error.message);
-      
+
       if (error.response) {
         console.error('Status:', error.response.status);
         console.error('Data:', error.response.data);
       }
-      
+
       await this.fallbackResponse(message, user, client, prisma);
     }
   }
@@ -303,31 +344,31 @@ class MessageHandler {
   async fallbackResponse(message, user, client, prisma) {
     try {
       console.log('📋 Utilisation du mode fallback...');
-      
+
       const faqs = await prisma.fAQ.findMany();
       const config = await prisma.appConfig.findUnique({
         where: { id: 1 }
       });
-      
+
       let response = "";
-      
+
       const normalizedMessage = message.body.toLowerCase();
-      const matchingFaq = faqs.find(faq => 
+      const matchingFaq = faqs.find(faq =>
         normalizedMessage.includes(faq.question.toLowerCase().substring(0, 20))
       );
-      
+
       if (matchingFaq) {
         response = matchingFaq.answer;
       } else if (config?.full_description) {
         response = "Merci pour votre message. Je suis l'assistant virtuel de Dressur. " +
-                   "Je peux vous renseigner sur nos services. " +
-                   "Que souhaitez-vous savoir exactement ?";
+          "Je peux vous renseigner sur nos services. " +
+          "Que souhaitez-vous savoir exactement ?";
       } else {
         response = "Bonjour ! Je suis l'assistant de Dressur. Comment puis-je vous aider aujourd'hui ?";
       }
-      
+
       await client.sendMessage(message.from, response);
-      
+
       await prisma.message.create({
         data: {
           user_id: user.id,
@@ -337,7 +378,7 @@ class MessageHandler {
           created_at: new Date()
         }
       });
-      
+
     } catch (fallbackError) {
       console.error('❌ Erreur fallback:', fallbackError);
       const emergencyResponse = "Merci pour votre message. Un conseiller vous répondra bientôt.";
@@ -347,7 +388,7 @@ class MessageHandler {
 
   buildPrompt(currentMessage, recentMessages, faqs, dressurDescription) {
     let prompt = `Description de Dressur: ${dressurDescription}\n\n`;
-    
+
     prompt += `FAQ disponibles:\n`;
     faqs.forEach(faq => {
       prompt += `Q: ${faq.question}\nR: ${faq.answer}\n`;
