@@ -2,6 +2,7 @@ import React from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/dashboard/Dashboard';
+import InstallPrompt from './components/pwa/InstallPrompt';
 import './App.css';
 
 function AppContent() {
@@ -16,7 +17,12 @@ function AppContent() {
     );
   }
 
-  return account ? <Dashboard /> : <AuthPage />;
+  return (
+    <>
+      {account ? <Dashboard /> : <AuthPage />}
+      <InstallPrompt />
+    </>
+  );
 }
 
 export default function App() {

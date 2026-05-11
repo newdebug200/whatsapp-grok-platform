@@ -1,0 +1,111 @@
+.pwa-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  background: #fff;
+  border-top: 1px solid #e9edef;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+  animation: slideUp 0.35s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.pwa-banner-icon img {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.pwa-banner-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.pwa-banner-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111b21;
+  margin-bottom: 2px;
+}
+
+.pwa-banner-desc {
+  font-size: 12px;
+  color: #667781;
+  line-height: 1.4;
+}
+
+.pwa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pwa-install-btn {
+  background: #25d366;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.pwa-install-btn:hover {
+  background: #20c45a;
+}
+
+.pwa-dismiss-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #8696a0;
+  font-size: 16px;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  width: 32px;
+  height: 32px;
+}
+
+.pwa-dismiss-btn:hover {
+  background: #f0f2f5;
+  color: #111;
+}
+
+@media (min-width: 600px) {
+  .pwa-banner {
+    bottom: 24px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    border-radius: 14px;
+    border: 1px solid #e9edef;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+    min-width: 360px;
+    max-width: 480px;
+    animation: popIn 0.35s ease;
+  }
+
+  @keyframes popIn {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+  }
+}
