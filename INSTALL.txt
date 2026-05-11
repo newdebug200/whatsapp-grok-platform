@@ -75,7 +75,32 @@ PRÉREQUIS
   7. Configurer les informations et le comportement du bot
   8. Enregistrer et tester en envoyant un message WhatsApp au numéro connecté
 
-ÉTAPE 6 - Multi-utilisateurs
+ÉTAPE 6 - Installer comme application (PWA)
+--------------------------------------------
+  SanRobot est une Progressive Web App installable sur tous les appareils :
+
+  Sur Android / Chrome desktop (PC/Mac/Linux) :
+    → Une bannière "Installer SanRobot" apparaît automatiquement
+    → Cliquer sur "Installer" pour ajouter l'app au bureau/launcher
+
+  Sur iPhone / iPad (Safari uniquement) :
+    → Ouvrir http://localhost:5173 dans Safari
+    → Appuyer sur l'icône Partager (rectangle avec flèche vers le haut)
+    → Sélectionner "Sur l'écran d'accueil"
+    → L'app s'installe comme une app native (plein écran, sans barre Safari)
+
+  Sur Windows (Edge / Chrome) :
+    → Cliquer sur l'icône d'installation dans la barre d'adresse
+    → Ou attendre la bannière automatique
+
+  Fonctionnalités PWA incluses :
+    ✓ Mode hors-ligne (cache des ressources statiques)
+    ✓ Plein écran sans barre de navigateur
+    ✓ Icônes optimisées pour chaque plateforme
+    ✓ Mise à jour automatique en arrière-plan
+    ✓ Raccourcis rapides depuis l'icône (Discussions / Configuration)
+
+ÉTAPE 7 - Multi-utilisateurs
 ------------------------------
   Chaque utilisateur peut :
   - Créer son propre compte SanRobot
@@ -89,23 +114,29 @@ STRUCTURE DU PROJET
   whatsapp-grok-platform/
   ├── backend/
   │   ├── src/
-  │   │   ├── middleware/auth.js       → Authentification JWT
+  │   │   ├── middleware/auth.js         → Authentification JWT
   │   │   ├── routes/
-  │   │   │   ├── authRoutes.js        → Inscription / Connexion
-  │   │   │   ├── messageRoutes.js     → Conversations & messages
-  │   │   │   ├── faqRoutes.js         → Gestion FAQ
-  │   │   │   └── configRoutes.js      → Config du bot
+  │   │   │   ├── authRoutes.js          → Inscription / Connexion
+  │   │   │   ├── messageRoutes.js       → Conversations & messages
+  │   │   │   ├── faqRoutes.js           → Gestion FAQ
+  │   │   │   └── configRoutes.js        → Config du bot
   │   │   ├── services/
-  │   │   │   ├── whatsappManager.js   → Gestion multi-comptes WhatsApp
-  │   │   │   └── messageHandler.js    → Traitement IA des messages
-  │   │   └── server.js                → Point d'entrée + Socket.io temps réel
-  │   └── prisma/schema.prisma         → Schéma base de données
+  │   │   │   ├── whatsappManager.js     → Gestion multi-comptes WhatsApp
+  │   │   │   └── messageHandler.js      → Traitement IA des messages
+  │   │   └── server.js                  → Point d'entrée + Socket.io temps réel
+  │   └── prisma/schema.prisma           → Schéma base de données
   └── frontend/
+      ├── public/
+      │   ├── manifest.json              → Configuration PWA
+      │   ├── sw.js                      → Service Worker (cache offline)
+      │   ├── apple-touch-icon.png       → Icône iOS
+      │   └── icons/                     → Icônes toutes tailles (72→512px)
       └── src/
-          ├── context/AuthContext.jsx  → Auth globale
+          ├── context/AuthContext.jsx    → Auth globale
           ├── components/
-          │   ├── auth/AuthPage.jsx    → Page de connexion/inscription
-          │   └── dashboard/           → Interface WhatsApp Web
+          │   ├── auth/AuthPage.jsx      → Page de connexion/inscription
+          │   ├── dashboard/             → Interface WhatsApp Web
+          │   └── pwa/InstallPrompt.jsx  → Bannière d'installation PWA
           └── App.jsx
 
 RÉSOLUTION DE PROBLÈMES
@@ -115,6 +146,7 @@ RÉSOLUTION DE PROBLÈMES
   - Erreur Groq API : Vérifier GROK_API_KEY dans .env
   - Base de données vide : Relancer "npx prisma migrate dev"
   - Port déjà utilisé : Changer PORT dans .env backend et VITE_API_URL dans .env frontend
+  - PWA non installable : Vérifier que vous utilisez HTTPS en production (requis par les navigateurs)
 
 NOTES IMPORTANTES
 -----------------
@@ -122,5 +154,6 @@ NOTES IMPORTANTES
   - Le JWT_SECRET doit être une chaîne longue et aléatoire en production
   - Les sessions WhatsApp sont sauvegardées dans backend/.wwebjs_auth/
   - Supprimer ce dossier pour forcer une nouvelle connexion WhatsApp
+  - En production, servir le frontend via HTTPS pour activer les fonctionnalités PWA
 
 =========================================================

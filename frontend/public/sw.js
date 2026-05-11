@@ -1,6 +1,5 @@
 const CACHE_NAME = 'sanrobot-v1';
 const STATIC_CACHE = 'sanrobot-static-v1';
-const API_ORIGINS = [];
 
 const STATIC_ASSETS = [
   '/',
