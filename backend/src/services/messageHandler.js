@@ -1,39 +1,46 @@
 const axios = require('axios');
-const predefinedRules = require('../config/predefinedRules');
 
 class MessageHandler {
-  async handleIncomingMessage(message, client, prisma) {
+  async handleIncomingMessage(message, client, prisma, accountId) {
     try {
-      // IGNORER LES STATUTS WHATSAPP
       if (message.from === 'status@broadcast' || message.from.includes('@broadcast')) {
-        console.log('📱 Statut WhatsApp ignoré:', message.body?.substring(0, 30));
         return;
       }
-
-      // IGNORER LES MESSAGES DES GROUPES
       if (message.from.includes('@g.us')) {
-        console.log('👥 Message de groupe ignoré:', message.from);
         return;
       }
 
-      // Vérifier/Créer l'utilisateur
-      let user = await prisma.user.findUnique({
-        where: { phone_number: message.from }
+      const contact = await message.getContact();
+      const phoneNumber = '+' + (contact.number || contact.id.user);
+      const contactName = contact.name || contact.pushname || null;
+
+      let dbContact = await prisma.contact.findUnique({
+        where: {
+          account_id_phone_number: {
+            account_id: accountId,
+            phone_number: phoneNumber
+          }
+        }
       });
 
-      if (!user) {
-        user = await prisma.user.create({
+      if (!dbContact) {
+        dbContact = await prisma.contact.create({
           data: {
-            phone_number: message.from,
-            name: message.author || message.from
+            account_id: accountId,
+            phone_number: phoneNumber,
+            name: contactName
           }
+        });
+      } else if (contactName && dbContact.name !== contactName) {
+        dbContact = await prisma.contact.update({
+          where: { id: dbContact.id },
+          data: { name: contactName }
         });
       }
 
-      // Sauvegarder le message reçu
       await prisma.message.create({
         data: {
-          user_id: user.id,
+          contact_id: dbContact.id,
           content: message.body || '',
           direction: 'received',
           type: message.hasMedia ? 'other' : 'text',
@@ -41,14 +48,12 @@ class MessageHandler {
         }
       });
 
-      // Si ce n'est pas un message texte
       if (message.hasMedia) {
-        const response = "Nous ne traitons que les messages textes. Merci d'écrire votre message.";
+        const response = "Je traite uniquement les messages texte. Merci de m'écrire votre demande en texte.";
         await client.sendMessage(message.from, response);
-
         await prisma.message.create({
           data: {
-            user_id: user.id,
+            contact_id: dbContact.id,
             content: response,
             direction: 'sent',
             type: 'text',
@@ -58,352 +63,155 @@ class MessageHandler {
         return;
       }
 
-      // Traitement du message texte
-      await this.processTextMessage(message, user, client, prisma);
-
+      await this.processTextMessage(message, dbContact, client, prisma, accountId);
     } catch (error) {
       console.error('Erreur traitement message:', error);
     }
   }
 
-  async processTextMessage(message, user, client, prisma) {
-    const normalizedMessage = message.body.toLowerCase().trim();
-
-    // Récupérer la configuration
-    const config = await prisma.appConfig.findUnique({
-      where: { id: 1 }
+  async processTextMessage(message, contact, client, prisma, accountId) {
+    const botConfig = await prisma.botConfig.findUnique({
+      where: { account_id: accountId }
     });
 
-    const iaEnabled = config?.ia_enabled !== false;
-    const whatsappConfirmEnabled = config?.whatsapp_confirm_enabled !== false;
-
-    // LOGIQUE AMÉLIORÉE POUR CONFIRMATION WHATSAPP
-
-    // 1. Vérifier si c'est un message de confirmation WhatsApp
-    const isWhatsAppConfirm = normalizedMessage.includes('confirmation whatsapp') ||
-      normalizedMessage.includes('whatsapp confirmation');
-
-    if (isWhatsAppConfirm) {
-      // Si la confirmation WhatsApp est activée, on la traite
-      if (whatsappConfirmEnabled) {
-        await this.handleWhatsAppConfirmation(message, user, client, prisma);
-        return;
-      } else {
-        // Si désactivée, on ignore complètement le message (pas de réponse)
-        console.log('🔕 WhatsApp Confirmation désactivée - message ignoré');
-
-        // Optionnel: Sauvegarder que le message a été ignoré dans les logs
-        await prisma.message.create({
-          data: {
-            user_id: user.id,
-            content: `[MESSAGE IGNORÉ - WhatsApp Confirmation désactivée]`,
-            direction: 'system',
-            type: 'text',
-            created_at: new Date()
-          }
-        });
-
-        // NE RIEN ENVOYER - on sort sans réponse
-        return;
-      }
-    }
-
-    // Vérifier les règles prédéfinies
-    for (const rule of predefinedRules) {
-      if (rule.triggers.some(trigger =>
-        normalizedMessage.includes(trigger.toLowerCase())
-      )) {
-        await client.sendMessage(message.from, rule.response);
-
-        await prisma.message.create({
-          data: {
-            user_id: user.id,
-            content: rule.response,
-            direction: 'sent',
-            type: 'text',
-            created_at: new Date()
-          }
-        });
-        return;
-      }
-    }
-
-    // Si IA activée, utiliser Groq
-    if (iaEnabled) {
-      await this.callGroqAPI(message, user, client, prisma);
-    } else {
-      // Si IA désactivée, message par défaut
-      console.log('🤖 IA désactivée - envoi message par défaut');
-      const defaultMessage = "Merci pour votre message. Un conseiller vous répondra bientôt.";
-      await client.sendMessage(message.from, defaultMessage);
-
+    if (!botConfig || !botConfig.ia_enabled) {
+      const defaultMsg = "Merci pour votre message. Un conseiller vous répondra bientôt.";
+      await client.sendMessage(message.from, defaultMsg);
       await prisma.message.create({
         data: {
-          user_id: user.id,
-          content: defaultMessage,
+          contact_id: contact.id,
+          content: defaultMsg,
           direction: 'sent',
           type: 'text',
           created_at: new Date()
         }
       });
+      return;
     }
+
+    await this.callGroqAPI(message, contact, client, prisma, accountId, botConfig);
   }
 
-  async handleWhatsAppConfirmation(message, user, client, prisma) {
+  async callGroqAPI(message, contact, client, prisma, accountId, botConfig) {
     try {
-      console.log('📞 Traitement de WhatsApp Confirmation pour:', message.from);
-
-      let phoneNumber = message.from.split('@')[0];
-      phoneNumber = phoneNumber.replace('+', '');
-
-      console.log('🔢 Numéro formaté:', phoneNumber);
-
-      const apiUrl = `https://dressur.site/crud/user/find_whatsapp_is_activatable/${phoneNumber}`;
-      console.log('🌐 Appel API:', apiUrl);
-
-      const response = await axios.get(apiUrl, {
-        timeout: 10000,
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'WhatsApp-Groq-Bot/1.0'
-        }
-      });
-
-      console.log('✅ Réponse API reçue:', response.data);
-
-      let messageToSend = "";
-
-      if (response.data && typeof response.data === 'object') {
-        if (response.data.message) {
-          messageToSend = response.data.message;
-        } else if (response.data.status === 'success' && response.data.data) {
-          messageToSend = response.data.data.message || JSON.stringify(response.data.data);
-        } else if (response.data.response) {
-          messageToSend = response.data.response;
-        } else {
-          messageToSend = JSON.stringify(response.data);
-        }
-      } else {
-        messageToSend = response.data;
-      }
-
-      await client.sendMessage(message.from, messageToSend);
-
-      await prisma.message.create({
-        data: {
-          user_id: user.id,
-          content: messageToSend,
-          direction: 'sent',
-          type: 'text',
-          created_at: new Date()
-        }
-      });
-
-      console.log('📨 Réponse WhatsApp Confirmation envoyée');
-
-    } catch (error) {
-      console.error('❌ Erreur WhatsApp Confirmation:', error.message);
-
-      if (error.response) {
-        console.error('Status:', error.response.status);
-        console.error('Data:', error.response.data);
-      } else if (error.request) {
-        console.error('Pas de réponse reçue de l\'API');
-      }
-
-      const errorMessage = "Désolé, le service de confirmation WhatsApp est temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
-
-      await client.sendMessage(message.from, errorMessage);
-
-      await prisma.message.create({
-        data: {
-          user_id: user.id,
-          content: errorMessage,
-          direction: 'sent',
-          type: 'text',
-          created_at: new Date()
-        }
-      });
-    }
-  }
-
-  async callGroqAPI(message, user, client, prisma) {
-    try {
-      console.log('📞 Appel à l\'API Groq pour le message:', message.body.substring(0, 50));
-
       const recentMessages = await prisma.message.findMany({
-        where: { user_id: user.id },
+        where: { contact_id: contact.id },
         orderBy: { created_at: 'desc' },
         take: 10
       });
 
-      const faqs = await prisma.fAQ.findMany();
-      const config = await prisma.appConfig.findUnique({
-        where: { id: 1 }
+      const faqs = await prisma.fAQ.findMany({
+        where: { account_id: accountId }
       });
 
-      const dressurDescription = config?.full_description || '';
-      const prompt = this.buildPrompt(
-        message.body,
-        recentMessages.reverse(),
-        faqs,
-        dressurDescription
-      );
+      const botName = botConfig.bot_name || 'SanRobot';
+      const botInfo = botConfig.bot_info || '';
+      const botBehavior = botConfig.bot_behavior || '';
 
-      console.log('🚀 Envoi de la requête à Groq...');
+      const systemPrompt = this.buildSystemPrompt(botName, botInfo, botBehavior);
+      const userPrompt = this.buildUserPrompt(message.body, recentMessages.reverse(), faqs);
 
-      const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'system',
-            content: `Tu es l’assistant commercial officiel de **Dressur** sur WhatsApp. Ton rôle est strictement limité à :
-
-                        🎯 **OBJECTIF UNIQUE** : Aider les utilisateurs à utiliser Dressur et les convertir en clients payants.
-
-                        📌 **CE QUE TU PEUX FAIRE** :
-                        - Répondre aux questions sur les fonctionnalités de Dressur
-                        - Expliquer comment utiliser Dressur (inscription, configuration, services)
-                        - Aider à résoudre les problèmes techniques liés à Dressur
-                        - Guider les utilisateurs vers les services payants (Boost Contact, promotions, etc.)
-                        - Expliquer les tarifs, les avantages, les programmes de récompense (#DS, VCF, points bonus)
-                        - Fournir des liens utiles vers la documentation Dressur, tutoriels YouTube, etc.
-
-                        🚫 **CE QUE TU NE DOIS ABSOLUMENT PAS FAIRE** :
-                        - ❌ Ne réponds JAMAIS aux questions qui ne concernent pas Dressur (programmation, design, autres sujets)
-                        - ❌ Ne donne pas de conseils techniques hors Dressur (PHP, JavaScript, WordPress, etc.)
-                        - ❌ Ne crée pas d'affiches, de designs, de contenu marketing hors Dressur
-                        - ❌ Ne sors pas du cadre de l'assistance Dressur
-
-                        📋 **RÈGLES DE RÉPONSE** :
-                        1. **Premier message** : "Bonjour [Nom] ! Je suis Dressur AI, votre assistant dédié sur WhatsApp. Comment puis-je vous aider aujourd’hui ?"
-                        2. **Messages suivants** : 
-                          - Si c'est une question sur Dressur → réponds de manière précise et structurée
-                          - Si c'est HORS SUJET → "Désolé, je suis spécialisé sur Dressur. Je ne peux pas répondre à cette question. Puis-je vous aider avec nos services (Boost Contact, promotions, configuration, etc.) ?"
-                        3. **Structure** : Reformule d'abord : "Si je comprends bien, vous avez un problème avec [résumé clair]…" puis réponds.
-                        4. **Tutoriels** : Utilise des étapes numérotées (1️⃣, 2️⃣, 3️⃣)
-                        5. **Liens utiles** : Propose des liens vers tarifs, tutoriels YouTube, documentation quand pertinent
-                        6. **Incitation commerciale** : Mentionne naturellement les services payants, les #DS, VCF, points bonus, validation admin
-                        7. **Empathie** : "Je suis désolé pour ce désagrément." en cas de problème
-                        8. **Escalade** : Si incertain ou cas complexe : "Je préfère vérifier avec l’équipe pour vous donner une réponse précise. Je reviens vers vous rapidement."
-                        9. **Hors champ** : "Pour ce type de cas, je vous mets en contact avec un membre de notre équipe humaine. Réponse sous 24h."
-                        10. **Fin** : Toujours terminer par "Avez-vous d’autres questions ? Je suis là pour vous aider !" (sauf escalade)
-
-                        ⚠️ **CONTRAINTES STRICTES** :
-                        - Maximum 200 mots (sauf tutoriel détaillé)
-                        - Texte brut uniquement (pas de HTML, JSON, formatage spécial)
-                        - Emojis uniquement pour empathie (✅ 🚀 💡) - jamais pour info critique
-                        - Jamais de mots de passe, données bancaires ou promesses non garanties
-                        - Respect RGPD
-
-                        💡 **SI LANGUE INCONNUE** : "Bonjour ! Votre message semble en [langue détectée]. Pouvez-vous reformuler en français ou anglais ?"
-
-                        🎯 **OBJECTIF COMMERCIAL** : Chaque réponse doit naturellement valoriser les services Dressur et encourager l'utilisation des fonctionnalités payantes.`
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 500
-      }, {
-        headers: {
-          'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
-          'Content-Type': 'application/json'
+      const response = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2,
+          max_tokens: 400
         },
-        timeout: 30000
-      });
-
-      console.log('✅ Réponse reçue de Groq');
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.GROK_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
 
       const aiResponse = response.data.choices[0].message.content;
       await client.sendMessage(message.from, aiResponse);
-
       await prisma.message.create({
         data: {
-          user_id: user.id,
+          contact_id: contact.id,
           content: aiResponse,
           direction: 'sent',
           type: 'text',
           created_at: new Date()
         }
       });
-
-      console.log('📨 Réponse envoyée avec succès');
-
     } catch (error) {
-      console.error('❌ Erreur API Groq:', error.message);
-
-      if (error.response) {
-        console.error('Status:', error.response.status);
-        console.error('Data:', error.response.data);
-      }
-
-      await this.fallbackResponse(message, user, client, prisma);
+      console.error('Erreur API Groq:', error.message);
+      await this.fallbackResponse(message, contact, client, prisma);
     }
   }
 
-  async fallbackResponse(message, user, client, prisma) {
-    try {
-      console.log('📋 Utilisation du mode fallback...');
+  buildSystemPrompt(botName, botInfo, botBehavior) {
+    let prompt = `Tu es ${botName}, un assistant intelligent sur WhatsApp.\n\n`;
 
-      const faqs = await prisma.fAQ.findMany();
-      const config = await prisma.appConfig.findUnique({
-        where: { id: 1 }
+    if (botInfo && botInfo.trim()) {
+      prompt += `📋 INFORMATIONS SUR TON DOMAINE :\n${botInfo}\n\n`;
+    }
+
+    if (botBehavior && botBehavior.trim()) {
+      prompt += `🎯 RÈGLES DE COMPORTEMENT :\n${botBehavior}\n\n`;
+    }
+
+    prompt += `⚙️ RÈGLES STRICTES À TOUJOURS RESPECTER :
+1. Tu réponds UNIQUEMENT selon les informations fournies ci-dessus.
+2. Si une question dépasse tes informations : réponds "Je n'ai pas l'information pour répondre à cela, mais je peux vous orienter vers un conseiller."
+3. Tu n'inventes JAMAIS d'informations que tu n'as pas.
+4. Tu restes strictement dans le cadre de ton domaine.
+5. Réponses en texte brut uniquement (pas de HTML, pas de JSON, pas de markdown complexe).
+6. Maximum 200 mots par réponse.
+7. Sois précis, utile et courtois.
+8. Si tu ne sais pas : dis-le clairement plutôt que d'inventer.`;
+
+    return prompt;
+  }
+
+  buildUserPrompt(currentMessage, recentMessages, faqs) {
+    let prompt = '';
+
+    if (faqs.length > 0) {
+      prompt += `FAQ disponibles :\n`;
+      faqs.forEach(faq => {
+        prompt += `Q: ${faq.question}\nR: ${faq.answer}\n`;
       });
+      prompt += '\n';
+    }
 
-      let response = "";
+    if (recentMessages.length > 0) {
+      prompt += `Historique récent :\n`;
+      recentMessages.forEach(msg => {
+        const role = msg.direction === 'received' ? 'Utilisateur' : 'Assistant';
+        prompt += `${role}: ${msg.content}\n`;
+      });
+      prompt += '\n';
+    }
 
-      const normalizedMessage = message.body.toLowerCase();
-      const matchingFaq = faqs.find(faq =>
-        normalizedMessage.includes(faq.question.toLowerCase().substring(0, 20))
-      );
+    prompt += `Message actuel de l'utilisateur : ${currentMessage}`;
+    return prompt;
+  }
 
-      if (matchingFaq) {
-        response = matchingFaq.answer;
-      } else if (config?.full_description) {
-        response = "Merci pour votre message. Je suis l'assistant virtuel de Dressur. " +
-          "Je peux vous renseigner sur nos services. " +
-          "Que souhaitez-vous savoir exactement ?";
-      } else {
-        response = "Bonjour ! Je suis l'assistant de Dressur. Comment puis-je vous aider aujourd'hui ?";
-      }
-
+  async fallbackResponse(message, contact, client, prisma) {
+    const response = "Merci pour votre message. Un conseiller vous répondra bientôt.";
+    try {
       await client.sendMessage(message.from, response);
-
       await prisma.message.create({
         data: {
-          user_id: user.id,
+          contact_id: contact.id,
           content: response,
           direction: 'sent',
           type: 'text',
           created_at: new Date()
         }
       });
-
-    } catch (fallbackError) {
-      console.error('❌ Erreur fallback:', fallbackError);
-      const emergencyResponse = "Merci pour votre message. Un conseiller vous répondra bientôt.";
-      await client.sendMessage(message.from, emergencyResponse);
+    } catch (err) {
+      console.error('Erreur fallback:', err);
     }
-  }
-
-  buildPrompt(currentMessage, recentMessages, faqs, dressurDescription) {
-    let prompt = `Description de Dressur: ${dressurDescription}\n\n`;
-
-    prompt += `FAQ disponibles:\n`;
-    faqs.forEach(faq => {
-      prompt += `Q: ${faq.question}\nR: ${faq.answer}\n`;
-    });
-
-    prompt += `\nHistorique de la conversation:\n`;
-    recentMessages.forEach(msg => {
-      const role = msg.direction === 'received' ? 'Client' : 'Assistant';
-      prompt += `${role}: ${msg.content}\n`;
-    });
-
-    prompt += `\nMessage actuel du client: ${currentMessage}\n\n`;
-    prompt += `Instructions: Répondez de manière naturelle en aidant le client, en résolvant son problème, et en promouvant les services Dressur si pertinent. Réponse en texte brut uniquement.`;
-
-    return prompt;
   }
 }
 

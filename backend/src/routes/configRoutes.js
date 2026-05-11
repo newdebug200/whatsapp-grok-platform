@@ -1,147 +1,59 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const { authMiddleware } = require('../middleware/auth');
+
 const prisma = new PrismaClient();
 
-// GET description Dressur
-router.get('/dressur', async (req, res) => {
-  try {
-    console.log('Tentative de récupération de la configuration...');
-    
-    let config = await prisma.appConfig.findUnique({
-      where: { id: 1 }
-    });
-    
-    console.log('Config trouvée:', config);
-    
-    if (!config) {
-      console.log('Aucune config trouvée, création...');
-      config = await prisma.appConfig.create({
-        data: { 
-          id: 1,
-          full_description: '',
-          ia_enabled: true,
-          whatsapp_confirm_enabled: true
-        }
-      });
-      console.log('Config créée:', config);
-    }
-    
-    res.json({ description: config.full_description || '' });
-  } catch (error) {
-    console.error('Erreur détaillée GET config:', error);
-    res.status(500).json({ 
-      error: error.message,
-      details: error.stack 
-    });
-  }
-});
+router.use(authMiddleware);
 
-// PUT mettre à jour description Dressur
-router.put('/dressur', async (req, res) => {
-  try {
-    const { description } = req.body;
-    console.log('Tentative de mise à jour avec description:', description);
-    
-    let config = await prisma.appConfig.findUnique({
-      where: { id: 1 }
-    });
-    
-    console.log('Config existante:', config);
-    
-    if (config) {
-      config = await prisma.appConfig.update({
-        where: { id: 1 },
-        data: { full_description: description }
-      });
-      console.log('Config mise à jour:', config);
-    } else {
-      config = await prisma.appConfig.create({
-        data: { 
-          id: 1,
-          full_description: description,
-          ia_enabled: true,
-          whatsapp_confirm_enabled: true
-        }
-      });
-      console.log('Config créée:', config);
-    }
-    
-    res.json({ 
-      success: true, 
-      description: config.full_description,
-      message: 'Description sauvegardée avec succès' 
-    });
-  } catch (error) {
-    console.error('Erreur détaillée PUT config:', error);
-    res.status(500).json({ 
-      error: error.message,
-      details: error.stack 
-    });
-  }
-});
-
-// NOUVELLE ROUTE : GET configuration du bot
 router.get('/bot', async (req, res) => {
   try {
-    let config = await prisma.appConfig.findUnique({
-      where: { id: 1 }
+    let config = await prisma.botConfig.findUnique({
+      where: { account_id: req.accountId }
     });
-    
+
     if (!config) {
-      config = await prisma.appConfig.create({
-        data: { 
-          id: 1,
-          full_description: '',
-          ia_enabled: true,
-          whatsapp_confirm_enabled: true
+      config = await prisma.botConfig.create({
+        data: {
+          account_id: req.accountId,
+          bot_name: 'SanRobot',
+          bot_info: '',
+          bot_behavior: '',
+          ia_enabled: true
         }
       });
     }
-    
-    res.json({
-      ia_enabled: config.ia_enabled,
-      whatsapp_confirm_enabled: config.whatsapp_confirm_enabled
-    });
+
+    res.json(config);
   } catch (error) {
     console.error('Erreur GET bot config:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// NOUVELLE ROUTE : PUT configuration du bot
 router.put('/bot', async (req, res) => {
   try {
-    const { ia_enabled, whatsapp_confirm_enabled } = req.body;
-    
-    let config = await prisma.appConfig.findUnique({
-      where: { id: 1 }
+    const { bot_name, bot_info, bot_behavior, ia_enabled } = req.body;
+
+    const config = await prisma.botConfig.upsert({
+      where: { account_id: req.accountId },
+      create: {
+        account_id: req.accountId,
+        bot_name: bot_name || 'SanRobot',
+        bot_info: bot_info || '',
+        bot_behavior: bot_behavior || '',
+        ia_enabled: ia_enabled !== undefined ? ia_enabled : true
+      },
+      update: {
+        bot_name: bot_name !== undefined ? bot_name : undefined,
+        bot_info: bot_info !== undefined ? bot_info : undefined,
+        bot_behavior: bot_behavior !== undefined ? bot_behavior : undefined,
+        ia_enabled: ia_enabled !== undefined ? ia_enabled : undefined
+      }
     });
-    
-    if (config) {
-      config = await prisma.appConfig.update({
-        where: { id: 1 },
-        data: { 
-          ia_enabled: ia_enabled,
-          whatsapp_confirm_enabled: whatsapp_confirm_enabled
-        }
-      });
-    } else {
-      config = await prisma.appConfig.create({
-        data: { 
-          id: 1,
-          full_description: '',
-          ia_enabled: ia_enabled,
-          whatsapp_confirm_enabled: whatsapp_confirm_enabled
-        }
-      });
-    }
-    
-    res.json({
-      success: true,
-      ia_enabled: config.ia_enabled,
-      whatsapp_confirm_enabled: config.whatsapp_confirm_enabled
-    });
+
+    res.json({ success: true, config });
   } catch (error) {
     console.error('Erreur PUT bot config:', error);
     res.status(500).json({ error: error.message });

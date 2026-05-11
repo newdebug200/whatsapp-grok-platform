@@ -1,0 +1,127 @@
+=========================================================
+   SANROBOT - GUIDE D'INSTALLATION COMPLET (A à Z)
+=========================================================
+
+PRÉREQUIS
+---------
+- Node.js 18.x ou supérieure : https://nodejs.org
+- Git (pour cloner le projet)
+- Un compte Groq (gratuit) pour l'API IA : https://console.groq.com
+- Google Chrome ou Chromium (requis par whatsapp-web.js / Puppeteer)
+
+ÉTAPE 1 - Cloner le projet
+---------------------------
+  git clone https://github.com/debugStaut200/whatsapp-grok-platform.git
+  cd whatsapp-grok-platform
+  git checkout work
+
+ÉTAPE 2 - Configurer le backend
+---------------------------------
+  cd backend
+
+  2a. Copier le fichier d'environnement :
+      cp .env.example .env
+
+  2b. Ouvrir .env et renseigner vos valeurs :
+      PORT=3001
+      DATABASE_URL="file:./dev.db"
+      GROK_API_KEY=votre_clé_groq_ici
+      JWT_SECRET=une_clé_secrète_aléatoire_longue
+
+      → Obtenir votre clé Groq : https://console.groq.com/keys
+
+  2c. Installer les dépendances backend :
+      npm install
+
+  2d. Générer le client Prisma et créer la base de données :
+      npx prisma generate
+      npx prisma migrate dev --name init
+
+ÉTAPE 3 - Configurer le frontend
+----------------------------------
+  cd ../frontend
+
+  3a. Copier le fichier d'environnement :
+      cp .env.example .env
+
+  3b. Vérifier que .env contient :
+      VITE_API_URL=http://localhost:3001/api
+      VITE_SOCKET_URL=http://localhost:3001
+
+  3c. Installer les dépendances frontend :
+      npm install
+
+ÉTAPE 4 - Lancer l'application
+--------------------------------
+  Ouvrir 2 terminaux séparés :
+
+  Terminal 1 (Backend) :
+    cd backend
+    npm run dev
+
+  Terminal 2 (Frontend) :
+    cd frontend
+    npm run dev
+
+ÉTAPE 5 - Utiliser SanRobot
+-----------------------------
+  1. Ouvrir http://localhost:5173 dans votre navigateur
+  2. Créer un compte (bouton "Créer un compte")
+  3. Se connecter avec vos identifiants
+  4. Dans le tableau de bord, cliquer sur "Bot Config"
+  5. Cliquer sur "Connecter WhatsApp"
+  6. Scanner le QR code avec l'application WhatsApp sur votre téléphone
+     → WhatsApp → Appareils reliés → Relier un appareil
+  7. Configurer les informations et le comportement du bot
+  8. Enregistrer et tester en envoyant un message WhatsApp au numéro connecté
+
+ÉTAPE 6 - Multi-utilisateurs
+------------------------------
+  Chaque utilisateur peut :
+  - Créer son propre compte SanRobot
+  - Connecter son propre numéro WhatsApp
+  - Configurer son propre bot (informations + comportement)
+  - Gérer sa propre FAQ
+  - Voir uniquement ses propres conversations
+
+STRUCTURE DU PROJET
+-------------------
+  whatsapp-grok-platform/
+  ├── backend/
+  │   ├── src/
+  │   │   ├── middleware/auth.js       → Authentification JWT
+  │   │   ├── routes/
+  │   │   │   ├── authRoutes.js        → Inscription / Connexion
+  │   │   │   ├── messageRoutes.js     → Conversations & messages
+  │   │   │   ├── faqRoutes.js         → Gestion FAQ
+  │   │   │   └── configRoutes.js      → Config du bot
+  │   │   ├── services/
+  │   │   │   ├── whatsappManager.js   → Gestion multi-comptes WhatsApp
+  │   │   │   └── messageHandler.js    → Traitement IA des messages
+  │   │   ├── socket/socketHandler.js  → Temps réel
+  │   │   └── server.js
+  │   └── prisma/schema.prisma         → Schéma base de données
+  └── frontend/
+      └── src/
+          ├── context/AuthContext.jsx  → Auth globale
+          ├── components/
+          │   ├── auth/AuthPage.jsx    → Page de connexion/inscription
+          │   └── dashboard/           → Interface WhatsApp Web
+          └── App.jsx
+
+RÉSOLUTION DE PROBLÈMES
+-----------------------
+  - "Chrome not found" : Installer Chrome ou définir PUPPETEER_EXECUTABLE_PATH dans .env
+  - QR code qui expire : Cliquer à nouveau sur "Connecter WhatsApp"
+  - Erreur Groq API : Vérifier GROK_API_KEY dans .env
+  - Base de données vide : Relancer "npx prisma migrate dev"
+  - Port déjà utilisé : Changer PORT dans .env backend et VITE_API_URL dans .env frontend
+
+NOTES IMPORTANTES
+-----------------
+  - Ne partagez jamais votre fichier .env publiquement
+  - Le JWT_SECRET doit être une chaîne longue et aléatoire en production
+  - Les sessions WhatsApp sont sauvegardées dans backend/.wwebjs_auth/
+  - Supprimer ce dossier pour forcer une nouvelle connexion WhatsApp
+
+=========================================================

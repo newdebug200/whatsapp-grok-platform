@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const { authMiddleware } = require('../middleware/auth');
+
 const prisma = new PrismaClient();
 
-// GET toutes les FAQ
+router.use(authMiddleware);
+
 router.get('/', async (req, res) => {
   try {
     const faqs = await prisma.fAQ.findMany({
+      where: { account_id: req.accountId },
       orderBy: { created_at: 'desc' }
     });
     res.json(faqs);
@@ -15,24 +19,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET une FAQ
-router.get('/:id', async (req, res) => {
-  try {
-    const faq = await prisma.fAQ.findUnique({
-      where: { id: parseInt(req.params.id) }
-    });
-    res.json(faq);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST nouvelle FAQ
 router.post('/', async (req, res) => {
   try {
     const { question, answer } = req.body;
+    if (!question || !answer) {
+      return res.status(400).json({ error: 'Question et réponse requises' });
+    }
     const faq = await prisma.fAQ.create({
-      data: { question, answer }
+      data: { question, answer, account_id: req.accountId }
     });
     res.json(faq);
   } catch (error) {
@@ -40,26 +34,31 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT modifier FAQ
 router.put('/:id', async (req, res) => {
   try {
-    const { question, answer } = req.body;
-    const faq = await prisma.fAQ.update({
-      where: { id: parseInt(req.params.id) },
-      data: { question, answer }
+    const faq = await prisma.fAQ.findFirst({
+      where: { id: parseInt(req.params.id), account_id: req.accountId }
     });
-    res.json(faq);
+    if (!faq) return res.status(404).json({ error: 'FAQ introuvable' });
+
+    const updated = await prisma.fAQ.update({
+      where: { id: faq.id },
+      data: { question: req.body.question, answer: req.body.answer }
+    });
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// DELETE FAQ
 router.delete('/:id', async (req, res) => {
   try {
-    await prisma.fAQ.delete({
-      where: { id: parseInt(req.params.id) }
+    const faq = await prisma.fAQ.findFirst({
+      where: { id: parseInt(req.params.id), account_id: req.accountId }
     });
+    if (!faq) return res.status(404).json({ error: 'FAQ introuvable' });
+
+    await prisma.fAQ.delete({ where: { id: faq.id } });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
