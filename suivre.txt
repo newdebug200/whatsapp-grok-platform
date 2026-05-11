@@ -1,0 +1,6 @@
+Ce fichier est conservé pour référence historique.
+Pour lancer l'application SanRobot, consulter :
+
+  → DEMARRAGE.txt  (guide de démarrage rapide)
+  → INSTALL.txt    (guide d'installation complet A à Z)
+  → README.md      (documentation technique du projet)

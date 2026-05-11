@@ -1,0 +1,120 @@
+=========================================================
+   SANROBOT — COMMENT LANCER L'APPLICATION
+=========================================================
+
+PRÉREQUIS OBLIGATOIRES
+-----------------------
+  1. Node.js 18+ installé → https://nodejs.org
+  2. Google Chrome ou Chromium installé (requis par WhatsApp Web.js)
+  3. Une clé API Groq gratuite → https://console.groq.com/keys
+
+=========================================================
+   PREMIÈRE UTILISATION (installation complète)
+=========================================================
+
+ÉTAPE A — Backend
+------------------
+  Ouvrir un terminal dans le dossier du projet :
+
+    cd backend
+    cp .env.example .env
+
+  Editer le fichier .env et renseigner :
+    GROK_API_KEY=votre_clé_groq_ici
+    JWT_SECRET=une_chaîne_secrète_longue_et_aléatoire
+
+  Puis :
+    npm install
+    npx prisma generate
+    npx prisma migrate dev --name init
+
+ÉTAPE B — Frontend
+-------------------
+  Ouvrir un 2ème terminal :
+
+    cd frontend
+    cp .env.example .env
+    npm install
+
+=========================================================
+   LANCER L'APPLICATION (après l'installation)
+=========================================================
+
+  TERMINAL 1 — Backend (API + WebSocket) :
+  -----------------------------------------
+    cd backend
+    npm run dev
+
+    → Serveur démarré sur http://localhost:3001
+    → Message attendu : "SanRobot Backend démarré sur port 3001"
+
+  TERMINAL 2 — Frontend (interface web) :
+  ----------------------------------------
+    cd frontend
+    npm run dev
+
+    → Application disponible sur http://localhost:5173
+    → Ouvrir cette URL dans Google Chrome
+
+=========================================================
+   UTILISER SANROBOT
+=========================================================
+
+  1. Ouvrir http://localhost:5173 dans le navigateur
+  2. Cliquer "Créer un compte" → renseigner nom, email, mot de passe
+  3. Se connecter
+  4. Dans le menu → "Bot Config" → cliquer "Connecter WhatsApp"
+  5. Scanner le QR code avec votre téléphone :
+       WhatsApp → ⋮ (3 points) → Appareils reliés → Relier un appareil
+  6. Renseigner les infos du bot (description, comportement, FAQ)
+  7. Enregistrer → le bot répond automatiquement aux messages
+
+=========================================================
+   RÉSOLUTION DE PROBLÈMES COURANTS
+=========================================================
+
+  Erreur "Chrome not found" :
+    → Installer Google Chrome : https://www.google.com/chrome
+    → Ou ajouter dans backend/.env :
+      PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+  QR code expiré :
+    → Cliquer à nouveau sur "Connecter WhatsApp"
+
+  Erreur "GROK_API_KEY" / réponses IA vides :
+    → Vérifier la clé dans backend/.env
+    → Obtenir une clé : https://console.groq.com/keys
+
+  Port déjà utilisé :
+    → Changer PORT=3001 dans backend/.env
+    → Mettre à jour VITE_API_URL et VITE_SOCKET_URL dans frontend/.env
+
+  Base de données corrompue / réinitialiser :
+    → Supprimer backend/dev.db
+    → Relancer : npx prisma migrate dev --name init
+
+  Sessions WhatsApp perdues après redémarrage :
+    → Normal si le dossier backend/.wwebjs_auth/ est absent
+    → Rescanner le QR code depuis l'interface
+
+=========================================================
+   SCRIPTS DISPONIBLES
+=========================================================
+
+  Backend (dans /backend) :
+    npm run dev     → Lancement avec rechargement automatique (nodemon)
+    npm start       → Lancement en mode production (node)
+
+  Frontend (dans /frontend) :
+    npm run dev     → Serveur de développement Vite (hot reload)
+    npm run build   → Compilation pour production (dossier dist/)
+    npm run preview → Prévisualisation du build de production
+
+=========================================================
+   PORTS PAR DÉFAUT
+=========================================================
+
+  Backend  : http://localhost:3001
+  Frontend : http://localhost:5173
+
+=========================================================
