@@ -1,8 +1,10 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('./middleware/auth');
@@ -12,8 +14,6 @@ const authRoutes = require('./routes/authRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const faqRoutes = require('./routes/faqRoutes');
 const configRoutes = require('./routes/configRoutes');
-
-dotenv.config();
 
 const app = express();
 const server = http.createServer(app);

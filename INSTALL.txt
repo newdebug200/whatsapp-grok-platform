@@ -98,8 +98,7 @@ STRUCTURE DU PROJET
   │   │   ├── services/
   │   │   │   ├── whatsappManager.js   → Gestion multi-comptes WhatsApp
   │   │   │   └── messageHandler.js    → Traitement IA des messages
-  │   │   ├── socket/socketHandler.js  → Temps réel
-  │   │   └── server.js
+  │   │   └── server.js                → Point d'entrée + Socket.io temps réel
   │   └── prisma/schema.prisma         → Schéma base de données
   └── frontend/
       └── src/

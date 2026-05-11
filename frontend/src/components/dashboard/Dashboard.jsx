@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import ConversationList from './ConversationList';
 import ChatWindow from './ChatWindow';
 import BotConfig from './BotConfig';
 import FAQManager from './FAQManager';
-import WhatsAppConnect from './WhatsAppConnect';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';

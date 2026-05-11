@@ -1,0 +1,7 @@
+node_modules/
+.env
+dev.db
+dev.db-journal
+.wwebjs_auth/
+.wwebjs_cache/
+prisma/migrations/*.db
