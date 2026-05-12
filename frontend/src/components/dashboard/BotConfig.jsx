@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const CONNECT_COOLDOWN_MS = 9000; // un peu plus long que le cooldown backend
 
 export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp }) {
   const [config, setConfig] = useState({
@@ -15,14 +16,64 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [waError, setWaError] = useState('');
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  const cooldownTimer = useRef(null);
+  const cooldownInterval = useRef(null);
 
   useEffect(() => { loadConfig(); }, []);
 
   useEffect(() => {
-    if (waStatus.qrCode) setConnecting(false);
-    if (waStatus.isConnected) setConnecting(false);
-    if (waStatus.status === 'error' || waStatus.status === 'auth_failure') setConnecting(false);
+    const { status, qrCode, isConnected } = waStatus;
+
+    if (qrCode || isConnected) {
+      setConnecting(false);
+      setWaError('');
+      clearCooldown();
+    }
+
+    if (status === 'error' || status === 'auth_failure') {
+      setConnecting(false);
+      const msg = waStatus.message || (
+        status === 'auth_failure'
+          ? 'Authentification WhatsApp refusée. Relancez et scannez le QR code.'
+          : 'Chrome ne démarre pas correctement. Assurez-vous que Google Chrome est installé.'
+      );
+      setWaError(msg);
+      startCooldown();
+    }
+
+    if (status === 'cooldown') {
+      setConnecting(false);
+      setWaError(waStatus.message || 'Veuillez patienter avant de réessayer.');
+    }
+
+    if (status === 'disconnected') {
+      setConnecting(false);
+      setWaError('');
+      clearCooldown();
+    }
   }, [waStatus]);
+
+  const startCooldown = () => {
+    clearCooldown();
+    setCooldownLeft(Math.ceil(CONNECT_COOLDOWN_MS / 1000));
+    cooldownInterval.current = setInterval(() => {
+      setCooldownLeft(prev => {
+        if (prev <= 1) { clearCooldown(); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const clearCooldown = () => {
+    clearInterval(cooldownInterval.current);
+    clearTimeout(cooldownTimer.current);
+    setCooldownLeft(0);
+  };
+
+  useEffect(() => () => clearCooldown(), []);
 
   const loadConfig = async () => {
     try {
@@ -48,17 +99,24 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   };
 
   const handleConnect = () => {
+    if (connecting || cooldownLeft > 0) return;
+    setWaError('');
     setConnecting(true);
     onConnectWhatsApp();
   };
 
   const handleDisconnect = async () => {
     setDisconnecting(true);
-    try {
-      await onLogoutWhatsApp();
-    } finally {
-      setDisconnecting(false);
-    }
+    try { await onLogoutWhatsApp(); }
+    finally { setDisconnecting(false); }
+  };
+
+  const isConnectDisabled = connecting || cooldownLeft > 0;
+
+  const connectLabel = () => {
+    if (connecting) return 'Connexion...';
+    if (cooldownLeft > 0) return `Réessayer (${cooldownLeft}s)`;
+    return 'Connecter WhatsApp';
   };
 
   return (
@@ -72,8 +130,8 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           <span>{waStatus.isConnected ? 'Connecté' : 'Non connecté'}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             {!waStatus.isConnected && (
-              <button className="btn-connect" onClick={handleConnect} disabled={connecting}>
-                {connecting ? 'Connexion...' : 'Connecter WhatsApp'}
+              <button className="btn-connect" onClick={handleConnect} disabled={isConnectDisabled}>
+                {connectLabel()}
               </button>
             )}
             {waStatus.isConnected && (
@@ -89,7 +147,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             <div className="qr-waiting-spinner" />
             <div>
               <div className="qr-waiting-title">Connexion en cours…</div>
-              <div className="qr-waiting-desc">Le QR code va apparaître dans quelques secondes (jusqu'à 30s). Soyez patient.</div>
+              <div className="qr-waiting-desc">Le QR code va apparaître dans quelques secondes (jusqu'à 30s). Ne cliquez pas à nouveau.</div>
             </div>
           </div>
         )}
@@ -104,9 +162,10 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           </div>
         )}
 
-        {(waStatus.status === 'error' || waStatus.status === 'auth_failure') && (
+        {waError && (
           <div className="wa-error-banner">
-            Erreur de connexion WhatsApp. Vérifiez que Chrome/Chromium est installé et réessayez.
+            <strong>Erreur :</strong> {waError}
+            {cooldownLeft > 0 && <span className="wa-error-retry"> — réessai possible dans {cooldownLeft}s</span>}
           </div>
         )}
       </div>
