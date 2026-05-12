@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function BotConfig({ waStatus, onConnectWhatsApp }) {
   const [config, setConfig] = useState({
-    bot_name: 'SanRobot',
+    bot_name: 'Botora',
     bot_info: '',
     bot_behavior: '',
     ia_enabled: true
@@ -88,7 +88,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp }) {
             type="text"
             value={config.bot_name}
             onChange={e => setConfig({ ...config, bot_name: e.target.value })}
-            placeholder="SanRobot"
+            placeholder="Botora"
           />
         </div>
 
