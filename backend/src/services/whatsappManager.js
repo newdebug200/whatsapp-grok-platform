@@ -73,6 +73,9 @@ class WhatsAppManager {
 
     client.on('message', async (message) => {
       try {
+        // Sécurité supplémentaire : ignorer les messages envoyés par le bot
+        if (message.fromMe) return;
+
         await messageHandler.handleIncomingMessage(message, client, this.prisma, accountId);
 
         const contact = await message.getContact();
