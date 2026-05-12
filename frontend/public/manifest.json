@@ -1,6 +1,6 @@
 {
-  "name": "SanRobot - Assistant WhatsApp IA",
-  "short_name": "SanRobot",
+  "name": "Botora - Assistant WhatsApp IA",
+  "short_name": "Botora",
   "description": "Plateforme multi-utilisateurs WhatsApp avec intelligence artificielle Groq",
   "start_url": "/",
   "scope": "/",
@@ -79,7 +79,7 @@
     {
       "name": "Configuration",
       "short_name": "Config",
-      "description": "Configurer le bot SanRobot",
+      "description": "Configurer le bot Botora",
       "url": "/?panel=config",
       "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     }
