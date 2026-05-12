@@ -12,7 +12,7 @@ function AppContent() {
     return (
       <div className="app-loading">
         <div className="app-loading-spinner"></div>
-        <span>SanRobot</span>
+        <span>Botora</span>
       </div>
     );
   }
