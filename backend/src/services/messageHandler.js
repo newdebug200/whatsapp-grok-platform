@@ -9,14 +9,10 @@ class MessageHandler {
 
   async handleIncomingMessage(message, client, prisma, accountId) {
     try {
-      // Ignorer les messages envoyés par le bot lui-même
       if (message.fromMe) return;
-
-      // Ignorer les broadcasts et les groupes
       if (message.from === 'status@broadcast' || message.from.includes('@broadcast')) return;
       if (message.from.includes('@g.us')) return;
 
-      // Ignorer les vieux messages (protection contre le replay lors de la restauration de session)
       const messageAgeMs = Date.now() - message.timestamp * 1000;
       if (messageAgeMs > 60000) {
         console.log(`Message ignoré (trop ancien: ${Math.round(messageAgeMs / 1000)}s) de ${message.from}`);
@@ -51,7 +47,6 @@ class MessageHandler {
         });
       }
 
-      // Sauvegarder le message reçu en base de données
       await prisma.message.create({
         data: {
           contact_id: dbContact.id,
@@ -62,7 +57,12 @@ class MessageHandler {
         }
       });
 
-      // Les messages media : répondre immédiatement (cas exceptionnel)
+      // Prise en main humaine active : ne pas répondre automatiquement
+      if (dbContact.ia_paused) {
+        console.log(`Contact ${phoneNumber}: prise en main humaine active, réponse IA désactivée`);
+        return;
+      }
+
       if (message.hasMedia) {
         const response = "Je traite uniquement les messages texte. Merci de m'écrire votre demande en texte.";
         await client.sendMessage(message.from, response);
@@ -78,7 +78,6 @@ class MessageHandler {
         return;
       }
 
-      // Mettre le message en file d'attente (5 min pour regrouper les bouts de messages)
       this._queueMessage(message.body || '', message.from, dbContact, client, prisma, accountId);
 
     } catch (error) {
@@ -90,7 +89,6 @@ class MessageHandler {
     const key = `${accountId}_${contact.id}`;
 
     if (this.pendingMessages.has(key)) {
-      // Annuler le timer existant et ajouter le nouveau bout de message
       const pending = this.pendingMessages.get(key);
       clearTimeout(pending.timer);
       pending.messages.push(body);
@@ -119,25 +117,29 @@ class MessageHandler {
 
   async _processTextMessage(messageText, contact, client, prisma, accountId, from) {
     try {
+      // Re-vérifier ia_paused au moment de l'envoi (l'humain a pu prendre la main pendant l'attente)
+      const freshContact = await prisma.contact.findUnique({ where: { id: contact.id } });
+      if (freshContact?.ia_paused) {
+        console.log(`Contact ${from}: prise en main humaine active au moment de l'envoi, réponse IA annulée`);
+        return;
+      }
+
       const botConfig = await prisma.botConfig.findUnique({
         where: { account_id: accountId }
       });
 
-      // Bot désactivé : ne pas répondre automatiquement
       if (!botConfig || !botConfig.ia_enabled) {
         console.log(`Compte ${accountId}: bot IA désactivé, aucune réponse envoyée.`);
         return;
       }
 
-      // Vérifier que des informations existent (FAQ ou bot_info)
       const faqs = await prisma.fAQ.findMany({ where: { account_id: accountId } });
       const hasInfo =
         (botConfig.bot_info && botConfig.bot_info.trim().length > 0) ||
         faqs.length > 0;
 
       if (!hasInfo) {
-        // Aucune information configurée : l'IA n'a rien à dire, on n'envoie rien
-        console.log(`Compte ${accountId}: aucune FAQ ni bot_info configurés — réponse IA annulée pour éviter les messages vides.`);
+        console.log(`Compte ${accountId}: aucune FAQ ni bot_info configurés — réponse IA annulée.`);
         return;
       }
 
@@ -197,7 +199,6 @@ class MessageHandler {
       console.log(`Réponse IA envoyée à ${from} pour le compte ${accountId}`);
     } catch (error) {
       console.error('Erreur API Groq:', error.message);
-      // Pas de fallback automatique pour ne pas envoyer des messages non sollicités
     }
   }
 
