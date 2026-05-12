@@ -940,6 +940,7 @@
 [data-theme="dark"] .qr-waiting-title { color: #ffd54f; }
 [data-theme="dark"] .qr-waiting-desc { color: #ffca28; }
 [data-theme="dark"] .wa-error-banner { background: #2c1a1a; border-color: #5c2222; color: #f87171; }
+.wa-error-retry { opacity: 0.75; font-style: italic; }
 [data-theme="dark"] .btn-disconnect { background: #2c1a1a; border-color: #5c2222; color: #f87171; }
 [data-theme="dark"] .btn-disconnect:hover:not(:disabled) { background: #3a1f1f; }
 
