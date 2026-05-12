@@ -31,7 +31,7 @@ model WhatsAppSession {
 model BotConfig {
   id           Int     @id @default(autoincrement())
   account_id   Int     @unique
-  bot_name     String  @default("SanRobot")
+  bot_name     String  @default("Botora")
   bot_info     String  @default("")
   bot_behavior String  @default("")
   ia_enabled   Boolean @default(true)
