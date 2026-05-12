@@ -1,6 +1,14 @@
 const dotenv = require('dotenv');
 dotenv.config();
 
+// Empêche le serveur de crasher sur des rejections non gérées (ex: puppeteer)
+process.on('unhandledRejection', (reason) => {
+  console.error('[Botora] Unhandled Rejection (non fatal):', reason?.message || reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('[Botora] Uncaught Exception (non fatal):', error.message);
+});
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -21,7 +29,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
 
@@ -36,13 +44,11 @@ app.use('/api/faq', faqRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/stats', statsRoutes);
 
-app.get('/api/healthz', (req, res) => res.json({ status: 'ok' }));
+app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
-  if (!token) {
-    return next(new Error('Authentication error'));
-  }
+  if (!token) return next(new Error('Authentication error'));
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     socket.accountId = decoded.accountId;
@@ -54,8 +60,7 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   const accountId = socket.accountId;
-  console.log(`Socket connecté pour compte ${accountId}:`, socket.id);
-
+  console.log(`Socket connecté — compte ${accountId} (${socket.id})`);
   socket.join(`account_${accountId}`);
 
   socket.on('get-status', () => {
@@ -64,7 +69,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('connect-whatsapp', () => {
-    console.log(`Demande de connexion WhatsApp pour compte ${accountId}`);
+    console.log(`Demande connexion WhatsApp — compte ${accountId}`);
     whatsappManager.initializeClient(accountId);
   });
 
@@ -72,22 +77,18 @@ io.on('connection', (socket) => {
     try {
       const contacts = await prisma.contact.findMany({
         where: { account_id: accountId },
-        include: {
-          messages: {
-            orderBy: { created_at: 'desc' },
-            take: 1
-          }
-        },
+        include: { messages: { orderBy: { created_at: 'desc' }, take: 1 } },
         orderBy: { created_at: 'desc' }
       });
       socket.emit('initial-contacts', contacts);
     } catch (error) {
-      console.error('Erreur get-initial-data:', error);
+      console.error('Erreur get-initial-data:', error.message);
+      socket.emit('initial-contacts', []);
     }
   });
 
   socket.on('disconnect', () => {
-    console.log(`Socket déconnecté pour compte ${accountId}:`, socket.id);
+    console.log(`Socket déconnecté — compte ${accountId} (${socket.id})`);
   });
 });
 
@@ -97,5 +98,14 @@ whatsappManager.setPrisma(prisma);
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, async () => {
   console.log(`Botora Backend démarré sur port ${PORT}`);
+
+  // Migration automatique : ajout colonne ia_paused si elle n'existe pas encore
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Contact" ADD COLUMN "ia_paused" INTEGER NOT NULL DEFAULT 0`);
+    console.log('Migration: colonne ia_paused ajoutée');
+  } catch (_) {
+    // Colonne déjà existante — normal
+  }
+
   await whatsappManager.restoreExistingSessions();
 });
