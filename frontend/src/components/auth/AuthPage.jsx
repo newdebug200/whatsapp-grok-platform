@@ -44,10 +44,10 @@ export default function AuthPage() {
             <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="30" cy="30" r="30" fill="#25D366"/>
               <path d="M30 10C19 10 10 19 10 30c0 3.7 1 7.2 2.8 10.2L10 50l10.1-2.7C23 49 26.4 50 30 50c11 0 20-9 20-20S41 10 30 10z" fill="white"/>
-              <text x="30" y="36" textAnchor="middle" fill="#25D366" fontSize="14" fontWeight="bold" fontFamily="system-ui">SR</text>
+              <text x="30" y="36" textAnchor="middle" fill="#25D366" fontSize="13" fontWeight="bold" fontFamily="system-ui">B</text>
             </svg>
           </div>
-          <h1 className="auth-title">SanRobot</h1>
+          <h1 className="auth-title">Botora</h1>
           <p className="auth-subtitle">Assistant WhatsApp intelligent</p>
         </div>
 
