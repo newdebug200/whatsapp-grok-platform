@@ -45,6 +45,17 @@ export default function Dashboard() {
     return () => s.disconnect();
   }, [token]);
 
+  // Fermer la discussion avec la touche Échap
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && selectedContact) {
+        handleBack();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedContact]);
+
   const handleSelectContact = (contact) => {
     setSelectedContact(contact);
     setMobileView('chat');
@@ -75,8 +86,8 @@ export default function Dashboard() {
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <div className="sidebar-logo">
-              <span className="logo-icon">SR</span>
-              <span className="logo-text">SanRobot</span>
+              <span className="logo-icon">B</span>
+              <span className="logo-text">Botora</span>
             </div>
             <div className="sidebar-actions">
               {!waStatus.isConnected && (
