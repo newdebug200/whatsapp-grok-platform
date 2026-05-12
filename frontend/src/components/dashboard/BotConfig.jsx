@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-export default function BotConfig({ waStatus, onConnectWhatsApp }) {
+export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp }) {
   const [config, setConfig] = useState({
     bot_name: 'Botora',
     bot_info: '',
@@ -13,15 +13,15 @@ export default function BotConfig({ waStatus, onConnectWhatsApp }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  const [qrVisible, setQrVisible] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  useEffect(() => { loadConfig(); }, []);
 
   useEffect(() => {
-    loadConfig();
-  }, []);
-
-  useEffect(() => {
-    if (waStatus.qrCode) setQrVisible(true);
-    if (waStatus.isConnected) setQrVisible(false);
+    if (waStatus.qrCode) setConnecting(false);
+    if (waStatus.isConnected) setConnecting(false);
+    if (waStatus.status === 'error' || waStatus.status === 'auth_failure') setConnecting(false);
   }, [waStatus]);
 
   const loadConfig = async () => {
@@ -41,15 +41,24 @@ export default function BotConfig({ waStatus, onConnectWhatsApp }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
-      setError('Erreur lors de la sauvegarde');
+      setError(err.response?.data?.error || 'Erreur lors de la sauvegarde. Vérifiez que le serveur est en marche.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleConnect = () => {
-    setQrVisible(true);
+    setConnecting(true);
     onConnectWhatsApp();
+  };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await onLogoutWhatsApp();
+    } finally {
+      setDisconnecting(false);
+    }
   };
 
   return (
@@ -61,20 +70,43 @@ export default function BotConfig({ waStatus, onConnectWhatsApp }) {
         <div className={`wa-status-row ${waStatus.isConnected ? 'connected' : 'disconnected'}`}>
           <span className="wa-dot" />
           <span>{waStatus.isConnected ? 'Connecté' : 'Non connecté'}</span>
-          {!waStatus.isConnected && (
-            <button className="btn-connect" onClick={handleConnect}>
-              Connecter WhatsApp
-            </button>
-          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {!waStatus.isConnected && (
+              <button className="btn-connect" onClick={handleConnect} disabled={connecting}>
+                {connecting ? 'Connexion...' : 'Connecter WhatsApp'}
+              </button>
+            )}
+            {waStatus.isConnected && (
+              <button className="btn-disconnect" onClick={handleDisconnect} disabled={disconnecting}>
+                {disconnecting ? 'Déconnexion...' : 'Déconnecter'}
+              </button>
+            )}
+          </div>
         </div>
 
-        {waStatus.qrCode && qrVisible && (
+        {connecting && !waStatus.qrCode && (
+          <div className="qr-waiting">
+            <div className="qr-waiting-spinner" />
+            <div>
+              <div className="qr-waiting-title">Connexion en cours…</div>
+              <div className="qr-waiting-desc">Le QR code va apparaître dans quelques secondes (jusqu'à 30s). Soyez patient.</div>
+            </div>
+          </div>
+        )}
+
+        {waStatus.qrCode && (
           <div className="qr-wrapper">
             <p className="qr-instructions">Scannez ce QR code avec votre WhatsApp</p>
             <QRCodeDisplay value={waStatus.qrCode} />
             <p className="qr-steps">
-              WhatsApp → Appareils reliés → Relier un appareil
+              WhatsApp → ⋮ Menu → Appareils reliés → Relier un appareil
             </p>
+          </div>
+        )}
+
+        {(waStatus.status === 'error' || waStatus.status === 'auth_failure') && (
+          <div className="wa-error-banner">
+            Erreur de connexion WhatsApp. Vérifiez que Chrome/Chromium est installé et réessayez.
           </div>
         )}
       </div>
@@ -97,13 +129,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp }) {
           <textarea
             value={config.bot_info}
             onChange={e => setConfig({ ...config, bot_info: e.target.value })}
-            placeholder="Décrivez ici tout ce que le bot doit connaître : vos produits, services, tarifs, adresses, horaires, etc.
-
-Exemple :
-- Nous vendons des vêtements en ligne
-- Livraison gratuite dès 50€
-- Retours acceptés sous 14 jours
-- Support disponible de 9h à 18h"
+            placeholder={`Décrivez ici tout ce que le bot doit connaître : produits, services, tarifs, adresses, horaires…\n\nExemple :\n- Nous vendons des vêtements en ligne\n- Livraison gratuite dès 50€\n- Retours acceptés sous 14 jours`}
             rows={7}
           />
         </div>
@@ -113,14 +139,7 @@ Exemple :
           <textarea
             value={config.bot_behavior}
             onChange={e => setConfig({ ...config, bot_behavior: e.target.value })}
-            placeholder="Décrivez comment le bot doit se comporter et répondre.
-
-Exemple :
-- Répondre en français uniquement
-- Être chaleureux et professionnel
-- Ne jamais parler de concurrents
-- Toujours proposer d'être mis en contact avec un conseiller pour les cas complexes
-- Limiter les réponses à 3 phrases maximum"
+            placeholder={`Décrivez comment le bot doit se comporter.\n\nExemple :\n- Répondre en français uniquement\n- Être chaleureux et professionnel\n- Limiter les réponses à 3 phrases maximum`}
             rows={6}
           />
         </div>
@@ -153,11 +172,12 @@ function QRCodeDisplay({ value }) {
 
   useEffect(() => {
     if (!value || !canvasRef.current) return;
-    import('qrcode').then(QRCode => {
+    import('qrcode').then(mod => {
+      const QRCode = mod.default || mod;
       QRCode.toCanvas(canvasRef.current, value, { width: 220, margin: 2 }, err => {
         if (err) console.error('QR error:', err);
       });
-    }).catch(() => {});
+    }).catch(err => console.error('Import qrcode failed:', err));
   }, [value]);
 
   return (
