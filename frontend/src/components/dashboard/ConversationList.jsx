@@ -7,13 +7,10 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function ConversationList({ contacts, selectedContact, onSelectContact, onContactsUpdate, waStatus, socket, onConnectWhatsApp }) {
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (socket) {
-      const refresh = () => {
-        loadConversations();
-      };
+      const refresh = () => loadConversations();
       socket.on('new-message', refresh);
       return () => socket.off('new-message', refresh);
     }
@@ -35,10 +32,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
 
   const filtered = contacts.filter(c => {
     const q = search.toLowerCase();
-    return (
-      c.phone_number?.toLowerCase().includes(q) ||
-      c.name?.toLowerCase().includes(q)
-    );
+    return c.phone_number?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q);
   });
 
   const formatTime = (ts) => {
@@ -53,13 +47,8 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     return format(date, 'dd/MM/yy');
   };
 
-  const getInitial = (contact) => {
-    const name = contact.name || contact.phone_number || '?';
-    return name.charAt(0).toUpperCase();
-  };
-
+  const getInitial = (contact) => (contact.name || contact.phone_number || '?').charAt(0).toUpperCase();
   const getDisplayName = (contact) => contact.name || contact.phone_number;
-
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[id % avatarColors.length];
 
@@ -84,21 +73,18 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             onChange={e => setSearch(e.target.value)}
             className="search-input"
           />
-          {search && (
-            <button className="search-clear" onClick={() => setSearch('')}>✕</button>
-          )}
+          {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
         </div>
       </div>
 
       <div className="contacts-scroll">
         {filtered.length === 0 ? (
-          <div className="empty-list">
-            {search ? 'Aucun résultat' : 'Aucune conversation'}
-          </div>
+          <div className="empty-list">{search ? 'Aucun résultat' : 'Aucune conversation'}</div>
         ) : (
           filtered.map(contact => {
             const lastMsg = contact.messages[0];
             const isSelected = selectedContact?.id === contact.id;
+            const isPaused = contact.ia_paused;
             return (
               <div
                 key={contact.id}
@@ -111,9 +97,12 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                 <div className="contact-info">
                   <div className="contact-row">
                     <span className="contact-name">{getDisplayName(contact)}</span>
-                    {lastMsg && (
-                      <span className="contact-time">{formatTime(lastMsg.created_at)}</span>
-                    )}
+                    <div className="contact-row-right">
+                      <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
+                        {isPaused ? '👤' : '🤖'}
+                      </span>
+                      {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
+                    </div>
                   </div>
                   <div className="contact-row">
                     <span className="contact-preview">
