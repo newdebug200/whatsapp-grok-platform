@@ -73,4 +73,60 @@ router.get('/conversation/:contactId', async (req, res) => {
   }
 });
 
+router.post('/send', async (req, res) => {
+  try {
+    const { contactId, content } = req.body;
+    if (!content?.trim()) {
+      return res.status(400).json({ error: 'Message vide' });
+    }
+
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(contactId), account_id: req.accountId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+
+    const waId = contact.phone_number.replace('+', '') + '@c.us';
+    await whatsappManager.sendMessage(req.accountId, waId, content.trim());
+
+    const msg = await prisma.message.create({
+      data: {
+        contact_id: contact.id,
+        content: content.trim(),
+        direction: 'sent',
+        type: 'text',
+        created_at: new Date()
+      }
+    });
+
+    await prisma.contact.update({
+      where: { id: contact.id },
+      data: { ia_paused: true }
+    });
+
+    res.json({ success: true, message: msg });
+  } catch (error) {
+    console.error('Erreur send message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/toggle-ia/:contactId', async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), account_id: req.accountId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+
+    const updated = await prisma.contact.update({
+      where: { id: contact.id },
+      data: { ia_paused: !contact.ia_paused }
+    });
+
+    res.json({ success: true, ia_paused: updated.ia_paused });
+  } catch (error) {
+    console.error('Erreur toggle IA:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
