@@ -17,7 +17,7 @@ router.get('/bot', async (req, res) => {
       config = await prisma.botConfig.create({
         data: {
           account_id: req.accountId,
-          bot_name: 'SanRobot',
+          bot_name: 'Botora',
           bot_info: '',
           bot_behavior: '',
           ia_enabled: true
@@ -40,7 +40,7 @@ router.put('/bot', async (req, res) => {
       where: { account_id: req.accountId },
       create: {
         account_id: req.accountId,
-        bot_name: bot_name || 'SanRobot',
+        bot_name: bot_name || 'Botora',
         bot_info: bot_info || '',
         bot_behavior: bot_behavior || '',
         ia_enabled: ia_enabled !== undefined ? ia_enabled : true
