@@ -94,6 +94,6 @@ whatsappManager.setPrisma(prisma);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, async () => {
-  console.log(`SanRobot Backend démarré sur port ${PORT}`);
+  console.log(`Botora Backend démarré sur port ${PORT}`);
   await whatsappManager.restoreExistingSessions();
 });
