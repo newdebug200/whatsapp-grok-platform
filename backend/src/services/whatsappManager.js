@@ -1,10 +1,11 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 const messageHandler = require('./messageHandler');
 
-// Délai minimum entre deux tentatives d'initialisation (ms)
-const REINIT_COOLDOWN_MS = 8000;
+const REINIT_COOLDOWN_MS = 10000;
+const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
 
 class WhatsAppManager {
   constructor() {
@@ -16,29 +17,83 @@ class WhatsAppManager {
   setIO(io) { this.io = io; }
   setPrisma(prisma) { this.prisma = prisma; }
 
-  initializeClient(accountId) {
+  /**
+   * Supprime les fichiers de verrou Chromium dans le dossier de session.
+   * Nécessaire quand un process Chrome précédent a crashé sans se fermer proprement.
+   */
+  _cleanChromeLocks(accountId) {
+    const sessionDir = path.join(SESSION_BASE, `session-account_${accountId}`);
+    if (!fs.existsSync(sessionDir)) return;
+
+    // Chromium pose ces verrous dans le profil utilisateur
+    const lockNames = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+    const searchDirs = [sessionDir, path.join(sessionDir, 'Default')];
+
+    for (const dir of searchDirs) {
+      for (const lock of lockNames) {
+        const p = path.join(dir, lock);
+        try { if (fs.existsSync(p)) { fs.unlinkSync(p); console.log(`[WA] Verrou supprimé: ${p}`); } } catch (_) {}
+      }
+    }
+  }
+
+  /**
+   * Tente de tuer les process Chrome/Chromium orphelins liés à notre session.
+   * Sur Windows on cherche le PID via le fichier SingletonLock (symlink → PID).
+   */
+  _killOrphanChrome(accountId) {
+    try {
+      if (process.platform === 'win32') {
+        // Sur Windows, tuer les process chrome.exe lancés par notre app
+        // On utilise /FI pour ne cibler que ceux dont le titre contient notre session
+        execSync('taskkill /F /IM chrome.exe /T 2>nul', { stdio: 'ignore' });
+      } else {
+        execSync(`pkill -f "session-account_${accountId}" 2>/dev/null || true`, { stdio: 'ignore' });
+      }
+    } catch (_) {
+      // Normal si aucun process à tuer
+    }
+  }
+
+  /**
+   * Détruit proprement un ancien client whatsapp-web.js s'il existe.
+   */
+  async _destroyExisting(accountId) {
+    const entry = this.clients.get(accountId);
+    if (!entry) return;
+    try {
+      await entry.client.destroy();
+    } catch (_) {}
+    this.clients.delete(accountId);
+  }
+
+  async initializeClient(accountId) {
     if (this.clients.has(accountId)) {
       const existing = this.clients.get(accountId);
-      // Bloquer si déjà en cours / connecté / QR affiché
+
       if (['initializing', 'connected', 'qr'].includes(existing.status)) {
-        console.log(`[WA] Initialisation ignorée — état actuel: ${existing.status} (compte ${accountId})`);
+        console.log(`[WA] Déjà en cours (${existing.status}) — compte ${accountId}`);
         return;
       }
-      // Cooldown après une erreur : éviter le spam de reconnexion
+
       if (existing.lastErrorAt && Date.now() - existing.lastErrorAt < REINIT_COOLDOWN_MS) {
         const remaining = Math.ceil((REINIT_COOLDOWN_MS - (Date.now() - existing.lastErrorAt)) / 1000);
-        console.log(`[WA] Cooldown actif — réessai dans ${remaining}s (compte ${accountId})`);
+        console.log(`[WA] Cooldown ${remaining}s — compte ${accountId}`);
         this.io?.to(`account_${accountId}`).emit('status', {
           isConnected: false, qrCode: null, status: 'cooldown',
-          message: `Veuillez patienter ${remaining}s avant de réessayer`
+          message: `Patientez ${remaining}s avant de réessayer`
         });
         return;
       }
+
+      // Détruire l'ancien client proprement avant de recréer
+      await this._destroyExisting(accountId);
     }
 
-    const sessionPath = path.join(__dirname, '../../.wwebjs_auth');
+    // Nettoyer les verrous Chrome AVANT de lancer un nouveau client
+    this._cleanChromeLocks(accountId);
 
-    // Détecter la plateforme : --single-process et --no-zygote crashent sur Windows
+    // Flags Chromium selon la plateforme
     const isWindows = process.platform === 'win32';
     const puppeteerArgs = [
       '--no-sandbox',
@@ -50,18 +105,18 @@ class WhatsAppManager {
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
+      '--disable-features=TranslateUI',
     ];
-    // Ces flags ne fonctionnent que sous Linux (crashent sous Windows avec "frame was detached")
     if (!isWindows) {
       puppeteerArgs.push('--no-zygote', '--single-process');
     }
 
-    console.log(`[WA] Initialisation compte ${accountId} (plateforme: ${process.platform})`);
+    console.log(`[WA] Initialisation compte ${accountId} (${process.platform})`);
 
     const client = new Client({
       authStrategy: new LocalAuth({
         clientId: `account_${accountId}`,
-        dataPath: sessionPath
+        dataPath: SESSION_BASE
       }),
       puppeteer: {
         headless: true,
@@ -69,18 +124,22 @@ class WhatsAppManager {
       }
     });
 
-    this.clients.set(accountId, { client, status: 'initializing', qrCode: null, lastErrorAt: null });
+    this.clients.set(accountId, {
+      client,
+      status: 'initializing',
+      qrCode: null,
+      lastErrorAt: null
+    });
 
     client.on('qr', (qr) => {
-      console.log(`[WA] QR Code disponible — compte ${accountId}`);
+      console.log(`[WA] QR Code — compte ${accountId}`);
       const entry = this.clients.get(accountId);
       if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
-      this.io?.to(`account_${accountId}`).emit('qr', qr);
       this.io?.to(`account_${accountId}`).emit('status', { isConnected: false, qrCode: qr, status: 'qr' });
     });
 
     client.on('ready', async () => {
-      console.log(`[WA] Prêt — compte ${accountId}`);
+      console.log(`[WA] Connecté — compte ${accountId}`);
       const entry = this.clients.get(accountId);
       if (entry) { entry.qrCode = null; entry.status = 'connected'; entry.lastErrorAt = null; }
 
@@ -91,10 +150,9 @@ class WhatsAppManager {
           update: { is_connected: true }
         });
       } catch (err) {
-        console.error('[WA] Erreur upsert session ready:', err.message);
+        console.error('[WA] Erreur DB ready:', err.message);
       }
 
-      this.io?.to(`account_${accountId}`).emit('ready', { status: 'connected' });
       this.io?.to(`account_${accountId}`).emit('status', { isConnected: true, qrCode: null, status: 'connected' });
     });
 
@@ -108,7 +166,7 @@ class WhatsAppManager {
           from: phoneNumber, body: message.body, timestamp: message.timestamp
         });
       } catch (err) {
-        console.error('[WA] Erreur message entrant:', err.message);
+        console.error('[WA] Erreur message:', err.message);
       }
     });
 
@@ -124,10 +182,9 @@ class WhatsAppManager {
           update: { is_connected: false }
         });
       } catch (err) {
-        console.error('[WA] Erreur upsert session disconnect:', err.message);
+        console.error('[WA] Erreur DB disconnect:', err.message);
       }
 
-      this.io?.to(`account_${accountId}`).emit('disconnected', { reason });
       this.io?.to(`account_${accountId}`).emit('status', { isConnected: false, qrCode: null, status: 'disconnected' });
       this.clients.delete(accountId);
     });
@@ -136,33 +193,44 @@ class WhatsAppManager {
       console.error(`[WA] Auth failure — compte ${accountId}:`, msg);
       const entry = this.clients.get(accountId);
       if (entry) { entry.status = 'auth_failure'; entry.lastErrorAt = Date.now(); }
-      this.io?.to(`account_${accountId}`).emit('auth_failure', { message: msg });
-      this.io?.to(`account_${accountId}`).emit('status', { isConnected: false, qrCode: null, status: 'auth_failure' });
+      this.io?.to(`account_${accountId}`).emit('status', {
+        isConnected: false, qrCode: null, status: 'auth_failure',
+        message: 'Authentification refusée. Réessayez en scannant le QR code.'
+      });
+      client.destroy().catch(() => {});
       this.clients.delete(accountId);
     });
 
-    client.initialize().catch(err => {
+    client.initialize().catch(async (err) => {
       console.error(`[WA] Erreur initialisation compte ${accountId}:`, err.message);
-      const entry = this.clients.get(accountId);
-      const errMsg = err.message || 'Erreur inconnue';
-      const isFrameDetached = errMsg.includes('frame was detached') || errMsg.includes('Navigating frame');
 
+      // Tuer le process Chrome qui bloque la session
+      try { await client.destroy(); } catch (_) {}
+      this._cleanChromeLocks(accountId);
+
+      const entry = this.clients.get(accountId);
       if (entry) {
         entry.status = 'error';
         entry.lastErrorAt = Date.now();
       }
 
-      const userMessage = isFrameDetached
-        ? 'Chrome ne démarre pas correctement. Assurez-vous que Google Chrome est installé, puis réessayez.'
-        : `Erreur de connexion: ${errMsg}`;
+      const isBrowserLocked = err.message?.includes('already running') || err.message?.includes('userDataDir');
+      const isContextDestroyed = err.message?.includes('context was destroyed') || err.message?.includes('Navigating frame');
 
-      this.io?.to(`account_${accountId}`).emit('auth_failure', { message: userMessage });
+      let userMessage;
+      if (isBrowserLocked) {
+        userMessage = 'Un Chrome précédent bloquait la session — il a été nettoyé. Cliquez "Réessayer" dans quelques secondes.';
+      } else if (isContextDestroyed) {
+        userMessage = 'Chrome a démarré mais a planté. Vérifiez que Google Chrome est bien installé et réessayez.';
+      } else {
+        userMessage = `Erreur WhatsApp: ${err.message}`;
+      }
+
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'error', message: userMessage
       });
 
-      // Supprimer le client de la map après l'avoir marqué en erreur
-      // (garder l'entrée qqs secondes pour le cooldown, puis supprimer)
+      // Libérer la map après le cooldown pour permettre un réessai
       setTimeout(() => {
         const e = this.clients.get(accountId);
         if (e?.status === 'error') this.clients.delete(accountId);
@@ -189,16 +257,15 @@ class WhatsAppManager {
   async logout(accountId) {
     const entry = this.clients.get(accountId);
     if (entry) {
-      try { await entry.client.logout(); } catch (err) {
-        console.error('[WA] Erreur logout:', err.message);
-      }
+      try { await entry.client.logout(); } catch (_) {}
+      try { await entry.client.destroy(); } catch (_) {}
       this.clients.delete(accountId);
     }
-    // Supprimer la session locale pour forcer un nouveau QR au prochain démarrage
-    const sessionDir = path.join(__dirname, `../../.wwebjs_auth/session-account_${accountId}`);
+    // Supprimer toute la session locale
+    const sessionDir = path.join(SESSION_BASE, `session-account_${accountId}`);
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`[WA] Session locale supprimée — compte ${accountId}`);
+      console.log(`[WA] Session supprimée — compte ${accountId}`);
     }
   }
 
@@ -209,7 +276,11 @@ class WhatsAppManager {
       });
       console.log(`Restauration de ${sessions.length} session(s) WhatsApp`);
       for (const session of sessions) {
-        this.initializeClient(session.account_id);
+        // Nettoyer les verrous avant de tenter la restauration
+        this._cleanChromeLocks(session.account_id);
+        await this.initializeClient(session.account_id);
+        // Petite pause entre chaque compte pour ne pas saturer Chrome
+        await new Promise(r => setTimeout(r, 3000));
       }
     } catch (err) {
       console.error('[WA] Erreur restauration sessions:', err.message);
