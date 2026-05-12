@@ -14,6 +14,7 @@ const authRoutes = require('./routes/authRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const faqRoutes = require('./routes/faqRoutes');
 const configRoutes = require('./routes/configRoutes');
+const statsRoutes = require('./routes/statsRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -33,6 +34,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/stats', statsRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok' }));
 
