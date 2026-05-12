@@ -1,0 +1,209 @@
+====================================================
+  BOTORA — CORRECTIONS DE BUGS & GUIDE DE DÉMARRAGE
+====================================================
+Date : Mai 2026 | Branche : work
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  COMMANDES À LANCER (dans l'ordre)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Récupérer les dernières corrections :
+   git pull origin work
+
+2. Installer les dépendances backend (si pas encore fait) :
+   cd backend
+   npm install
+
+3. Créer le fichier .env dans backend/ (si pas encore fait) :
+   Copier backend/.env.example → backend/.env
+   Remplir les variables :
+     DATABASE_URL="file:./dev.db"
+     JWT_SECRET="un-secret-long-et-complexe"
+     GROK_API_KEY="votre-clé-groq"
+
+4. Appliquer le schéma Prisma à la base de données :
+   cd backend
+   npx prisma db push
+
+   ⚠️  Cette commande est OBLIGATOIRE si c'est la première
+   fois ou après un git pull qui a modifié schema.prisma.
+   Elle crée/met à jour les tables (dont la colonne ia_paused).
+
+5. Lancer le backend :
+   cd backend
+   npm run dev
+
+6. Dans un autre terminal, lancer le frontend :
+   cd frontend
+   npm install
+   npm run dev
+
+7. Ouvrir le navigateur :
+   http://localhost:5173
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BUGS CORRIGÉS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BUG 1 — Serveur qui crashait au démarrage (CRITIQUE)
+  Symptôme : "ProtocolError: Execution context was destroyed"
+             nodemon redémarre en boucle → tout le site tombe
+  Cause    : whatsapp-web.js lançait une erreur non catchée
+             depuis client.initialize() (promesse rejetée)
+  Correction :
+    - whatsappManager.js : client.initialize().catch(err => {...})
+      Le crash WhatsApp n'affecte plus le serveur Node
+    - server.js : process.on('unhandledRejection') +
+                  process.on('uncaughtException')
+      Filet de sécurité global — aucune erreur ne peut
+      plus tuer le processus
+
+BUG 2 — Colonne ia_paused manquante → toutes les requêtes échouaient
+  Symptôme : "une erreur est subvenue" partout (FAQ, config,
+             discussions, statistiques)
+  Cause    : Le champ ia_paused a été ajouté au schema.prisma
+             mais pas encore appliqué à la base SQLite
+  Correction :
+    - server.js : migration automatique au démarrage
+      ALTER TABLE "Contact" ADD COLUMN "ia_paused" ...
+      (silencieux si déjà existant)
+    → Plus besoin de "prisma db push" à chaque changement,
+      mais la première fois reste obligatoire
+
+BUG 3 — Authentification échouait ("une erreur est survenue")
+  Symptôme : Impossible de se connecter ou créer un compte
+  Cause 1  : Le serveur crashait (Bug 1), donc toute requête
+             HTTP échouait avec "Network Error"
+  Cause 2  : Clé localStorage encore nommée "sanrobot_token"
+             (ancien nom avant le rebranding Botora)
+  Correction :
+    - AuthContext.jsx : clé renommée en "botora_token"
+    - Rétrocompatibilité : les anciens tokens "sanrobot_token"
+      sont automatiquement migrés au prochain login
+
+BUG 4 — Déconnexion WhatsApp impossible depuis l'interface
+  Symptôme : Aucun bouton de déconnexion visible
+             La fonction onLogoutWhatsApp était vide : () => {}
+  Correction :
+    - BotConfig.jsx : bouton "Déconnecter" visible quand
+      WhatsApp est connecté
+    - Dashboard.jsx : handleLogoutWhatsApp implémenté
+      → appelle POST /api/messages/logout
+      → met à jour le statut local (isConnected: false)
+
+BUG 5 — Aucun feedback entre clic "Connecter" et apparition QR
+  Symptôme : L'utilisateur clique, rien ne se passe pendant
+             10-30 secondes → pense que ça ne marche pas
+  Correction :
+    - BotConfig.jsx : bandeau animé affiché immédiatement :
+      "Connexion en cours… Le QR code va apparaître dans
+       quelques secondes (jusqu'à 30s). Soyez patient."
+    - Le bandeau disparaît automatiquement quand le QR arrive
+    - Bandeau d'erreur rouge si la connexion échoue
+
+BUG 6 — Mode IA/Humain par contact (nouvelle fonctionnalité)
+  Ajouté :
+    - Champ ia_paused dans la table Contact
+    - Toggle 🤖/👤 dans l'en-tête de chaque conversation
+    - Envoi manuel auto-pause l'IA pour ce contact
+    - messageHandler vérifie ia_paused avant de répondre,
+      et re-vérifie après le délai de 5 minutes
+    - Badge 🤖/👤 visible dans la liste des conversations
+
+BUG 7 — Messages envoyés manuellement depuis le dashboard
+  Ajouté :
+    - POST /api/messages/send : envoi via WhatsApp, sauvegarde
+      en base, active automatiquement le mode Humain
+    - POST /api/messages/toggle-ia/:contactId : bascule IA/Humain
+
+BUG 8 — Picker emoji absent
+  Ajouté dans ChatWindow.jsx :
+    - 6 catégories × 25 emojis sans dépendance externe
+    - Clic en dehors pour fermer, insertion à la position curseur
+
+BUG 9 — Thème clair/sombre
+  Ajouté :
+    - CSS variables complètes (--bg-primary, --chat-bg, etc.)
+    - Bascule via page Paramètres, persisté en localStorage
+    - data-theme="dark" sur <html>
+
+BUG 10 — Page Paramètres manquante
+  Créé Settings.jsx + Settings.css avec :
+    - Thème clair/sombre
+    - Son de notification on/off
+    - Notifications navigateur (permission)
+    - Infos compte + déconnexion
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  VARIABLES D'ENVIRONNEMENT REQUISES (backend/.env)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DATABASE_URL="file:./dev.db"
+JWT_SECRET="choisissez-un-secret-long-et-complexe"
+GROK_API_KEY="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+PORT=3001  (optionnel, défaut 3001)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  STRUCTURE DES FICHIERS MODIFIÉS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+backend/
+  prisma/schema.prisma              ← +ia_paused sur Contact
+  src/server.js                     ← +error handlers globaux
+                                       +migration auto ia_paused
+  src/services/whatsappManager.js   ← +fix crash initialize()
+                                       +emit status à chaque event
+  src/services/messageHandler.js    ← +check ia_paused (x2)
+  src/routes/messageRoutes.js       ← +POST /send +POST /toggle-ia
+
+frontend/
+  src/App.jsx                       ← ThemeContext
+  src/App.css                       ← CSS variables dark/light
+  src/context/AuthContext.jsx       ← +botora_token (rétrocompat)
+  src/components/auth/AuthPage.jsx  ← (inchangé, fonctionnel)
+  src/components/dashboard/
+    Dashboard.jsx                   ← +handleLogoutWhatsApp
+                                       +socket ref robuste
+    Dashboard.css                   ← +dark theme overrides
+                                       +btn-disconnect
+                                       +qr-waiting
+                                       +chat-input-bar, emoji
+    BotConfig.jsx                   ← +btn déconnecter
+                                       +état connecting
+                                       +bandeau qr-waiting
+    ChatWindow.jsx                  ← +envoi manuel
+                                       +emoji picker
+                                       +toggle IA/Humain
+    ConversationList.jsx            ← +badge 🤖/👤
+    Settings.jsx                    ← (nouveau)
+    Settings.css                    ← (nouveau)
+    Stats.jsx                       ← (inchangé, fonctionnel)
+    FAQManager.jsx                  ← (inchangé, fonctionnel)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  EN CAS DE PROBLÈME
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Serveur redémarre en boucle
+  → Vérifier backend/.env (DATABASE_URL en particulier)
+  → Lancer : cd backend && npx prisma db push
+
+• "Network Error" dans le navigateur
+  → Le backend n'est pas lancé ou plante au démarrage
+  → Lire les logs dans le terminal du backend
+
+• QR Code ne s'affiche jamais
+  → whatsapp-web.js a besoin de Chromium installé
+  → Windows : Chrome doit être installé
+  → Linux : sudo apt-get install chromium-browser
+
+• "Token invalide ou expiré"
+  → Vider le localStorage du navigateur (F12 > Application)
+  → Se reconnecter
+
+====================================================
