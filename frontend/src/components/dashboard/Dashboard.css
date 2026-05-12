@@ -612,6 +612,203 @@
   font-size: 12px;
 }
 
+/* ===== CHAT INPUT BAR ===== */
+.chat-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f0f2f5;
+  border-top: 1px solid #e9edef;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.chat-input {
+  flex: 1;
+  min-height: 40px;
+  max-height: 120px;
+  background: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #111b21;
+  outline: none;
+  resize: none;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.chat-input::placeholder { color: #8696a0; }
+
+.send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #25d366;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s;
+}
+.send-btn:hover:not(:disabled) { background: #1da851; }
+.send-btn:active:not(:disabled) { transform: scale(0.93); }
+.send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+.emoji-toggle-btn {
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8696a0;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.emoji-toggle-btn:hover { background: #e9edef; color: #54656f; }
+.emoji-toggle-btn.active { color: #25d366; }
+
+/* ===== EMOJI PICKER ===== */
+.emoji-picker {
+  position: absolute;
+  bottom: 60px;
+  left: 8px;
+  width: 320px;
+  background: #fff;
+  border: 1px solid #e9edef;
+  border-radius: 16px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.emoji-cats {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9edef;
+}
+
+.emoji-cat-btn {
+  font-size: 18px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.12s;
+  line-height: 1;
+}
+.emoji-cat-btn:hover { background: #e9edef; }
+.emoji-cat-btn.active { background: #e9edef; }
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.emoji-grid::-webkit-scrollbar { width: 4px; }
+.emoji-grid::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+.emoji-item {
+  font-size: 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  text-align: center;
+  transition: background 0.12s, transform 0.1s;
+  line-height: 1;
+}
+.emoji-item:hover { background: #f0f2f5; transform: scale(1.15); }
+
+/* ===== IA / HUMAN MODE BUTTON ===== */
+.ia-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+.ia-mode-btn.ai {
+  background: #e8faf0;
+  color: #25d366;
+}
+.ia-mode-btn.ai:hover { background: #d0f5e2; }
+.ia-mode-btn.human {
+  background: #fef3f3;
+  color: #e74c3c;
+}
+.ia-mode-btn.human:hover { background: #fde8e8; }
+.ia-mode-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+.ia-mode-icon { font-size: 14px; }
+.ia-mode-label { font-size: 11px; }
+
+.close-chat-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #8696a0;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.close-chat-btn:hover { background: #e9edef; color: #54656f; }
+
+/* ===== CHAT WA OFFLINE ===== */
+.chat-wa-offline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  font-size: 12px;
+  background: #fef9ec;
+  color: #9d6c00;
+  border-top: 1px solid #fde8b0;
+  flex-shrink: 0;
+}
+
+/* ===== CONTACT MODE BADGE ===== */
+.contact-row-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.contact-mode-badge {
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.7;
+}
+.contact-mode-badge.ai { opacity: 0.5; }
+.contact-mode-badge.human { opacity: 1; }
+
 /* ===== PANEL CONTENT (FAQ + Config) ===== */
 .panel-content {
   padding: 16px;
@@ -910,3 +1107,104 @@
     min-width: 300px;
   }
 }
+
+/* ===== DARK THEME OVERRIDES ===== */
+[data-theme="dark"] .dashboard { background: var(--bg-secondary, #111b21); }
+[data-theme="dark"] .sidebar { background: var(--sidebar-bg, #111b21); border-right-color: var(--border, #2a3942); }
+[data-theme="dark"] .sidebar-header { background: var(--sidebar-bg, #111b21); border-bottom-color: var(--border, #2a3942); }
+[data-theme="dark"] .sidebar-header-top { background: var(--header-bg, #202c33); }
+[data-theme="dark"] .logo-text { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .icon-btn { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .icon-btn:hover { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .dropdown-menu { background: var(--bg-primary, #1f2c34); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+[data-theme="dark"] .dropdown-user { background: var(--header-bg, #202c33); }
+[data-theme="dark"] .dropdown-name { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .dropdown-email { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .dropdown-divider { background: var(--border, #2a3942); }
+[data-theme="dark"] .dropdown-item { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .dropdown-item:hover { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .sidebar-nav { border-bottom-color: var(--border, #2a3942); background: var(--sidebar-bg, #111b21); }
+[data-theme="dark"] .nav-btn { color: var(--text-secondary, #8696a0); border-bottom-color: transparent; }
+[data-theme="dark"] .nav-btn:hover { background: var(--bg-hover, #2a3942); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .nav-btn.active { color: var(--accent, #00a884); border-bottom-color: var(--accent, #00a884); }
+[data-theme="dark"] .nav-label { color: inherit; }
+
+/* Conversation list dark */
+[data-theme="dark"] .conversation-list { background: var(--sidebar-bg, #111b21); }
+[data-theme="dark"] .search-container { background: var(--sidebar-bg, #111b21); border-bottom-color: var(--border, #2a3942); }
+[data-theme="dark"] .search-input-wrapper { background: var(--bg-input, #2a3942); }
+[data-theme="dark"] .search-input { background: transparent; color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .search-input::placeholder { color: var(--text-muted, #667781); }
+[data-theme="dark"] .search-icon { color: var(--text-muted, #667781); }
+[data-theme="dark"] .contact-item { border-bottom-color: var(--border, #2a3942); }
+[data-theme="dark"] .contact-item:hover { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .contact-item.selected { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .contact-name { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .contact-time { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .contact-preview { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .empty-list { color: var(--text-secondary, #8696a0); }
+
+/* Chat window dark */
+[data-theme="dark"] .chat-window { background: var(--chat-bg, #0b141a); }
+[data-theme="dark"] .chat-empty { background: var(--chat-bg, #0b141a); }
+[data-theme="dark"] .chat-empty-content h3 { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .chat-empty-content p { color: var(--text-muted, #667781); }
+[data-theme="dark"] .chat-header { background: var(--header-bg, #202c33); border-bottom-color: var(--border, #2a3942); }
+[data-theme="dark"] .chat-header-name { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .chat-header-phone { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .chat-messages { background: var(--chat-bg, #0b141a); }
+[data-theme="dark"] .message-bubble.sent { background: var(--bg-message-sent, #005c4b); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .message-bubble.received { background: var(--bg-message-received, #202c33); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .message-time { color: rgba(233,237,239,0.5); }
+[data-theme="dark"] .date-separator span { background: #182229; color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .chat-no-messages { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .chat-loading { color: var(--text-secondary, #8696a0); }
+
+/* Chat input dark */
+[data-theme="dark"] .chat-input-bar { background: var(--header-bg, #202c33); border-top-color: var(--border, #2a3942); }
+[data-theme="dark"] .chat-input { background: var(--bg-input, #2a3942); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .chat-input::placeholder { color: var(--text-muted, #667781); }
+[data-theme="dark"] .emoji-toggle-btn { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .emoji-toggle-btn:hover { background: var(--bg-hover, #3a4a52); }
+[data-theme="dark"] .emoji-picker { background: var(--bg-primary, #1f2c34); border-color: var(--border, #2a3942); box-shadow: 0 -4px 20px rgba(0,0,0,0.3); }
+[data-theme="dark"] .emoji-cats { background: var(--header-bg, #202c33); border-bottom-color: var(--border, #2a3942); }
+[data-theme="dark"] .emoji-cat-btn:hover { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .emoji-cat-btn.active { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .emoji-item:hover { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .chat-wa-offline { background: #2c1a1a; color: #e74c3c; }
+
+/* IA mode button dark */
+[data-theme="dark"] .ia-mode-btn.ai { background: rgba(0,168,132,0.15); color: #00a884; }
+[data-theme="dark"] .ia-mode-btn.human { background: rgba(231,76,60,0.15); color: #e74c3c; }
+
+/* Panels dark */
+[data-theme="dark"] .panel-content { background: var(--bg-secondary, #111b21); }
+[data-theme="dark"] .panel-title { color: var(--text-primary, #e9edef); border-bottom-color: var(--border, #2a3942); }
+[data-theme="dark"] .section-label { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .field-group label { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .field-group input,
+[data-theme="dark"] .field-group textarea { background: var(--bg-primary, #1f2c34); border-color: var(--border, #2a3942); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .field-group input::placeholder,
+[data-theme="dark"] .field-group textarea::placeholder { color: var(--text-muted, #667781); }
+[data-theme="dark"] .toggle-label { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .toggle-desc { color: var(--text-secondary, #8696a0); }
+
+/* Stats dark */
+[data-theme="dark"] .stats-panel { background: var(--bg-secondary, #111b21); }
+[data-theme="dark"] .stats-title { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .stat-card { background: var(--bg-primary, #1f2c34); }
+[data-theme="dark"] .stat-card-value { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .stat-card-label { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .stats-section { background: var(--bg-primary, #1f2c34); }
+[data-theme="dark"] .stats-section-title { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .stats-period-tabs { background: var(--bg-secondary, #111b21); }
+[data-theme="dark"] .period-tab { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .period-tab.active { background: var(--bg-primary, #1f2c34); color: var(--accent, #00a884); }
+[data-theme="dark"] .chart-label { color: var(--text-muted, #667781); }
+[data-theme="dark"] .chart-total { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .chart-legend { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .summary-label { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .summary-val { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .top-contact-name { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .top-contact-phone { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .top-contact-rank { color: var(--text-muted, #667781); }
