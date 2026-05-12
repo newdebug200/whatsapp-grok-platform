@@ -44,6 +44,7 @@ model Contact {
   phone_number String
   name         String?
   created_at   DateTime  @default(now())
+  ia_paused    Boolean   @default(false)
   messages     Message[]
   account      Account   @relation(fields: [account_id], references: [id])
 
