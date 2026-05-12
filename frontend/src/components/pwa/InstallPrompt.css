@@ -1,3 +1,36 @@
+/* ===== FAB INSTALL BUTTON (toujours visible) ===== */
+.pwa-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px 10px 12px;
+  background: #075e54;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(7, 94, 84, 0.4);
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  font-family: inherit;
+}
+
+.pwa-fab:hover {
+  background: #054d45;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(7, 94, 84, 0.5);
+}
+
+.pwa-fab:active {
+  transform: translateY(0);
+}
+
+/* ===== BANNER (première visite) ===== */
 .pwa-banner {
   position: fixed;
   bottom: 0;
@@ -63,6 +96,7 @@
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.2s;
+  font-family: inherit;
 }
 
 .pwa-install-btn:hover {
@@ -83,6 +117,7 @@
   transition: background 0.15s;
   width: 32px;
   height: 32px;
+  font-family: inherit;
 }
 
 .pwa-dismiss-btn:hover {
@@ -90,22 +125,127 @@
   color: #111;
 }
 
+/* ===== iOS GUIDE OVERLAY ===== */
+.pwa-ios-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.pwa-ios-card {
+  background: white;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+  animation: slideUp 0.3s ease;
+}
+
+.pwa-ios-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 16px;
+  background: #f0f2f5;
+}
+
+.pwa-ios-header img {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.pwa-ios-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111;
+}
+
+.pwa-ios-sub {
+  font-size: 12px;
+  color: #667781;
+  margin-top: 2px;
+}
+
+.pwa-ios-close {
+  margin-left: auto;
+  background: #e9edef;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #54656f;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.pwa-ios-steps {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pwa-ios-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 14px;
+  color: #111;
+  line-height: 1.5;
+}
+
+.pwa-ios-num {
+  width: 28px;
+  height: 28px;
+  background: #075e54;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.pwa-ios-icon {
+  font-size: 16px;
+}
+
 @media (min-width: 600px) {
   .pwa-banner {
-    bottom: 24px;
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
+    bottom: 80px;
+    left: auto;
+    right: 20px;
     border-radius: 14px;
     border: 1px solid #e9edef;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
     min-width: 360px;
-    max-width: 480px;
+    max-width: 440px;
     animation: popIn 0.35s ease;
   }
 
   @keyframes popIn {
-    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
-    to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+    from { transform: translateY(10px); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
   }
 }
