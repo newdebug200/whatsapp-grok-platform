@@ -33,7 +33,7 @@ router.post('/register', async (req, res) => {
         name,
         botConfig: {
           create: {
-            bot_name: 'SanRobot',
+            bot_name: 'Botora',
             bot_info: '',
             bot_behavior: '',
             ia_enabled: true
