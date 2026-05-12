@@ -155,7 +155,7 @@ class MessageHandler {
         take: 10
       });
 
-      const botName = botConfig.bot_name || 'SanRobot';
+      const botName = botConfig.bot_name || 'Botora';
       const botInfo = botConfig.bot_info || '';
       const botBehavior = botConfig.bot_behavior || '';
 
