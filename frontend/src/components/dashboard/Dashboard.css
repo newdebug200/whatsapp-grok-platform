@@ -426,6 +426,24 @@
 .chat-header-name { font-size: 15px; font-weight: 600; color: #111; }
 .chat-header-phone { font-size: 12px; color: #667781; }
 
+.close-chat-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e74c3c;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.close-chat-btn:hover {
+  background: #fef3f3;
+  color: #c0392b;
+}
+
 .chat-messages {
   flex: 1;
   overflow-y: auto;
