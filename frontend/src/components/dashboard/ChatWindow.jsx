@@ -90,7 +90,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
               <path d="M30 14C21.16 14 14 21.16 14 30c0 3.16.86 6.12 2.36 8.64L14 46l7.64-2.3C23.9 44.88 26.88 45.5 30 45.5 38.84 45.5 46 38.34 46 29.5S38.84 14 30 14z" stroke="#25d366" strokeWidth="1.5" fill="none"/>
             </svg>
           </div>
-          <h3>SanRobot</h3>
+          <h3>Botora</h3>
           <p>Sélectionnez une discussion pour afficher les messages</p>
           {!waStatus.isConnected && (
             <p className="wa-hint">Connectez votre WhatsApp depuis le panneau gauche pour recevoir des messages</p>
@@ -103,7 +103,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   return (
     <div className="chat-window">
       <div className="chat-header">
-        <button className="back-btn" onClick={onBack}>
+        <button className="back-btn" onClick={onBack} title="Retour">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
         <div className="chat-header-avatar" style={{ background: getColor(contact.id) }}>
@@ -115,6 +115,11 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
             {contact.name ? contact.phone_number : ''}
           </div>
         </div>
+        <button className="close-chat-btn" onClick={onBack} title="Fermer la discussion (Échap)">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
       </div>
 
       <div className="chat-messages" ref={containerRef} onScroll={handleScroll}>
@@ -160,7 +165,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       <div className="chat-footer">
         <div className="chat-footer-info">
           <svg viewBox="0 0 24 24" fill="#25d366" width="20" height="20"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-          <span>SanRobot répond automatiquement</span>
+          <span>Botora répond automatiquement</span>
         </div>
       </div>
     </div>
