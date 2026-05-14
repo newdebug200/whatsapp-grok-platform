@@ -48,6 +48,7 @@ model Contact {
   id           Int       @id @default(autoincrement())
   profile_id   Int
   phone_number String
+  wa_id        String?
   name         String?
   created_at   DateTime  @default(now())
   ia_paused    Boolean   @default(false)
