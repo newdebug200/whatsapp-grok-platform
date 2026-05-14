@@ -1,16 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 
 router.use(authMiddleware);
+router.use(profileMiddleware);
 
 router.get('/', async (req, res) => {
   try {
     const faqs = await prisma.fAQ.findMany({
-      where: { account_id: req.accountId },
+      where: { profile_id: req.profileId },
       orderBy: { created_at: 'desc' }
     });
     res.json(faqs);
@@ -26,7 +27,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Question et réponse requises' });
     }
     const faq = await prisma.fAQ.create({
-      data: { question, answer, account_id: req.accountId }
+      data: { question, answer, profile_id: req.profileId }
     });
     res.json(faq);
   } catch (error) {
@@ -37,7 +38,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const faq = await prisma.fAQ.findFirst({
-      where: { id: parseInt(req.params.id), account_id: req.accountId }
+      where: { id: parseInt(req.params.id), profile_id: req.profileId }
     });
     if (!faq) return res.status(404).json({ error: 'FAQ introuvable' });
 
@@ -54,7 +55,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const faq = await prisma.fAQ.findFirst({
-      where: { id: parseInt(req.params.id), account_id: req.accountId }
+      where: { id: parseInt(req.params.id), profile_id: req.profileId }
     });
     if (!faq) return res.status(404).json({ error: 'FAQ introuvable' });
 
