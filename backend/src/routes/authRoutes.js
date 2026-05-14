@@ -27,19 +27,7 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const account = await prisma.account.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        botConfig: {
-          create: {
-            bot_name: 'Botora',
-            bot_info: '',
-            bot_behavior: '',
-            ia_enabled: true
-          }
-        }
-      }
+      data: { email, password: hashedPassword, name }
     });
 
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
