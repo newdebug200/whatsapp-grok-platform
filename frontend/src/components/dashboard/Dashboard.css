@@ -64,6 +64,111 @@
   gap: 4px;
 }
 
+/* ===== PROFILE SELECTOR ===== */
+.profile-selector-wrapper {
+  position: relative;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e9edef;
+  background: #fff;
+}
+
+.profile-selector-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: #f0f2f5;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111;
+  transition: background 0.15s;
+}
+.profile-selector-btn:hover { background: #e9edef; }
+
+.profile-selector-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.profile-selector-label {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 12px;
+  right: 12px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.profile-dropdown-empty {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: #667781;
+  text-align: center;
+}
+
+.profile-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #111;
+  text-align: left;
+  transition: background 0.12s;
+}
+.profile-dropdown-item:hover { background: #f0f2f5; }
+.profile-dropdown-item.active { background: #e7f8ee; font-weight: 600; }
+
+.profile-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.profile-item-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== NO PROFILE PLACEHOLDER ===== */
+.no-profile-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px 24px;
+  text-align: center;
+  color: #667781;
+  gap: 16px;
+  font-size: 14px;
+}
+
 .wa-status-badge {
   font-size: 18px;
   line-height: 1;
