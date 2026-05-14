@@ -155,6 +155,45 @@
   text-overflow: ellipsis;
 }
 
+.profile-dropdown-divider {
+  height: 1px;
+  background: #e9edef;
+  margin: 4px 0;
+}
+
+.profile-dropdown-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #25d366;
+  font-weight: 600;
+  text-align: left;
+  transition: background 0.15s;
+}
+.profile-dropdown-add:hover { background: #e7f8ee; }
+
+.profile-add-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
 /* ===== NO PROFILE PLACEHOLDER ===== */
 .no-profile-msg {
   display: flex;
