@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
 
 const prisma = new PrismaClient();
@@ -21,21 +21,16 @@ router.post('/connect', (req, res) => {
 router.post('/logout', async (req, res) => {
   try {
     await whatsappManager.logout(req.accountId);
-    await prisma.whatsAppSession.upsert({
-      where: { account_id: req.accountId },
-      create: { account_id: req.accountId, is_connected: false },
-      update: { is_connected: false }
-    });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-router.get('/conversations', async (req, res) => {
+router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
     const contacts = await prisma.contact.findMany({
-      where: { account_id: req.accountId },
+      where: { profile_id: req.profileId },
       include: {
         messages: {
           orderBy: { created_at: 'desc' },
@@ -56,10 +51,10 @@ router.get('/conversations', async (req, res) => {
   }
 });
 
-router.get('/conversation/:contactId', async (req, res) => {
+router.get('/conversation/:contactId', profileMiddleware, async (req, res) => {
   try {
     const contact = await prisma.contact.findFirst({
-      where: { id: parseInt(req.params.contactId), account_id: req.accountId }
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
 
@@ -73,7 +68,7 @@ router.get('/conversation/:contactId', async (req, res) => {
   }
 });
 
-router.post('/send', async (req, res) => {
+router.post('/send', profileMiddleware, async (req, res) => {
   try {
     const { contactId, content } = req.body;
     if (!content?.trim()) {
@@ -81,7 +76,7 @@ router.post('/send', async (req, res) => {
     }
 
     const contact = await prisma.contact.findFirst({
-      where: { id: parseInt(contactId), account_id: req.accountId }
+      where: { id: parseInt(contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
 
@@ -110,10 +105,10 @@ router.post('/send', async (req, res) => {
   }
 });
 
-router.post('/toggle-ia/:contactId', async (req, res) => {
+router.post('/toggle-ia/:contactId', profileMiddleware, async (req, res) => {
   try {
     const contact = await prisma.contact.findFirst({
-      where: { id: parseInt(req.params.contactId), account_id: req.accountId }
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
 
