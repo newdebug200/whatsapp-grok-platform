@@ -303,6 +303,18 @@ export default function Dashboard() {
                     )}
                   </button>
                 ))}
+                <div className="profile-dropdown-divider" />
+                <button
+                  className="profile-dropdown-add"
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    setActivePanel('config');
+                    handleConnectWhatsApp();
+                  }}
+                >
+                  <span className="profile-add-icon">+</span>
+                  <span>Ajouter un numéro WhatsApp</span>
+                </button>
               </div>
             )}
           </div>
