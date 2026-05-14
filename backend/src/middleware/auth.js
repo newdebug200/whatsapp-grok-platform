@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'botora-secret-key-change-in-prod';
+const prisma = new PrismaClient();
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -18,4 +20,24 @@ function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware, JWT_SECRET };
+async function profileMiddleware(req, res, next) {
+  const profileId = parseInt(req.headers['x-profile-id']);
+  if (!profileId || isNaN(profileId)) {
+    return res.status(400).json({ error: 'Profil non spécifié (header X-Profile-Id manquant)' });
+  }
+
+  try {
+    const profile = await prisma.whatsAppProfile.findFirst({
+      where: { id: profileId, account_id: req.accountId }
+    });
+    if (!profile) {
+      return res.status(403).json({ error: 'Profil introuvable ou non autorisé' });
+    }
+    req.profileId = profileId;
+    next();
+  } catch (err) {
+    return res.status(500).json({ error: 'Erreur vérification profil' });
+  }
+}
+
+module.exports = { authMiddleware, profileMiddleware, JWT_SECRET };
