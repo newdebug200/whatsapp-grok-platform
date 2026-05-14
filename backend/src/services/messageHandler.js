@@ -23,6 +23,8 @@ class MessageHandler {
       const phoneNumber = '+' + (contact.number || contact.id.user);
       const contactName = contact.name || contact.pushname || null;
 
+      const waId = message.from;
+
       let dbContact = await prisma.contact.findUnique({
         where: {
           profile_id_phone_number: {
@@ -37,14 +39,20 @@ class MessageHandler {
           data: {
             profile_id: profileId,
             phone_number: phoneNumber,
+            wa_id: waId,
             name: contactName
           }
         });
-      } else if (contactName && dbContact.name !== contactName) {
-        dbContact = await prisma.contact.update({
-          where: { id: dbContact.id },
-          data: { name: contactName }
-        });
+      } else {
+        const updates = {};
+        if (contactName && dbContact.name !== contactName) updates.name = contactName;
+        if (!dbContact.wa_id && waId) updates.wa_id = waId;
+        if (Object.keys(updates).length > 0) {
+          dbContact = await prisma.contact.update({
+            where: { id: dbContact.id },
+            data: updates
+          });
+        }
       }
 
       await prisma.message.create({
