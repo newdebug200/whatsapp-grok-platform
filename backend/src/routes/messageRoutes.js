@@ -80,7 +80,7 @@ router.post('/send', profileMiddleware, async (req, res) => {
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
 
-    const waId = contact.phone_number.replace('+', '') + '@c.us';
+    const waId = contact.wa_id || (contact.phone_number.replace('+', '') + '@c.us');
     await whatsappManager.sendMessage(req.accountId, waId, content.trim());
 
     const msg = await prisma.message.create({
