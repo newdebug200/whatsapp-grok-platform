@@ -2,12 +2,12 @@ const axios = require('axios');
 
 class MessageHandler {
   constructor() {
-    // key: `${accountId}_${contactId}` -> { messages, timer, contact, client, prisma, accountId, from }
+    // key: `${profileId}_${contactId}` -> { messages, timer, contact, client, prisma, profileId, from }
     this.pendingMessages = new Map();
     this.DELAY_MS = 5 * 60 * 1000; // 5 minutes
   }
 
-  async handleIncomingMessage(message, client, prisma, accountId) {
+  async handleIncomingMessage(message, client, prisma, profileId) {
     try {
       if (message.fromMe) return;
       if (message.from === 'status@broadcast' || message.from.includes('@broadcast')) return;
@@ -25,8 +25,8 @@ class MessageHandler {
 
       let dbContact = await prisma.contact.findUnique({
         where: {
-          account_id_phone_number: {
-            account_id: accountId,
+          profile_id_phone_number: {
+            profile_id: profileId,
             phone_number: phoneNumber
           }
         }
@@ -35,7 +35,7 @@ class MessageHandler {
       if (!dbContact) {
         dbContact = await prisma.contact.create({
           data: {
-            account_id: accountId,
+            profile_id: profileId,
             phone_number: phoneNumber,
             name: contactName
           }
@@ -57,7 +57,6 @@ class MessageHandler {
         }
       });
 
-      // Prise en main humaine active : ne pas répondre automatiquement
       if (dbContact.ia_paused) {
         console.log(`Contact ${phoneNumber}: prise en main humaine active, réponse IA désactivée`);
         return;
@@ -78,15 +77,15 @@ class MessageHandler {
         return;
       }
 
-      this._queueMessage(message.body || '', message.from, dbContact, client, prisma, accountId);
+      this._queueMessage(message.body || '', message.from, dbContact, client, prisma, profileId);
 
     } catch (error) {
       console.error('Erreur traitement message:', error);
     }
   }
 
-  _queueMessage(body, from, contact, client, prisma, accountId) {
-    const key = `${accountId}_${contact.id}`;
+  _queueMessage(body, from, contact, client, prisma, profileId) {
+    const key = `${profileId}_${contact.id}`;
 
     if (this.pendingMessages.has(key)) {
       const pending = this.pendingMessages.get(key);
@@ -100,7 +99,7 @@ class MessageHandler {
         contact,
         client,
         prisma,
-        accountId,
+        profileId,
         from
       });
       console.log(`Nouveau message en file pour ${from} — réponse dans 5 min si pas de nouveau message`);
@@ -111,13 +110,12 @@ class MessageHandler {
       this.pendingMessages.delete(key);
       const concatenated = pending.messages.join('\n');
       console.log(`Traitement de ${pending.messages.length} message(s) pour ${pending.from}`);
-      await this._processTextMessage(concatenated, pending.contact, pending.client, pending.prisma, pending.accountId, pending.from);
+      await this._processTextMessage(concatenated, pending.contact, pending.client, pending.prisma, pending.profileId, pending.from);
     }, this.DELAY_MS);
   }
 
-  async _processTextMessage(messageText, contact, client, prisma, accountId, from) {
+  async _processTextMessage(messageText, contact, client, prisma, profileId, from) {
     try {
-      // Re-vérifier ia_paused au moment de l'envoi (l'humain a pu prendre la main pendant l'attente)
       const freshContact = await prisma.contact.findUnique({ where: { id: contact.id } });
       if (freshContact?.ia_paused) {
         console.log(`Contact ${from}: prise en main humaine active au moment de l'envoi, réponse IA annulée`);
@@ -125,31 +123,31 @@ class MessageHandler {
       }
 
       const botConfig = await prisma.botConfig.findUnique({
-        where: { account_id: accountId }
+        where: { profile_id: profileId }
       });
 
       if (!botConfig || !botConfig.ia_enabled) {
-        console.log(`Compte ${accountId}: bot IA désactivé, aucune réponse envoyée.`);
+        console.log(`Profil ${profileId}: bot IA désactivé, aucune réponse envoyée.`);
         return;
       }
 
-      const faqs = await prisma.fAQ.findMany({ where: { account_id: accountId } });
+      const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
       const hasInfo =
         (botConfig.bot_info && botConfig.bot_info.trim().length > 0) ||
         faqs.length > 0;
 
       if (!hasInfo) {
-        console.log(`Compte ${accountId}: aucune FAQ ni bot_info configurés — réponse IA annulée.`);
+        console.log(`Profil ${profileId}: aucune FAQ ni bot_info configurés — réponse IA annulée.`);
         return;
       }
 
-      await this._callGroqAPI(messageText, contact, client, prisma, accountId, botConfig, from, faqs);
+      await this._callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs);
     } catch (error) {
       console.error('Erreur processTextMessage:', error);
     }
   }
 
-  async _callGroqAPI(messageText, contact, client, prisma, accountId, botConfig, from, faqs) {
+  async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs) {
     try {
       const recentMessages = await prisma.message.findMany({
         where: { contact_id: contact.id },
@@ -196,7 +194,7 @@ class MessageHandler {
         }
       });
 
-      console.log(`Réponse IA envoyée à ${from} pour le compte ${accountId}`);
+      console.log(`Réponse IA envoyée à ${from} pour le profil ${profileId}`);
     } catch (error) {
       console.error('Erreur API Groq:', error.message);
     }
