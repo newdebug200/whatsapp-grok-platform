@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 
 router.use(authMiddleware);
+router.use(profileMiddleware);
 
 router.get('/', async (req, res) => {
   try {
-    const accountId = req.accountId;
+    const profileId = req.profileId;
 
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
     start30Days.setDate(start30Days.getDate() - 29);
 
     const contacts = await prisma.contact.findMany({
-      where: { account_id: accountId },
+      where: { profile_id: profileId },
       select: { id: true }
     });
     const contactIds = contacts.map(c => c.id);
