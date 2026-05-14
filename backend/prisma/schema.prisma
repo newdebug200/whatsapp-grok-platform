@@ -14,41 +14,48 @@ model Account {
   name       String
   created_at DateTime @default(now())
 
-  whatsappSession WhatsAppSession?
-  botConfig       BotConfig?
-  contacts        Contact[]
-  faqs            FAQ[]
+  whatsappProfiles WhatsAppProfile[]
 }
 
-model WhatsAppSession {
+model WhatsAppProfile {
   id           Int      @id @default(autoincrement())
-  account_id   Int      @unique
+  account_id   Int
+  phone_number String
+  display_name String?
   is_connected Boolean  @default(false)
   created_at   DateTime @default(now())
-  account      Account  @relation(fields: [account_id], references: [id])
+
+  account   Account     @relation(fields: [account_id], references: [id])
+  botConfig BotConfig?
+  contacts  Contact[]
+  faqs      FAQ[]
+
+  @@unique([account_id, phone_number])
 }
 
 model BotConfig {
   id           Int     @id @default(autoincrement())
-  account_id   Int     @unique
+  profile_id   Int     @unique
   bot_name     String  @default("Botora")
   bot_info     String  @default("")
   bot_behavior String  @default("")
   ia_enabled   Boolean @default(true)
-  account      Account @relation(fields: [account_id], references: [id])
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
 
 model Contact {
   id           Int       @id @default(autoincrement())
-  account_id   Int
+  profile_id   Int
   phone_number String
   name         String?
   created_at   DateTime  @default(now())
   ia_paused    Boolean   @default(false)
-  messages     Message[]
-  account      Account   @relation(fields: [account_id], references: [id])
 
-  @@unique([account_id, phone_number])
+  messages Message[]
+  profile  WhatsAppProfile @relation(fields: [profile_id], references: [id])
+
+  @@unique([profile_id, phone_number])
 }
 
 model Message {
@@ -58,15 +65,17 @@ model Message {
   direction  String
   type       String
   created_at DateTime @default(now())
-  contact    Contact  @relation(fields: [contact_id], references: [id])
+
+  contact Contact @relation(fields: [contact_id], references: [id])
 }
 
 model FAQ {
   id         Int      @id @default(autoincrement())
-  account_id Int
+  profile_id Int
   question   String
   answer     String
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
-  account    Account  @relation(fields: [account_id], references: [id])
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
