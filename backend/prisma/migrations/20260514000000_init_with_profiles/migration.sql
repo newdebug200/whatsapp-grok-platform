@@ -34,6 +34,7 @@ CREATE TABLE "Contact" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "profile_id" INTEGER NOT NULL,
     "phone_number" TEXT NOT NULL,
+    "wa_id" TEXT,
     "name" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "ia_paused" BOOLEAN NOT NULL DEFAULT false,
