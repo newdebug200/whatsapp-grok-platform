@@ -31,7 +31,7 @@ function playNotifSound() {
 }
 
 export default function Dashboard() {
-  const { account, token, logout } = useAuth();
+  const { account, token, logout, profiles, activeProfile, selectProfile, loadProfiles } = useAuth();
   const [socket, setSocket] = useState(null);
   const [waStatus, setWaStatus] = useState({ isConnected: false, qrCode: null, status: 'not_initialized' });
   const [selectedContact, setSelectedContact] = useState(null);
@@ -39,6 +39,7 @@ export default function Dashboard() {
   const [activePanel, setActivePanel] = useState('chat');
   const [mobileView, setMobileView] = useState('list');
   const [showMenu, setShowMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('botora-notif-sound') !== 'off');
 
@@ -46,10 +47,12 @@ export default function Dashboard() {
   const selectedContactRef = useRef(selectedContact);
   const soundEnabledRef = useRef(soundEnabled);
   const socketRef = useRef(null);
+  const activeProfileRef = useRef(activeProfile);
 
   useEffect(() => { activePanelRef.current = activePanel; }, [activePanel]);
   useEffect(() => { selectedContactRef.current = selectedContact; }, [selectedContact]);
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+  useEffect(() => { activeProfileRef.current = activeProfile; }, [activeProfile]);
 
   useEffect(() => {
     const handler = (e) => setSoundEnabled(e.detail);
@@ -57,7 +60,16 @@ export default function Dashboard() {
     return () => window.removeEventListener('botora-sound-change', handler);
   }, []);
 
+  const loadContactsForProfile = useCallback((profileId, sock) => {
+    const s = sock || socketRef.current;
+    if (s) {
+      s.emit('get-initial-data', { profileId });
+    }
+  }, []);
+
   const handleNewMessage = useCallback((msg) => {
+    if (msg.profileId && activeProfileRef.current?.id !== msg.profileId) return;
+
     const isOnThisConversation = (
       activePanelRef.current === 'chat' &&
       selectedContactRef.current &&
@@ -92,7 +104,11 @@ export default function Dashboard() {
     s.on('connect', () => {
       console.log('Socket connecté');
       s.emit('get-status');
-      s.emit('get-initial-data');
+      if (activeProfileRef.current?.id) {
+        loadContactsForProfile(activeProfileRef.current.id, s);
+      } else {
+        s.emit('get-initial-data', {});
+      }
     });
 
     s.on('connect_error', (err) => {
@@ -105,18 +121,26 @@ export default function Dashboard() {
     s.on('disconnected', () => setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' }));
     s.on('auth_failure', () => setWaStatus({ isConnected: false, qrCode: null, status: 'auth_failure' }));
 
+    s.on('profile-ready', async (profile) => {
+      selectProfile(profile);
+      await loadProfiles();
+      loadContactsForProfile(profile.id, s);
+    });
+
     s.on('initial-contacts', (data) => {
       if (Array.isArray(data)) setContacts(data);
     });
 
     s.on('new-message', (msg) => {
-      s.emit('get-initial-data');
+      if (!msg.profileId || msg.profileId === activeProfileRef.current?.id) {
+        loadContactsForProfile(activeProfileRef.current?.id, s);
+      }
       handleNewMessage(msg);
     });
 
     setSocket(s);
     return () => { s.disconnect(); socketRef.current = null; };
-  }, [token, handleNewMessage]);
+  }, [token, handleNewMessage, loadContactsForProfile, selectProfile, loadProfiles]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -126,6 +150,14 @@ export default function Dashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const handleSwitchProfile = (profile) => {
+    selectProfile(profile);
+    setShowProfileMenu(false);
+    setSelectedContact(null);
+    setContacts([]);
+    loadContactsForProfile(profile.id);
+  };
+
   const handleConnectWhatsApp = () => {
     socketRef.current?.emit('connect-whatsapp');
   };
@@ -134,6 +166,7 @@ export default function Dashboard() {
     try {
       await axios.post(`${API_URL}/messages/logout`);
       setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' });
+      await loadProfiles();
     } catch (err) {
       console.error('Erreur déconnexion WhatsApp:', err.message);
       setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' });
@@ -177,6 +210,12 @@ export default function Dashboard() {
     setSoundEnabled(v);
     localStorage.setItem('botora-notif-sound', v ? 'on' : 'off');
   };
+
+  const profileLabel = activeProfile
+    ? (activeProfile.display_name || activeProfile.phone_number || 'Profil')
+    : 'Aucun profil';
+
+  const noProfile = !activeProfile;
 
   return (
     <div className="dashboard">
@@ -229,6 +268,45 @@ export default function Dashboard() {
             </div>
           </div>
 
+          <div className="profile-selector-wrapper">
+            <button
+              className="profile-selector-btn"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              title="Changer de profil WhatsApp"
+            >
+              <span className="profile-selector-dot" style={{ background: waStatus.isConnected ? '#25d366' : '#aaa' }} />
+              <span className="profile-selector-label">{profileLabel}</span>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style={{ marginLeft: 'auto', opacity: 0.5 }}>
+                <path d="M7 10l5 5 5-5z"/>
+              </svg>
+            </button>
+
+            {showProfileMenu && (
+              <div className="profile-dropdown">
+                {profiles.length === 0 && (
+                  <div className="profile-dropdown-empty">Aucun profil — connectez WhatsApp</div>
+                )}
+                {profiles.map(p => (
+                  <button
+                    key={p.id}
+                    className={`profile-dropdown-item ${activeProfile?.id === p.id ? 'active' : ''}`}
+                    onClick={() => handleSwitchProfile(p)}
+                  >
+                    <span className="profile-item-dot" style={{ background: p.is_connected ? '#25d366' : '#aaa' }} />
+                    <span className="profile-item-label">
+                      {p.display_name || p.phone_number}
+                    </span>
+                    {activeProfile?.id === p.id && (
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style={{ marginLeft: 'auto', color: '#25d366' }}>
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="sidebar-nav">
             {navItems.map(item => (
               <button
@@ -251,23 +329,37 @@ export default function Dashboard() {
 
         <div className="sidebar-content">
           {activePanel === 'chat' && (
-            <ConversationList
-              contacts={contacts}
-              selectedContact={selectedContact}
-              onSelectContact={handleSelectContact}
-              onContactsUpdate={handleContactsUpdate}
-              waStatus={waStatus}
-              socket={socket}
-              onConnectWhatsApp={handleConnectWhatsApp}
-            />
+            noProfile ? (
+              <div className="no-profile-msg">
+                <p>Connectez un numéro WhatsApp pour commencer.</p>
+                <button className="btn-connect" onClick={() => { setActivePanel('config'); }}>
+                  Configurer WhatsApp
+                </button>
+              </div>
+            ) : (
+              <ConversationList
+                contacts={contacts}
+                selectedContact={selectedContact}
+                onSelectContact={handleSelectContact}
+                onContactsUpdate={handleContactsUpdate}
+                waStatus={waStatus}
+                socket={socket}
+                onConnectWhatsApp={handleConnectWhatsApp}
+              />
+            )
           )}
-          {activePanel === 'stats' && <Stats socket={socket} />}
-          {activePanel === 'faq' && <FAQManager />}
+          {activePanel === 'stats' && (
+            noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <Stats socket={socket} />
+          )}
+          {activePanel === 'faq' && (
+            noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <FAQManager />
+          )}
           {activePanel === 'config' && (
             <BotConfig
               waStatus={waStatus}
               onConnectWhatsApp={handleConnectWhatsApp}
               onLogoutWhatsApp={handleLogoutWhatsApp}
+              activeProfile={activeProfile}
             />
           )}
           {activePanel === 'settings' && <Settings />}
@@ -283,7 +375,18 @@ export default function Dashboard() {
         />
       </div>
 
-      {showMenu && <div className="overlay" onClick={() => setShowMenu(false)} />}
+      {(showMenu || showProfileMenu) && (
+        <div className="overlay" onClick={() => { setShowMenu(false); setShowProfileMenu(false); }} />
+      )}
+    </div>
+  );
+}
+
+function NoProfilePlaceholder({ onGoConfig }) {
+  return (
+    <div className="no-profile-msg">
+      <p>Sélectionnez ou connectez un profil WhatsApp pour accéder à cette section.</p>
+      <button className="btn-connect" onClick={onGoConfig}>Configurer WhatsApp</button>
     </div>
   );
 }
