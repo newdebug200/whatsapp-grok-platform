@@ -1,22 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 
 router.use(authMiddleware);
+router.use(profileMiddleware);
 
 router.get('/bot', async (req, res) => {
   try {
     let config = await prisma.botConfig.findUnique({
-      where: { account_id: req.accountId }
+      where: { profile_id: req.profileId }
     });
 
     if (!config) {
       config = await prisma.botConfig.create({
         data: {
-          account_id: req.accountId,
+          profile_id: req.profileId,
           bot_name: 'Botora',
           bot_info: '',
           bot_behavior: '',
@@ -37,9 +38,9 @@ router.put('/bot', async (req, res) => {
     const { bot_name, bot_info, bot_behavior, ia_enabled } = req.body;
 
     const config = await prisma.botConfig.upsert({
-      where: { account_id: req.accountId },
+      where: { profile_id: req.profileId },
       create: {
-        account_id: req.accountId,
+        profile_id: req.profileId,
         bot_name: bot_name || 'Botora',
         bot_info: bot_info || '',
         bot_behavior: bot_behavior || '',
