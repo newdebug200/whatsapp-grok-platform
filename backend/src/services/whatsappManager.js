@@ -6,10 +6,14 @@ const messageHandler = require('./messageHandler');
 
 const REINIT_COOLDOWN_MS = 10000;
 const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
+const CONTEXT_MAX = 20;
 
 class WhatsAppManager {
   constructor() {
+    // Key: profileId (number) or temp string "tmp_accountId_timestamp" before phone known
     this.clients = new Map();
+    // In-memory context cache for Groq: key = `${profileId}_${contactId}`
+    this.contextCache = new Map();
     this.io = null;
     this.prisma = null;
   }
@@ -17,13 +21,58 @@ class WhatsAppManager {
   setIO(io) { this.io = io; }
   setPrisma(prisma) { this.prisma = prisma; }
 
-  _cleanChromeLocks(accountId) {
-    const sessionDir = path.join(SESSION_BASE, `session-account_${accountId}`);
-    if (!fs.existsSync(sessionDir)) return;
+  // ─── Context cache helpers ────────────────────────────────────────────────
 
+  addToCache(profileId, contactId, direction, content) {
+    const key = `${profileId}_${contactId}`;
+    if (!this.contextCache.has(key)) this.contextCache.set(key, []);
+    const cache = this.contextCache.get(key);
+    cache.push({ direction, content, created_at: new Date() });
+    if (cache.length > CONTEXT_MAX) cache.splice(0, cache.length - CONTEXT_MAX);
+  }
+
+  getFromCache(profileId, contactId) {
+    return this.contextCache.get(`${profileId}_${contactId}`) || [];
+  }
+
+  clearCache(profileId) {
+    for (const key of this.contextCache.keys()) {
+      if (key.startsWith(`${profileId}_`)) this.contextCache.delete(key);
+    }
+  }
+
+  // ─── Client lookup helpers ────────────────────────────────────────────────
+
+  _getEntryByProfileId(profileId) {
+    for (const [key, entry] of this.clients) {
+      if (entry.profileId === profileId) return { key, entry };
+    }
+    return null;
+  }
+
+  _getEntriesForAccount(accountId) {
+    const results = [];
+    for (const [key, entry] of this.clients) {
+      if (entry.accountId === accountId) results.push({ key, entry });
+    }
+    return results;
+  }
+
+  _tempKey(accountId) {
+    return `tmp_${accountId}_${Date.now()}`;
+  }
+
+  // ─── Chrome helpers ───────────────────────────────────────────────────────
+
+  _sessionId(clientKey) {
+    return typeof clientKey === 'number' ? `profile_${clientKey}` : clientKey;
+  }
+
+  _cleanChromeLocks(clientKey) {
+    const sessionDir = path.join(SESSION_BASE, `session-${this._sessionId(clientKey)}`);
+    if (!fs.existsSync(sessionDir)) return;
     const lockNames = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
     const searchDirs = [sessionDir, path.join(sessionDir, 'Default')];
-
     for (const dir of searchDirs) {
       for (const lock of lockNames) {
         const p = path.join(dir, lock);
@@ -32,99 +81,97 @@ class WhatsAppManager {
     }
   }
 
-  _killOrphanChrome(accountId) {
+  _killOrphanChrome() {
     try {
       if (process.platform === 'win32') {
         execSync('taskkill /F /IM chrome.exe /T 2>nul', { stdio: 'ignore' });
       } else {
-        execSync(`pkill -f "session-account_${accountId}" 2>/dev/null || true`, { stdio: 'ignore' });
+        execSync('pkill -f "wwebjs" 2>/dev/null || true', { stdio: 'ignore' });
       }
     } catch (_) {}
   }
 
-  async _destroyExisting(accountId) {
-    const entry = this.clients.get(accountId);
+  async _destroyEntry(key) {
+    const entry = this.clients.get(key);
     if (!entry) return;
-    try {
-      await entry.client.destroy();
-    } catch (_) {}
-    this.clients.delete(accountId);
+    try { await entry.client.destroy(); } catch (_) {}
+    this.clients.delete(key);
   }
 
-  async initializeClient(accountId) {
-    if (this.clients.has(accountId)) {
-      const existing = this.clients.get(accountId);
+  // ─── Main: initialize a WhatsApp client ──────────────────────────────────
 
-      if (['initializing', 'connected', 'qr'].includes(existing.status)) {
-        console.log(`[WA] Déjà en cours (${existing.status}) — compte ${accountId}`);
-        return;
+  /**
+   * @param {number} accountId
+   * @param {number|null} profileId  null = new connection (no profile yet)
+   */
+  async initializeClient(accountId, profileId = null) {
+    // If profileId given, check if already running
+    if (profileId !== null) {
+      const existing = this._getEntryByProfileId(profileId);
+      if (existing) {
+        const { entry } = existing;
+        if (['initializing', 'connected', 'qr'].includes(entry.status)) {
+          console.log(`[WA] Déjà en cours (${entry.status}) — profil ${profileId}`);
+          return;
+        }
+        if (entry.lastErrorAt && Date.now() - entry.lastErrorAt < REINIT_COOLDOWN_MS) {
+          const remaining = Math.ceil((REINIT_COOLDOWN_MS - (Date.now() - entry.lastErrorAt)) / 1000);
+          this.io?.to(`account_${accountId}`).emit('status', {
+            isConnected: false, qrCode: null, status: 'cooldown', profileId,
+            message: `Patientez ${remaining}s avant de réessayer`
+          });
+          return;
+        }
+        await this._destroyEntry(existing.key);
       }
-
-      if (existing.lastErrorAt && Date.now() - existing.lastErrorAt < REINIT_COOLDOWN_MS) {
-        const remaining = Math.ceil((REINIT_COOLDOWN_MS - (Date.now() - existing.lastErrorAt)) / 1000);
-        console.log(`[WA] Cooldown ${remaining}s — compte ${accountId}`);
-        this.io?.to(`account_${accountId}`).emit('status', {
-          isConnected: false, qrCode: null, status: 'cooldown',
-          message: `Patientez ${remaining}s avant de réessayer`
-        });
-        return;
-      }
-
-      await this._destroyExisting(accountId);
     }
 
-    this._cleanChromeLocks(accountId);
+    // Choose the client map key
+    const clientKey = profileId !== null ? profileId : this._tempKey(accountId);
+    const sessionId = this._sessionId(clientKey);
+    this._cleanChromeLocks(clientKey);
 
     const isWindows = process.platform === 'win32';
     const puppeteerArgs = [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-first-run',
-      '--disable-extensions',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-features=TranslateUI',
+      '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+      '--disable-gpu', '--no-first-run', '--disable-extensions',
+      '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding', '--disable-features=TranslateUI',
     ];
-    if (!isWindows) {
-      puppeteerArgs.push('--no-zygote', '--single-process');
-    }
+    if (!isWindows) puppeteerArgs.push('--no-zygote', '--single-process');
 
-    console.log(`[WA] Initialisation compte ${accountId} (${process.platform})`);
+    console.log(`[WA] Initialisation — compte ${accountId}, clé ${clientKey} (${process.platform})`);
 
     const client = new Client({
-      authStrategy: new LocalAuth({
-        clientId: `account_${accountId}`,
-        dataPath: SESSION_BASE
-      }),
-      puppeteer: {
-        headless: true,
-        args: puppeteerArgs
-      }
+      authStrategy: new LocalAuth({ clientId: `session-${sessionId}`, dataPath: SESSION_BASE }),
+      puppeteer: { headless: true, args: puppeteerArgs }
     });
 
-    this.clients.set(accountId, {
+    this.clients.set(clientKey, {
       client,
       status: 'initializing',
+      accountId,
+      profileId: profileId,
+      phoneNumber: null,
       qrCode: null,
-      lastErrorAt: null,
-      profileId: null,
-      phoneNumber: null
+      lastErrorAt: null
     });
 
+    // ── QR ──
     client.on('qr', (qr) => {
-      console.log(`[WA] QR Code — compte ${accountId}`);
-      const entry = this.clients.get(accountId);
+      console.log(`[WA] QR Code — clé ${clientKey}`);
+      const entry = this.clients.get(clientKey);
       if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
-      this.io?.to(`account_${accountId}`).emit('status', { isConnected: false, qrCode: qr, status: 'qr' });
+      this.io?.to(`account_${accountId}`).emit('status', {
+        isConnected: false, qrCode: qr, status: 'qr',
+        profileId: profileId
+      });
     });
 
+    // ── Ready ──
     client.on('ready', async () => {
-      console.log(`[WA] Connecté — compte ${accountId}`);
-
       const phoneNumber = '+' + client.info.wid.user;
+      console.log(`[WA] Connecté — ${phoneNumber} (compte ${accountId})`);
 
       let profile;
       try {
@@ -138,13 +185,27 @@ class WhatsAppManager {
         return;
       }
 
-      const entry = this.clients.get(accountId);
-      if (entry) {
-        entry.qrCode = null;
-        entry.status = 'connected';
-        entry.lastErrorAt = null;
-        entry.profileId = profile.id;
-        entry.phoneNumber = phoneNumber;
+      // Move from temp key to real profileId if needed
+      if (clientKey !== profile.id) {
+        const entry = this.clients.get(clientKey);
+        if (entry) {
+          this.clients.delete(clientKey);
+          entry.profileId = profile.id;
+          entry.phoneNumber = phoneNumber;
+          entry.qrCode = null;
+          entry.status = 'connected';
+          entry.lastErrorAt = null;
+          this.clients.set(profile.id, entry);
+        }
+      } else {
+        const entry = this.clients.get(clientKey);
+        if (entry) {
+          entry.profileId = profile.id;
+          entry.phoneNumber = phoneNumber;
+          entry.qrCode = null;
+          entry.status = 'connected';
+          entry.lastErrorAt = null;
+        }
       }
 
       this.io?.to(`account_${accountId}`).emit('profile-ready', {
@@ -155,104 +216,123 @@ class WhatsAppManager {
       });
 
       this.io?.to(`account_${accountId}`).emit('status', {
-        isConnected: true,
-        qrCode: null,
-        status: 'connected',
-        profileId: profile.id,
-        phoneNumber: profile.phone_number
+        isConnected: true, qrCode: null, status: 'connected',
+        profileId: profile.id, phoneNumber: profile.phone_number
       });
     });
 
+    // ── Incoming message ──
     client.on('message', async (message) => {
       try {
         if (message.fromMe) return;
-        const entry = this.clients.get(accountId);
-        if (!entry?.profileId) return;
+        const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
+          || this._findEntryByClient(client);
+        if (!entry?.entry?.profileId) return;
 
-        await messageHandler.handleIncomingMessage(message, client, this.prisma, entry.profileId);
+        const currentProfileId = entry.entry.profileId;
+        await messageHandler.handleIncomingMessage(message, client, this.prisma, currentProfileId, this);
 
         const contact = await message.getContact();
-        const phoneNumber = '+' + (contact.number || contact.id.user);
+        const phone = '+' + (contact.number || contact.id.user);
         this.io?.to(`account_${accountId}`).emit('new-message', {
-          from: phoneNumber, body: message.body, timestamp: message.timestamp,
-          profileId: entry.profileId
+          from: phone, body: message.body, timestamp: message.timestamp,
+          profileId: currentProfileId
         });
       } catch (err) {
         console.error('[WA] Erreur message:', err.message);
       }
     });
 
+    // ── Disconnected ──
     client.on('disconnected', async (reason) => {
-      console.log(`[WA] Déconnecté — compte ${accountId}: ${reason}`);
-      const entry = this.clients.get(accountId);
+      console.log(`[WA] Déconnecté — clé ${clientKey}: ${reason}`);
+      const found = this._findEntryByClient(client);
+      const resolvedProfileId = found?.entry?.profileId;
 
-      if (entry?.profileId) {
+      if (resolvedProfileId) {
         try {
           await this.prisma.whatsAppProfile.update({
-            where: { id: entry.profileId },
-            data: { is_connected: false }
+            where: { id: resolvedProfileId }, data: { is_connected: false }
           });
         } catch (err) {
           console.error('[WA] Erreur DB disconnect:', err.message);
         }
+        this.clearCache(resolvedProfileId);
       }
 
-      if (entry) { entry.status = 'disconnected'; entry.qrCode = null; }
+      if (found) {
+        found.entry.status = 'disconnected';
+        found.entry.qrCode = null;
+        this.clients.delete(found.key);
+      }
 
-      this.io?.to(`account_${accountId}`).emit('status', { isConnected: false, qrCode: null, status: 'disconnected' });
-      this.clients.delete(accountId);
+      this.io?.to(`account_${accountId}`).emit('status', {
+        isConnected: false, qrCode: null, status: 'disconnected',
+        profileId: resolvedProfileId || null
+      });
     });
 
+    // ── Auth failure ──
     client.on('auth_failure', (msg) => {
-      console.error(`[WA] Auth failure — compte ${accountId}:`, msg);
-      const entry = this.clients.get(accountId);
-      if (entry) { entry.status = 'auth_failure'; entry.lastErrorAt = Date.now(); }
+      console.error(`[WA] Auth failure — clé ${clientKey}:`, msg);
+      const found = this._findEntryByClient(client);
+      if (found) { found.entry.status = 'auth_failure'; found.entry.lastErrorAt = Date.now(); }
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'auth_failure',
+        profileId: profileId,
         message: 'Authentification refusée. Réessayez en scannant le QR code.'
       });
       client.destroy().catch(() => {});
-      this.clients.delete(accountId);
+      if (found) this.clients.delete(found.key);
     });
 
+    // ── Init error ──
     client.initialize().catch(async (err) => {
-      console.error(`[WA] Erreur initialisation compte ${accountId}:`, err.message);
-
+      console.error(`[WA] Erreur initialisation clé ${clientKey}:`, err.message);
       try { await client.destroy(); } catch (_) {}
-      this._cleanChromeLocks(accountId);
+      this._cleanChromeLocks(clientKey);
 
-      const entry = this.clients.get(accountId);
-      if (entry) {
-        entry.status = 'error';
-        entry.lastErrorAt = Date.now();
-      }
+      const found = this._findEntryByClient(client);
+      if (found) { found.entry.status = 'error'; found.entry.lastErrorAt = Date.now(); }
 
       const isBrowserLocked = err.message?.includes('already running') || err.message?.includes('userDataDir');
       const isContextDestroyed = err.message?.includes('context was destroyed') || err.message?.includes('Navigating frame');
-
       let userMessage;
-      if (isBrowserLocked) {
-        userMessage = 'Un Chrome précédent bloquait la session — il a été nettoyé. Cliquez "Réessayer" dans quelques secondes.';
-      } else if (isContextDestroyed) {
-        userMessage = 'Chrome a démarré mais a planté. Vérifiez que Google Chrome est bien installé et réessayez.';
-      } else {
-        userMessage = `Erreur WhatsApp: ${err.message}`;
-      }
+      if (isBrowserLocked) userMessage = 'Un Chrome précédent bloquait la session — il a été nettoyé. Réessayez.';
+      else if (isContextDestroyed) userMessage = 'Chrome a démarré mais a planté. Vérifiez que Google Chrome est installé.';
+      else userMessage = `Erreur WhatsApp: ${err.message}`;
 
       this.io?.to(`account_${accountId}`).emit('status', {
-        isConnected: false, qrCode: null, status: 'error', message: userMessage
+        isConnected: false, qrCode: null, status: 'error', profileId, message: userMessage
       });
 
       setTimeout(() => {
-        const e = this.clients.get(accountId);
-        if (e?.status === 'error') this.clients.delete(accountId);
+        if (found) {
+          const e = this.clients.get(found.key);
+          if (e?.status === 'error') this.clients.delete(found.key);
+        }
       }, REINIT_COOLDOWN_MS);
     });
   }
 
+  _findEntryByClient(client) {
+    for (const [key, entry] of this.clients) {
+      if (entry.client === client) return { key, entry };
+    }
+    return null;
+  }
+
+  // ─── Status ──────────────────────────────────────────────────────────────
+
   getStatus(accountId) {
-    const entry = this.clients.get(accountId);
-    if (!entry) return { isConnected: false, qrCode: null, status: 'not_initialized', profileId: null, phoneNumber: null };
+    const entries = this._getEntriesForAccount(accountId);
+    if (entries.length === 0) {
+      return { isConnected: false, qrCode: null, status: 'not_initialized', profileId: null, phoneNumber: null };
+    }
+    // Prefer connected, then qr, then first
+    const connected = entries.find(e => e.entry.status === 'connected');
+    const qr = entries.find(e => e.entry.status === 'qr');
+    const { entry } = connected || qr || entries[0];
     return {
       isConnected: entry.status === 'connected',
       qrCode: entry.qrCode,
@@ -262,33 +342,54 @@ class WhatsAppManager {
     };
   }
 
-  async sendMessage(accountId, to, content) {
-    const entry = this.clients.get(accountId);
-    if (!entry || entry.status !== 'connected') throw new Error('WhatsApp non connecté');
-    await entry.client.sendMessage(to, content);
+  getProfileStatus(profileId) {
+    const found = this._getEntryByProfileId(profileId);
+    if (!found) return { isConnected: false, qrCode: null, status: 'not_initialized' };
+    const { entry } = found;
+    return { isConnected: entry.status === 'connected', qrCode: entry.qrCode, status: entry.status };
   }
 
-  async logout(accountId) {
-    const entry = this.clients.get(accountId);
-    if (entry) {
-      if (entry.profileId) {
-        try {
-          await this.prisma.whatsAppProfile.update({
-            where: { id: entry.profileId },
-            data: { is_connected: false }
-          });
-        } catch (_) {}
-      }
-      try { await entry.client.logout(); } catch (_) {}
-      try { await entry.client.destroy(); } catch (_) {}
-      this.clients.delete(accountId);
+  getAllStatuses(accountId) {
+    return this._getEntriesForAccount(accountId).map(({ entry }) => ({
+      profileId: entry.profileId,
+      phoneNumber: entry.phoneNumber,
+      status: entry.status,
+      isConnected: entry.status === 'connected'
+    }));
+  }
+
+  // ─── Send message ─────────────────────────────────────────────────────────
+
+  async sendMessage(profileId, to, content) {
+    const found = this._getEntryByProfileId(profileId);
+    if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté pour ce profil');
+    await found.entry.client.sendMessage(to, content);
+  }
+
+  // ─── Logout ──────────────────────────────────────────────────────────────
+
+  async logout(profileId) {
+    const found = this._getEntryByProfileId(profileId);
+    if (found) {
+      try { await found.entry.client.logout(); } catch (_) {}
+      try { await found.entry.client.destroy(); } catch (_) {}
+      this.clients.delete(found.key);
+      this.clearCache(profileId);
     }
-    const sessionDir = path.join(SESSION_BASE, `session-account_${accountId}`);
+    try {
+      await this.prisma.whatsAppProfile.update({
+        where: { id: profileId }, data: { is_connected: false }
+      });
+    } catch (_) {}
+
+    const sessionDir = path.join(SESSION_BASE, `session-profile_${profileId}`);
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`[WA] Session supprimée — compte ${accountId}`);
+      console.log(`[WA] Session supprimée — profil ${profileId}`);
     }
   }
+
+  // ─── Restore sessions on startup ─────────────────────────────────────────
 
   async restoreExistingSessions() {
     try {
@@ -297,8 +398,8 @@ class WhatsAppManager {
       });
       console.log(`Restauration de ${profiles.length} session(s) WhatsApp`);
       for (const profile of profiles) {
-        this._cleanChromeLocks(profile.account_id);
-        await this.initializeClient(profile.account_id);
+        this._cleanChromeLocks(profile.id);
+        await this.initializeClient(profile.account_id, profile.id);
         await new Promise(r => setTimeout(r, 3000));
       }
     } catch (err) {
