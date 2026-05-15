@@ -162,9 +162,11 @@ export default function Dashboard() {
     socketRef.current?.emit('connect-whatsapp');
   };
 
-  const handleLogoutWhatsApp = async () => {
+  const handleLogoutWhatsApp = async (profileId) => {
+    const pid = profileId || activeProfile?.id;
+    if (!pid) return;
     try {
-      await axios.post(`${API_URL}/messages/logout`);
+      await axios.post(`${API_URL}/messages/logout`, { profileId: pid });
       setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' });
       await loadProfiles();
     } catch (err) {
