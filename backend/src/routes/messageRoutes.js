@@ -14,13 +14,16 @@ router.get('/status', (req, res) => {
 });
 
 router.post('/connect', (req, res) => {
-  whatsappManager.initializeClient(req.accountId);
+  const profileId = req.body?.profileId ? Number(req.body.profileId) : null;
+  whatsappManager.initializeClient(req.accountId, profileId);
   res.json({ success: true, message: 'Initialisation WhatsApp en cours...' });
 });
 
 router.post('/logout', async (req, res) => {
   try {
-    await whatsappManager.logout(req.accountId);
+    const profileId = req.body?.profileId ? Number(req.body.profileId) : null;
+    if (!profileId) return res.status(400).json({ error: 'profileId requis' });
+    await whatsappManager.logout(profileId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -81,7 +84,7 @@ router.post('/send', profileMiddleware, async (req, res) => {
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
 
     const waId = contact.wa_id || (contact.phone_number.replace('+', '') + '@c.us');
-    await whatsappManager.sendMessage(req.accountId, waId, content.trim());
+    await whatsappManager.sendMessage(req.profileId, waId, content.trim());
 
     const msg = await prisma.message.create({
       data: {
