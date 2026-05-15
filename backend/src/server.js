@@ -69,14 +69,15 @@ io.on('connection', (socket) => {
     socket.emit('status', status);
   });
 
-  socket.on('connect-whatsapp', () => {
-    console.log(`Demande connexion WhatsApp — compte ${accountId}`);
-    whatsappManager.initializeClient(accountId);
+  socket.on('connect-whatsapp', (data = {}) => {
+    const profileId = data?.profileId ? Number(data.profileId) : null;
+    console.log(`Demande connexion WhatsApp — compte ${accountId}${profileId ? `, profil ${profileId}` : ' (nouveau)'}`);
+    whatsappManager.initializeClient(accountId, profileId);
   });
 
   socket.on('get-initial-data', async (data = {}) => {
     try {
-      let profileId = data?.profileId;
+      let profileId = data?.profileId ? Number(data.profileId) : null;
 
       if (!profileId) {
         const status = whatsappManager.getStatus(accountId);
