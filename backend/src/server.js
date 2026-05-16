@@ -73,6 +73,12 @@ io.on('connection', (socket) => {
 
   socket.on('connect-whatsapp', (data = {}) => {
     const profileId = data?.profileId ? Number(data.profileId) : null;
+    // Guard: if already connected or initializing, just re-emit current status
+    const current = whatsappManager.getStatus(accountId);
+    if (['connected', 'initializing', 'qr'].includes(current.status)) {
+      socket.emit('status', current);
+      return;
+    }
     console.log(`Demande connexion WhatsApp — compte ${accountId}${profileId ? `, profil ${profileId}` : ' (nouveau)'}`);
     whatsappManager.initializeClient(accountId, profileId);
   });
