@@ -29,6 +29,7 @@ model WhatsAppProfile {
   botConfig BotConfig?
   contacts  Contact[]
   faqs      FAQ[]
+  statuses  Status[]
 
   @@unique([account_id, phone_number])
 }
@@ -77,6 +78,18 @@ model FAQ {
   answer     String
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
+}
+
+model Status {
+  id         Int      @id @default(autoincrement())
+  profile_id Int
+  content    String
+  type       String   @default("text")
+  view_count Int      @default(0)
+  wa_msg_id  String?
+  created_at DateTime @default(now())
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
