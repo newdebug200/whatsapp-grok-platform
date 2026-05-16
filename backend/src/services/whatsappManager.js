@@ -112,6 +112,16 @@ class WhatsAppManager {
         const { entry } = existing;
         if (['initializing', 'connected', 'qr'].includes(entry.status)) {
           console.log(`[WA] Déjà en cours (${entry.status}) — profil ${profileId}`);
+          if (entry.status === 'connected') {
+            this.io?.to(`account_${accountId}`).emit('status', {
+              isConnected: true, qrCode: null, status: 'connected',
+              profileId: entry.profileId, phoneNumber: entry.phoneNumber
+            });
+          } else if (entry.qrCode) {
+            this.io?.to(`account_${accountId}`).emit('status', {
+              isConnected: false, qrCode: entry.qrCode, status: 'qr', profileId
+            });
+          }
           return;
         }
         if (entry.lastErrorAt && Date.now() - entry.lastErrorAt < REINIT_COOLDOWN_MS) {
@@ -123,6 +133,27 @@ class WhatsAppManager {
           return;
         }
         await this._destroyEntry(existing.key);
+      }
+    } else {
+      // Dedup for new connections (profileId unknown) — prevent multiple simultaneous clients
+      const existingEntries = this._getEntriesForAccount(accountId);
+      const active = existingEntries.find(e =>
+        ['initializing', 'connected', 'qr'].includes(e.entry.status)
+      );
+      if (active) {
+        console.log(`[WA] Déjà actif (${active.entry.status}) — compte ${accountId}, ignoré`);
+        if (active.entry.status === 'connected') {
+          this.io?.to(`account_${accountId}`).emit('status', {
+            isConnected: true, qrCode: null, status: 'connected',
+            profileId: active.entry.profileId, phoneNumber: active.entry.phoneNumber
+          });
+        } else if (active.entry.qrCode) {
+          this.io?.to(`account_${accountId}`).emit('status', {
+            isConnected: false, qrCode: active.entry.qrCode, status: 'qr',
+            profileId: active.entry.profileId
+          });
+        }
+        return;
       }
     }
 
@@ -196,6 +227,26 @@ class WhatsAppManager {
           entry.status = 'connected';
           entry.lastErrorAt = null;
           this.clients.set(profile.id, entry);
+        }
+        // Rename session folder from temp key to persistent profile key
+        // so restoreExistingSessions can find it on next server restart
+        const oldSessionDir = path.join(SESSION_BASE, `session-${clientKey}`);
+        const newSessionDir = path.join(SESSION_BASE, `session-profile_${profile.id}`);
+        if (fs.existsSync(oldSessionDir) && !fs.existsSync(newSessionDir)) {
+          try {
+            fs.renameSync(oldSessionDir, newSessionDir);
+            console.log(`[WA] Session renommée: ${clientKey} → profile_${profile.id}`);
+          } catch (renameErr) {
+            // On Windows, Chrome may still have files locked — try again after a short delay
+            setTimeout(() => {
+              try {
+                if (fs.existsSync(oldSessionDir) && !fs.existsSync(newSessionDir)) {
+                  fs.renameSync(oldSessionDir, newSessionDir);
+                  console.log(`[WA] Session renommée (delayed): ${clientKey} → profile_${profile.id}`);
+                }
+              } catch (_) {}
+            }, 3000);
+          }
         }
       } else {
         const entry = this.clients.get(clientKey);
