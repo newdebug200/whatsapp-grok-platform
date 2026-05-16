@@ -161,8 +161,9 @@ export default function Dashboard() {
     loadContactsForProfile(profile.id);
   };
 
-  const handleConnectWhatsApp = () => {
-    socketRef.current?.emit('connect-whatsapp');
+  const handleConnectWhatsApp = (forceNew = false) => {
+    const profileId = !forceNew && activeProfileRef.current?.id ? activeProfileRef.current.id : null;
+    socketRef.current?.emit('connect-whatsapp', profileId ? { profileId } : {});
   };
 
   const handleLogoutWhatsApp = async (profileId) => {
