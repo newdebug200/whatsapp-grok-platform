@@ -155,6 +155,60 @@
   text-overflow: ellipsis;
 }
 
+.profile-dropdown-item-wrap {
+  position: relative;
+}
+
+.profile-rename-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #bbb;
+  padding: 2px 4px;
+  margin-left: auto;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.profile-dropdown-item:hover .profile-rename-btn { opacity: 1; }
+.profile-rename-btn:hover { color: #555; }
+
+.profile-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+}
+
+.profile-rename-input {
+  flex: 1;
+  border: 1.5px solid #25d366;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+
+.profile-rename-ok,
+.profile-rename-cancel {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.profile-rename-ok { color: #25d366; }
+.profile-rename-ok:hover { background: #e7f8ee; }
+.profile-rename-cancel { color: #e53935; }
+.profile-rename-cancel:hover { background: #fdecea; }
+
 .profile-dropdown-divider {
   height: 1px;
   background: #e9edef;
