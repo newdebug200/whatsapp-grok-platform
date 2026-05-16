@@ -8,6 +8,7 @@ import BotConfig from './BotConfig';
 import FAQManager from './FAQManager';
 import Stats from './Stats';
 import Settings from './Settings';
+import StatusManager from './StatusManager';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -40,6 +41,8 @@ export default function Dashboard() {
   const [mobileView, setMobileView] = useState('list');
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState(null);
+  const [editName, setEditName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('botora-notif-sound') !== 'off');
 
@@ -184,6 +187,16 @@ export default function Dashboard() {
     if (key === 'chat') setUnreadCount(0);
   };
 
+  const handleRenameProfile = async (profileId, name) => {
+    try {
+      await axios.put(`${API_URL}/profiles/${profileId}`, { display_name: name.trim() || null });
+      await loadProfiles();
+    } catch (err) {
+      console.error('Erreur renommage:', err.message);
+    }
+    setEditingProfileId(null);
+  };
+
   const navItems = [
     {
       key: 'chat', label: 'Discussions',
@@ -192,6 +205,10 @@ export default function Dashboard() {
     {
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
+    },
+    {
+      key: 'statuts', label: 'Statuts',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
     },
     {
       key: 'faq', label: 'FAQ',
@@ -289,21 +306,40 @@ export default function Dashboard() {
                   <div className="profile-dropdown-empty">Aucun profil — connectez WhatsApp</div>
                 )}
                 {profiles.map(p => (
-                  <button
-                    key={p.id}
-                    className={`profile-dropdown-item ${activeProfile?.id === p.id ? 'active' : ''}`}
-                    onClick={() => handleSwitchProfile(p)}
-                  >
-                    <span className="profile-item-dot" style={{ background: p.is_connected ? '#25d366' : '#aaa' }} />
-                    <span className="profile-item-label">
-                      {p.display_name || p.phone_number}
-                    </span>
-                    {activeProfile?.id === p.id && (
-                      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style={{ marginLeft: 'auto', color: '#25d366' }}>
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                      </svg>
+                  <div key={p.id} className="profile-dropdown-item-wrap">
+                    {editingProfileId === p.id ? (
+                      <form
+                        className="profile-rename-form"
+                        onSubmit={(e) => { e.preventDefault(); handleRenameProfile(p.id, editName); }}
+                      >
+                        <input
+                          className="profile-rename-input"
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          placeholder={p.phone_number}
+                          autoFocus
+                          maxLength={40}
+                        />
+                        <button type="submit" className="profile-rename-ok">✓</button>
+                        <button type="button" className="profile-rename-cancel" onClick={() => setEditingProfileId(null)}>✕</button>
+                      </form>
+                    ) : (
+                      <button
+                        className={`profile-dropdown-item ${activeProfile?.id === p.id ? 'active' : ''}`}
+                        onClick={() => handleSwitchProfile(p)}
+                      >
+                        <span className="profile-item-dot" style={{ background: p.is_connected ? '#25d366' : '#aaa' }} />
+                        <span className="profile-item-label">{p.display_name || p.phone_number}</span>
+                        <button
+                          className="profile-rename-btn"
+                          title="Renommer"
+                          onClick={(e) => { e.stopPropagation(); setEditingProfileId(p.id); setEditName(p.display_name || ''); }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                        </button>
+                      </button>
                     )}
-                  </button>
+                  </div>
                 ))}
                 <div className="profile-dropdown-divider" />
                 <button
@@ -364,6 +400,9 @@ export default function Dashboard() {
           )}
           {activePanel === 'stats' && (
             noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <Stats socket={socket} />
+          )}
+          {activePanel === 'statuts' && (
+            noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <StatusManager socket={socket} />
           )}
           {activePanel === 'faq' && (
             noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <FAQManager />
