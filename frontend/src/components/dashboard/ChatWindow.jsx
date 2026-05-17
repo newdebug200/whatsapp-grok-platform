@@ -26,6 +26,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [emojiCategory, setEmojiCategory] = useState('😀');
   const [iaPaused, setIaPaused] = useState(false);
   const [togglingIA, setTogglingIA] = useState(false);
+  const [sendError, setSendError] = useState('');
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -68,7 +69,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     setLoading(true);
     try {
       const res = await axios.get(`${API_URL}/messages/conversation/${contactId}`);
-      setMessages(res.data);
+      const data = res.data;
+      const msgs = Array.isArray(data) ? data : (data.messages || []);
+      setMessages(msgs);
       setAutoScroll(true);
       setTimeout(scrollToBottom, 80);
     } catch (err) {
@@ -93,6 +96,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     if (!inputText.trim() || !contact || sending) return;
     const text = inputText.trim();
     setInputText('');
+    setSendError('');
     setSending(true);
     setShowEmoji(false);
     try {
@@ -101,7 +105,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       await loadMessages(contact.id);
     } catch (err) {
       setInputText(text);
+      setSendError("Échec de l'envoi. Vérifiez que WhatsApp est connecté.");
       console.error('Erreur envoi:', err);
+      setTimeout(() => setSendError(''), 5000);
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -222,7 +228,20 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
                   <div className="date-separator"><span>{formatDateSep(msg.created_at)}</span></div>
                 )}
                 <div className={`message-bubble ${msg.direction === 'sent' ? 'sent' : msg.direction === 'system' ? 'system' : 'received'}`}>
-                  <span className="message-text">{msg.content}</span>
+                  <span className="message-text">
+                    {/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: 0.85, fontStyle: 'italic' }}>
+                        <span style={{ fontSize: '1.1em' }}>
+                          {msg.content === '[Image]' ? '📷' :
+                           msg.content === '[Vidéo]' ? '🎥' :
+                           msg.content === '[Audio]' ? '🎵' :
+                           msg.content === '[Document]' ? '📄' :
+                           msg.content === '[Sticker]' ? '🎭' : '📎'}
+                        </span>
+                        {msg.content.replace(/[\[\]]/g, '')}
+                      </span>
+                    ) : msg.content}
+                  </span>
                   <span className="message-time">
                     {formatMsgTime(msg.created_at)}
                     {msg.direction === 'sent' && (
@@ -311,6 +330,17 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         <div className="chat-wa-offline">
           <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
           WhatsApp non connecté — l'envoi est désactivé
+        </div>
+      )}
+      {sendError && (
+        <div style={{
+          position: 'absolute', bottom: 70, left: '50%', transform: 'translateX(-50%)',
+          background: '#c0392b', color: '#fff', padding: '8px 16px', borderRadius: 8,
+          fontSize: '0.85rem', boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap'
+        }}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          {sendError}
         </div>
       )}
     </div>
