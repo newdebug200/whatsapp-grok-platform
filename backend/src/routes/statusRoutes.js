@@ -1,10 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
-
-const prisma = new PrismaClient();
 
 router.use(authMiddleware);
 
@@ -17,7 +15,7 @@ router.get('/', profileMiddleware, async (req, res) => {
     });
     res.json(statuses);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors du chargement des statuts' });
   }
 });
 
@@ -50,7 +48,7 @@ router.post('/', profileMiddleware, async (req, res) => {
 
     res.json(status);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors de la création du statut' });
   }
 });
 
@@ -73,7 +71,7 @@ router.delete('/:id', profileMiddleware, async (req, res) => {
     await prisma.status.delete({ where: { id: status.id } });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors de la suppression du statut' });
   }
 });
 
