@@ -41,6 +41,14 @@ class WhatsAppManager {
     }
   }
 
+  emitToProfileAccount(profileId, event, data) {
+    const found = this._getEntryByProfileId(profileId);
+    const accountId = found?.entry?.accountId;
+    if (accountId && this.io) {
+      this.io.to(`account_${accountId}`).emit(event, data);
+    }
+  }
+
   // ─── Client lookup helpers ────────────────────────────────────────────────
 
   _getEntryByProfileId(profileId) {
@@ -487,8 +495,20 @@ class WhatsAppManager {
 
     const sessionDir = path.join(SESSION_BASE, `session-profile_${profileId}`);
     if (fs.existsSync(sessionDir)) {
-      fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`[WA] Session supprimée — profil ${profileId}`);
+      const deleteWithRetry = (retries = 4, delay = 1500) => {
+        try {
+          fs.rmSync(sessionDir, { recursive: true, force: true });
+          console.log(`[WA] Session supprimée — profil ${profileId}`);
+        } catch (err) {
+          if (retries > 0 && (err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'ENOTEMPTY')) {
+            console.warn(`[WA] Session verrouillée (${err.code}), nouvelle tentative dans ${delay}ms...`);
+            setTimeout(() => deleteWithRetry(retries - 1, delay * 2), delay);
+          } else {
+            console.error(`[WA] Impossible de supprimer la session: ${err.message}`);
+          }
+        }
+      };
+      deleteWithRetry();
     }
   }
 
