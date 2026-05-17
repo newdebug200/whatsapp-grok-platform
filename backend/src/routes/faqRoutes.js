@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
-
-const prisma = new PrismaClient();
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
@@ -16,7 +14,7 @@ router.get('/', async (req, res) => {
     });
     res.json(faqs);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors du chargement des FAQs' });
   }
 });
 
@@ -31,7 +29,7 @@ router.post('/', async (req, res) => {
     });
     res.json(faq);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Erreur lors de la création de la FAQ" });
   }
 });
 
@@ -48,7 +46,7 @@ router.put('/:id', async (req, res) => {
     });
     res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Erreur lors de la mise à jour de la FAQ" });
   }
 });
 
@@ -62,7 +60,7 @@ router.delete('/:id', async (req, res) => {
     await prisma.fAQ.delete({ where: { id: faq.id } });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Erreur lors de la suppression de la FAQ" });
   }
 });
 
