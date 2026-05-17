@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const CONNECT_COOLDOWN_MS = 9000; // un peu plus long que le cooldown backend
+const CONNECT_COOLDOWN_MS = 9000;
 
 export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp }) {
   const [config, setConfig] = useState({
     bot_name: 'Botora',
     bot_info: '',
     bot_behavior: '',
-    ia_enabled: true
+    ia_enabled: true,
+    response_delay_seconds: 5
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -119,6 +120,13 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     return 'Connecter WhatsApp';
   };
 
+  const formatDelay = (s) => {
+    if (s < 60) return `${s} seconde${s > 1 ? 's' : ''}`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return r === 0 ? `${m} min` : `${m}min ${r}s`;
+  };
+
   return (
     <div className="panel-content">
       <div className="panel-title">Configuration du Bot</div>
@@ -214,6 +222,29 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           >
             <span className="toggle-knob" />
           </button>
+        </div>
+
+        <div className="field-group" style={{ marginTop: 16 }}>
+          <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Délai de regroupement des messages</span>
+            <span style={{ fontWeight: 600, color: 'var(--accent, #25d366)', fontSize: '0.85rem' }}>
+              {formatDelay(config.response_delay_seconds ?? 5)}
+            </span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="300"
+            step="1"
+            value={config.response_delay_seconds ?? 5}
+            onChange={e => setConfig({ ...config, response_delay_seconds: parseInt(e.target.value) })}
+            style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--accent, #25d366)' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary, #888)', marginTop: 2 }}>
+            <span>1s</span>
+            <span style={{ fontSize: '0.7rem' }}>Délai avant que le bot réponde après le dernier message reçu</span>
+            <span>5min</span>
+          </div>
         </div>
 
         {error && <div className="config-error">{error}</div>}
