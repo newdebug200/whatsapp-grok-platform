@@ -126,11 +126,17 @@ export function AuthProvider({ children }) {
     setActiveProfileState(null);
   };
 
+  const deleteAccount = async (password) => {
+    const res = await axios.delete(`${API_URL}/auth/account`, { data: { password } });
+    if (res.data.success) logout();
+    return res.data;
+  };
+
   return (
     <AuthContext.Provider value={{
       account, token, loading,
       profiles, activeProfile,
-      login, register, logout,
+      login, register, logout, deleteAccount,
       selectProfile, loadProfiles
     }}>
       {children}
