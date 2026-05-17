@@ -1,8 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../prisma');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'botora-secret-key-change-in-prod';
-const prisma = new PrismaClient();
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'];
