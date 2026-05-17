@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [editName, setEditName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('botora-notif-sound') !== 'off');
+  const [botError, setBotError] = useState(null);
 
   const activePanelRef = useRef(activePanel);
   const selectedContactRef = useRef(selectedContact);
@@ -139,6 +140,19 @@ export default function Dashboard() {
         loadContactsForProfile(activeProfileRef.current?.id, s);
       }
       handleNewMessage(msg);
+    });
+
+    s.on('bot-error', (data) => {
+      setBotError(data);
+      setTimeout(() => setBotError(null), 8000);
+    });
+
+    s.on('reconnect', () => {
+      console.log('Socket reconnecté — resync statut WA');
+      s.emit('get-status');
+      if (activeProfileRef.current?.id) {
+        loadContactsForProfile(activeProfileRef.current.id, s);
+      }
     });
 
     setSocket(s);
@@ -431,6 +445,30 @@ export default function Dashboard() {
 
       {(showMenu || showProfileMenu) && (
         <div className="overlay" onClick={() => { setShowMenu(false); setShowProfileMenu(false); }} />
+      )}
+
+      {botError && (
+        <div style={{
+          position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
+          background: '#c0392b', color: '#fff', borderRadius: 10,
+          padding: '12px 18px', maxWidth: 340, boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'flex-start', gap: 10
+        }}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style={{ flexShrink: 0, marginTop: 1 }}>
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 3 }}>Erreur bot IA</div>
+            <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{botError.error}</div>
+            {botError.contactPhone && (
+              <div style={{ fontSize: '0.78rem', opacity: 0.7, marginTop: 2 }}>Contact : {botError.contactPhone}</div>
+            )}
+          </div>
+          <button
+            onClick={() => setBotError(null)}
+            style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, marginLeft: 4, opacity: 0.8 }}
+          >✕</button>
+        </div>
       )}
     </div>
   );
