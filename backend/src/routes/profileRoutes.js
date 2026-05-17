@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../prisma');
 const { authMiddleware } = require('../middleware/auth');
-
-const prisma = new PrismaClient();
 
 router.use(authMiddleware);
 
@@ -15,7 +13,7 @@ router.get('/', async (req, res) => {
     });
     res.json(profiles);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors du chargement des profils' });
   }
 });
 
@@ -32,7 +30,7 @@ router.put('/:id', async (req, res) => {
     });
     res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du profil' });
   }
 });
 
@@ -56,7 +54,7 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors de la suppression du profil' });
   }
 });
 
