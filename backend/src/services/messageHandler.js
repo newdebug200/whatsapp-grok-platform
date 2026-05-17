@@ -2,9 +2,7 @@ const axios = require('axios');
 
 class MessageHandler {
   constructor() {
-    // key: `${profileId}_${contactId}` -> { messages[], timer, contact, client, prisma, profileId, from, waManager }
     this.pendingMessages = new Map();
-    this.DELAY_MS = 5 * 60 * 1000;
   }
 
   async handleIncomingMessage(message, client, prisma, profileId, waManager) {
@@ -41,19 +39,28 @@ class MessageHandler {
         }
       }
 
-      // Save message to DB (for UI display) — fire & forget for performance
+      const mediaTypeLabel = message.hasMedia
+        ? (message.type === 'image' ? 'Image'
+          : message.type === 'video' ? 'Vidéo'
+          : message.type === 'audio' || message.type === 'ptt' ? 'Audio'
+          : message.type === 'document' ? 'Document'
+          : message.type === 'sticker' ? 'Sticker'
+          : 'Fichier')
+        : null;
+
       prisma.message.create({
         data: {
           contact_id: dbContact.id,
-          content: message.body || '',
+          content: mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || ''),
           direction: 'received',
-          type: message.hasMedia ? 'other' : 'text',
+          type: message.type || 'text',
           created_at: new Date(message.timestamp * 1000)
         }
       }).catch(err => console.error('[DB] Erreur save message:', err.message));
 
-      // Add to in-memory context cache
-      waManager.addToCache(profileId, dbContact.id, 'received', message.body || '');
+      if (!message.hasMedia) {
+        waManager.addToCache(profileId, dbContact.id, 'received', message.body || '');
+      }
 
       if (dbContact.ia_paused) {
         console.log(`Contact ${phoneNumber}: prise en main humaine active, réponse IA désactivée`);
@@ -61,7 +68,8 @@ class MessageHandler {
       }
 
       if (message.hasMedia) {
-        const response = "Je traite uniquement les messages texte. Merci de m'écrire votre demande en texte.";
+        const label = mediaTypeLabel?.toLowerCase() || 'fichier';
+        const response = `Je reçois votre ${label} mais je ne traite que les messages texte. Merci de reformuler votre demande par écrit.`;
         await client.sendMessage(waId, response);
         waManager.addToCache(profileId, dbContact.id, 'sent', response);
         prisma.message.create({
@@ -70,14 +78,15 @@ class MessageHandler {
         return;
       }
 
-      this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager);
-
+      const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
+      const delayMs = (botConfig?.response_delay_seconds ?? 5) * 1000;
+      this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs, botConfig);
     } catch (error) {
       console.error('Erreur traitement message:', error);
     }
   }
 
-  _queueMessage(body, from, contact, client, prisma, profileId, waManager) {
+  _queueMessage(body, from, contact, client, prisma, profileId, waManager, delayMs, botConfig) {
     const key = `${profileId}_${contact.id}`;
 
     if (this.pendingMessages.has(key)) {
@@ -86,8 +95,8 @@ class MessageHandler {
       pending.messages.push(body);
       console.log(`Message ajouté à la file pour ${from} (${pending.messages.length} messages en attente) — timer remis à zéro`);
     } else {
-      this.pendingMessages.set(key, { messages: [body], timer: null, contact, client, prisma, profileId, from, waManager });
-      console.log(`Nouveau message en file pour ${from} — réponse dans ${this.DELAY_MS / 60000} min si pas de nouveau message`);
+      this.pendingMessages.set(key, { messages: [body], timer: null, contact, client, prisma, profileId, from, waManager, delayMs, botConfig });
+      console.log(`Nouveau message en file pour ${from} — réponse dans ${delayMs / 1000}s si pas de nouveau message`);
     }
 
     const pending = this.pendingMessages.get(key);
@@ -95,11 +104,14 @@ class MessageHandler {
       this.pendingMessages.delete(key);
       const concatenated = pending.messages.join('\n');
       console.log(`Traitement de ${pending.messages.length} message(s) pour ${pending.from}`);
-      await this._processTextMessage(concatenated, pending.contact, pending.client, pending.prisma, pending.profileId, pending.from, pending.waManager);
-    }, this.DELAY_MS);
+      await this._processTextMessage(
+        concatenated, pending.contact, pending.client, pending.prisma,
+        pending.profileId, pending.from, pending.waManager, pending.botConfig
+      );
+    }, delayMs);
   }
 
-  async _processTextMessage(messageText, contact, client, prisma, profileId, from, waManager) {
+  async _processTextMessage(messageText, contact, client, prisma, profileId, from, waManager, cachedBotConfig) {
     try {
       const freshContact = await prisma.contact.findUnique({ where: { id: contact.id } });
       if (freshContact?.ia_paused) {
@@ -107,7 +119,7 @@ class MessageHandler {
         return;
       }
 
-      const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
+      const botConfig = cachedBotConfig || await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
       if (!botConfig || !botConfig.ia_enabled) {
         console.log(`Profil ${profileId}: bot IA désactivé, aucune réponse envoyée.`);
         return;
@@ -120,7 +132,6 @@ class MessageHandler {
         return;
       }
 
-      // Use RAM cache for context (fallback to DB on cold start)
       let recentMessages = waManager.getFromCache(profileId, contact.id);
       if (recentMessages.length === 0) {
         const dbMessages = await prisma.message.findMany({
@@ -129,7 +140,6 @@ class MessageHandler {
           take: 15
         });
         recentMessages = dbMessages.map(m => ({ direction: m.direction, content: m.content }));
-        // Seed the cache with DB data
         for (const m of recentMessages) waManager.addToCache(profileId, contact.id, m.direction, m.content);
       }
 
@@ -166,18 +176,18 @@ class MessageHandler {
 
       const aiResponse = response.data.choices[0].message.content;
       await client.sendMessage(from, aiResponse);
-
-      // Add to cache
       waManager.addToCache(profileId, contact.id, 'sent', aiResponse);
-
-      // Save to DB (fire & forget)
       prisma.message.create({
         data: { contact_id: contact.id, content: aiResponse, direction: 'sent', type: 'text', created_at: new Date() }
       }).catch(() => {});
-
       console.log(`Réponse IA envoyée à ${from} pour le profil ${profileId}`);
     } catch (error) {
       console.error('Erreur API Groq:', error.message);
+      waManager.emitToProfileAccount(profileId, 'bot-error', {
+        profileId,
+        contactPhone: contact.phone_number || from,
+        error: "Le bot IA n'a pas pu répondre. Vérifiez votre clé API Groq dans le fichier .env."
+      });
     }
   }
 
