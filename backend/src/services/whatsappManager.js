@@ -233,7 +233,7 @@ class WhatsAppManager {
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: `session-${sessionId}`, dataPath: SESSION_BASE }),
-      puppeteer: { headless: true, args: puppeteerArgs }
+      puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 120000 }
     });
 
     this.clients.set(clientKey, {
