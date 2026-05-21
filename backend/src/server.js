@@ -23,7 +23,7 @@ const faqRoutes = require('./routes/faqRoutes');
 const configRoutes = require('./routes/configRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const profileRoutes = require('./routes/profileRoutes');
-const statusRoutes = require('./routes/statusRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -45,7 +45,7 @@ app.use('/api/faq', faqRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/profiles', profileRoutes);
-app.use('/api/status', statusRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
