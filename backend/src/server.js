@@ -1,13 +1,6 @@
 const dotenv = require('dotenv');
 dotenv.config();
 
-process.on('unhandledRejection', (reason) => {
-  console.error('[Botora] Unhandled Rejection (non fatal):', reason?.message || reason);
-});
-process.on('uncaughtException', (error) => {
-  console.error('[Botora] Uncaught Exception (non fatal):', error.message);
-});
-
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -24,14 +17,12 @@ const configRoutes = require('./routes/configRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const broadcastRoutes = require('./routes/broadcastRoutes');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
-  }
+  cors: { origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] }
 });
 
 const prisma = new PrismaClient();
@@ -46,6 +37,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/broadcast', broadcastRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
@@ -73,38 +65,26 @@ io.on('connection', (socket) => {
 
   socket.on('connect-whatsapp', (data = {}) => {
     const profileId = data?.profileId ? Number(data.profileId) : null;
-    // Guard: if already connected or initializing, just re-emit current status
     const current = whatsappManager.getStatus(accountId);
     if (['connected', 'initializing', 'qr'].includes(current.status)) {
       socket.emit('status', current);
       return;
     }
-    console.log(`Demande connexion WhatsApp — compte ${accountId}${profileId ? `, profil ${profileId}` : ' (nouveau)'}`);
     whatsappManager.initializeClient(accountId, profileId);
   });
 
   socket.on('get-initial-data', async (data = {}) => {
     try {
       let profileId = data?.profileId ? Number(data.profileId) : null;
-
       if (!profileId) {
         const status = whatsappManager.getStatus(accountId);
         profileId = status.profileId;
       }
-
-      if (!profileId) {
-        socket.emit('initial-contacts', []);
-        return;
-      }
-
+      if (!profileId) { socket.emit('initial-contacts', []); return; }
       const profile = await prisma.whatsAppProfile.findFirst({
         where: { id: profileId, account_id: accountId }
       });
-      if (!profile) {
-        socket.emit('initial-contacts', []);
-        return;
-      }
-
+      if (!profile) { socket.emit('initial-contacts', []); return; }
       const contacts = await prisma.contact.findMany({
         where: { profile_id: profileId },
         include: { messages: { orderBy: { created_at: 'desc' }, take: 1 } },
@@ -128,6 +108,15 @@ whatsappManager.setPrisma(prisma);
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, async () => {
   console.log(`Botora Backend démarré sur port ${PORT}`);
-
   await whatsappManager.restoreExistingSessions();
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Botora] Unhandled Rejection:', reason?.message || reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('[Botora] Uncaught Exception:', error.message);
+  if (error.code === 'MODULE_NOT_FOUND') {
+    console.error('[Botora] Module manquant — relancez npm install');
+  }
 });
