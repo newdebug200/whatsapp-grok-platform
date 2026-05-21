@@ -280,26 +280,6 @@ class WhatsAppManager {
       });
     });
 
-    // ── Status view tracking (message_ack on status@broadcast) ──
-    client.on('message_ack', async (msg, ack) => {
-      try {
-        if (msg.to !== 'status@broadcast' || ack < 3) return;
-        const found = this._findEntryByClient(client);
-        if (!found?.entry?.profileId) return;
-        const updated = await this.prisma.status.updateMany({
-          where: { wa_msg_id: msg.id._serialized, profile_id: found.entry.profileId },
-          data: { view_count: { increment: 1 } }
-        });
-        if (updated.count > 0) {
-          this.io?.to(`account_${accountId}`).emit('status-view-update', {
-            waMsgId: msg.id._serialized, profileId: found.entry.profileId
-          });
-        }
-      } catch (err) {
-        console.error('[WA] Erreur ack statut:', err.message);
-      }
-    });
-
     // ── Incoming message ──
     client.on('message', async (message) => {
       try {
@@ -443,38 +423,6 @@ class WhatsAppManager {
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté pour ce profil');
     await found.entry.client.sendMessage(to, content);
-  }
-
-  // ─── Post WhatsApp Status (story) ────────────────────────────────────────
-
-  async postStatus(profileId, content, type, mediaBase64) {
-    const found = this._getEntryByProfileId(profileId);
-    if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté pour ce profil');
-    const client = found.entry.client;
-
-    let msg;
-    if (type === 'image' && mediaBase64) {
-      const media = new MessageMedia('image/jpeg', mediaBase64);
-      msg = await client.sendMessage('status@broadcast', media, { caption: content || '' });
-    } else {
-      msg = await client.sendMessage('status@broadcast', content);
-    }
-    return msg?.id?._serialized || null;
-  }
-
-  // ─── Delete WhatsApp Status ───────────────────────────────────────────────
-
-  async deleteStatus(profileId, waMsgId) {
-    const found = this._getEntryByProfileId(profileId);
-    if (!found || found.entry.status !== 'connected') return;
-    try {
-      const chat = await found.entry.client.getChatById('status@broadcast');
-      const messages = await chat.fetchMessages({ limit: 50 });
-      const msg = messages.find(m => m.id._serialized === waMsgId);
-      if (msg) await msg.delete(true);
-    } catch (err) {
-      console.error('[WA] Erreur suppression statut WA:', err.message);
-    }
   }
 
   // ─── Logout ──────────────────────────────────────────────────────────────
