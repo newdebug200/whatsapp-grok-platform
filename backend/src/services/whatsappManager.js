@@ -1,8 +1,34 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 const messageHandler = require('./messageHandler');
+
+// ─── Lazy-load whatsapp-web.js (heavy native module) ────────────────────────
+// If it's missing, the server still starts and auth/API routes work normally.
+// WhatsApp features emit a clear error to the frontend.
+let Client = null;
+let LocalAuth = null;
+let MessageMedia = null;
+let WWEB_AVAILABLE = false;
+
+try {
+  const wweb = require('whatsapp-web.js');
+  Client = wweb.Client;
+  LocalAuth = wweb.LocalAuth;
+  MessageMedia = wweb.MessageMedia;
+  WWEB_AVAILABLE = true;
+} catch (err) {
+  console.error('');
+  console.error('╔══════════════════════════════════════════════════════════════╗');
+  console.error('║  ATTENTION : whatsapp-web.js introuvable dans node_modules  ║');
+  console.error('║  Les fonctions WhatsApp seront désactivées.                 ║');
+  console.error('║                                                              ║');
+  console.error('║  Pour installer le module :                                  ║');
+  console.error('║    1) Supprimez node_modules  (rmdir /s /q node_modules)    ║');
+  console.error('║    2) Relancez :  npm install                                ║');
+  console.error('╚══════════════════════════════════════════════════════════════╝');
+  console.error('');
+}
 
 const REINIT_COOLDOWN_MS = 10000;
 const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
@@ -10,9 +36,7 @@ const CONTEXT_MAX = 20;
 
 class WhatsAppManager {
   constructor() {
-    // Key: profileId (number) or temp string "tmp_accountId_timestamp" before phone known
     this.clients = new Map();
-    // In-memory context cache for Groq: key = `${profileId}_${contactId}`
     this.contextCache = new Map();
     this.io = null;
     this.prisma = null;
@@ -108,12 +132,19 @@ class WhatsAppManager {
 
   // ─── Main: initialize a WhatsApp client ──────────────────────────────────
 
-  /**
-   * @param {number} accountId
-   * @param {number|null} profileId  null = new connection (no profile yet)
-   */
   async initializeClient(accountId, profileId = null) {
-    // If profileId given, check if already running
+    if (!WWEB_AVAILABLE) {
+      console.error('[WA] initializeClient ignoré : whatsapp-web.js non installé');
+      this.io?.to(`account_${accountId}`).emit('status', {
+        isConnected: false,
+        qrCode: null,
+        status: 'error',
+        profileId,
+        message: 'Module WhatsApp non installé. Supprimez node_modules et relancez npm install dans le dossier backend.'
+      });
+      return;
+    }
+
     if (profileId !== null) {
       const existing = this._getEntryByProfileId(profileId);
       if (existing) {
@@ -143,7 +174,6 @@ class WhatsAppManager {
         await this._destroyEntry(existing.key);
       }
     } else {
-      // Dedup for new connections (profileId unknown) — prevent multiple simultaneous clients
       const existingEntries = this._getEntriesForAccount(accountId);
       const active = existingEntries.find(e =>
         ['initializing', 'connected', 'qr'].includes(e.entry.status)
@@ -165,7 +195,6 @@ class WhatsAppManager {
       }
     }
 
-    // Choose the client map key
     const clientKey = profileId !== null ? profileId : this._tempKey(accountId);
     const sessionId = this._sessionId(clientKey);
     this._cleanChromeLocks(clientKey);
@@ -196,18 +225,15 @@ class WhatsAppManager {
       lastErrorAt: null
     });
 
-    // ── QR ──
     client.on('qr', (qr) => {
       console.log(`[WA] QR Code — clé ${clientKey}`);
       const entry = this.clients.get(clientKey);
       if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
       this.io?.to(`account_${accountId}`).emit('status', {
-        isConnected: false, qrCode: qr, status: 'qr',
-        profileId: profileId
+        isConnected: false, qrCode: qr, status: 'qr', profileId
       });
     });
 
-    // ── Ready ──
     client.on('ready', async () => {
       const phoneNumber = '+' + client.info.wid.user;
       console.log(`[WA] Connecté — ${phoneNumber} (compte ${accountId})`);
@@ -224,7 +250,6 @@ class WhatsAppManager {
         return;
       }
 
-      // Move from temp key to real profileId if needed
       if (clientKey !== profile.id) {
         const entry = this.clients.get(clientKey);
         if (entry) {
@@ -236,8 +261,6 @@ class WhatsAppManager {
           entry.lastErrorAt = null;
           this.clients.set(profile.id, entry);
         }
-        // Rename session folder from temp key to persistent profile key
-        // so restoreExistingSessions can find it on next server restart
         const oldSessionDir = path.join(SESSION_BASE, `session-${clientKey}`);
         const newSessionDir = path.join(SESSION_BASE, `session-profile_${profile.id}`);
         if (fs.existsSync(oldSessionDir) && !fs.existsSync(newSessionDir)) {
@@ -245,12 +268,10 @@ class WhatsAppManager {
             fs.renameSync(oldSessionDir, newSessionDir);
             console.log(`[WA] Session renommée: ${clientKey} → profile_${profile.id}`);
           } catch (renameErr) {
-            // On Windows, Chrome may still have files locked — try again after a short delay
             setTimeout(() => {
               try {
                 if (fs.existsSync(oldSessionDir) && !fs.existsSync(newSessionDir)) {
                   fs.renameSync(oldSessionDir, newSessionDir);
-                  console.log(`[WA] Session renommée (delayed): ${clientKey} → profile_${profile.id}`);
                 }
               } catch (_) {}
             }, 3000);
@@ -280,7 +301,6 @@ class WhatsAppManager {
       });
     });
 
-    // ── Incoming message ──
     client.on('message', async (message) => {
       try {
         if (message.fromMe) return;
@@ -302,7 +322,6 @@ class WhatsAppManager {
       }
     });
 
-    // ── Disconnected ──
     client.on('disconnected', async (reason) => {
       console.log(`[WA] Déconnecté — clé ${clientKey}: ${reason}`);
       const found = this._findEntryByClient(client);
@@ -331,7 +350,6 @@ class WhatsAppManager {
       });
     });
 
-    // ── Auth failure ──
     client.on('auth_failure', (msg) => {
       console.error(`[WA] Auth failure — clé ${clientKey}:`, msg);
       const found = this._findEntryByClient(client);
@@ -345,7 +363,6 @@ class WhatsAppManager {
       if (found) this.clients.delete(found.key);
     });
 
-    // ── Init error ──
     client.initialize().catch(async (err) => {
       console.error(`[WA] Erreur initialisation clé ${clientKey}:`, err.message);
       try { await client.destroy(); } catch (_) {}
@@ -388,7 +405,6 @@ class WhatsAppManager {
     if (entries.length === 0) {
       return { isConnected: false, qrCode: null, status: 'not_initialized', profileId: null, phoneNumber: null };
     }
-    // Prefer connected, then qr, then first
     const connected = entries.find(e => e.entry.status === 'connected');
     const qr = entries.find(e => e.entry.status === 'qr');
     const { entry } = connected || qr || entries[0];
@@ -420,6 +436,7 @@ class WhatsAppManager {
   // ─── Send message ─────────────────────────────────────────────────────────
 
   async sendMessage(profileId, to, content) {
+    if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté pour ce profil');
     await found.entry.client.sendMessage(to, content);
@@ -463,6 +480,10 @@ class WhatsAppManager {
   // ─── Restore sessions on startup ─────────────────────────────────────────
 
   async restoreExistingSessions() {
+    if (!WWEB_AVAILABLE) {
+      console.log('[WA] Restauration ignorée : whatsapp-web.js non installé');
+      return;
+    }
     try {
       const profiles = await this.prisma.whatsAppProfile.findMany({
         where: { is_connected: true }
