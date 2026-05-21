@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import './Broadcast.css';
 
@@ -30,6 +30,8 @@ export default function Broadcast({ socket, activeProfile }) {
   const [error, setError] = useState('');
   const [contactsError, setContactsError] = useState('');
   const [contactsLoading, setContactsLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState(null);
   const [progress, setProgress] = useState({});
 
   const [form, setForm] = useState({
@@ -39,6 +41,8 @@ export default function Broadcast({ socket, activeProfile }) {
   });
   const [contactSearch, setContactSearch] = useState('');
   const [selectAll, setSelectAll] = useState(false);
+
+  const fileInputRef = useRef(null);
 
   const loadCampaigns = useCallback(async () => {
     setLoading(true);
@@ -60,7 +64,7 @@ export default function Broadcast({ socket, activeProfile }) {
       const res = await axios.get(`${API_URL}/messages/conversations`);
       setContacts(res.data);
       if (res.data.length === 0) {
-        setContactsError('Aucun contact trouvé. WhatsApp doit être connecté et avoir reçu au moins un message.');
+        setContactsError('Aucun contact trouvé. WhatsApp doit être connecté ou importez un fichier CSV / VCF.');
       }
     } catch (err) {
       console.error('Erreur chargement contacts:', err.message);
@@ -161,11 +165,42 @@ export default function Broadcast({ socket, activeProfile }) {
       setForm({ name: '', messages: [{ content: '' }], contactIds: [] });
       setContactSearch('');
       setSelectAll(false);
+      setImportStatus(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    const filename = file.name;
+    const ext = filename.split('.').pop().toLowerCase();
+    if (!['csv', 'vcf'].includes(ext)) {
+      setImportStatus({ error: 'Format non supporté. Utilisez un fichier .csv ou .vcf' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const content = ev.target.result;
+      setImporting(true);
+      setImportStatus(null);
+      try {
+        const res = await axios.post(`${API_URL}/broadcast/import-contacts`, { content, filename });
+        setImportStatus({ imported: res.data.imported, skipped: res.data.skipped, total: res.data.total });
+        await loadContacts();
+      } catch (err) {
+        setImportStatus({ error: err.response?.data?.error || 'Erreur lors de l\'import' });
+      } finally {
+        setImporting(false);
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
   };
 
   const handleStartCampaign = async (id, e) => {
@@ -243,7 +278,7 @@ export default function Broadcast({ socket, activeProfile }) {
     return (
       <div className="bc-panel">
         <div className="bc-toolbar">
-          <button className="bc-back" onClick={() => { setView('list'); setError(''); }}>
+          <button className="bc-back" onClick={() => { setView('list'); setError(''); setImportStatus(null); }}>
             <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
               <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
             </svg>
@@ -304,7 +339,7 @@ export default function Broadcast({ socket, activeProfile }) {
                 <span className="bc-hint"> — {form.contactIds.length} sélectionné(s)</span>
               </label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="bc-select-all" onClick={loadContacts} title="Recharger les contacts" disabled={contactsLoading}>
+                <button className="bc-select-all" onClick={loadContacts} title="Recharger" disabled={contactsLoading}>
                   {contactsLoading ? '…' : '↺'}
                 </button>
                 <button className="bc-select-all" onClick={handleSelectAll}>
@@ -312,9 +347,44 @@ export default function Broadcast({ socket, activeProfile }) {
                 </button>
               </div>
             </div>
-            {contactsError && (
-              <div className="bc-error" style={{ marginBottom: 8 }}>{contactsError}</div>
+
+            {/* Import CSV / VCF */}
+            <div className="bc-import-bar">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.vcf"
+                style={{ display: 'none' }}
+                onChange={handleImportFile}
+              />
+              <button
+                className="bc-import-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15">
+                  <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                </svg>
+                {importing ? 'Import en cours…' : 'Importer CSV / VCF'}
+              </button>
+              <span className="bc-import-hint">CSV : colonnes nom/téléphone · VCF : contacts exportés depuis votre téléphone</span>
+            </div>
+
+            {importStatus && (
+              importStatus.error
+                ? <div className="bc-error" style={{ marginTop: 0 }}>{importStatus.error}</div>
+                : <div className="bc-import-success">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    {importStatus.imported} contact(s) importé(s)
+                    {importStatus.skipped > 0 && ` · ${importStatus.skipped} ignoré(s)`}
+                    {' '}sur {importStatus.total} trouvé(s) dans le fichier
+                  </div>
             )}
+
+            {contactsError && !importStatus && (
+              <div className="bc-error" style={{ marginBottom: 0, marginTop: 0 }}>{contactsError}</div>
+            )}
+
             <input
               className="bc-search"
               type="text"
@@ -326,9 +396,9 @@ export default function Broadcast({ socket, activeProfile }) {
               {contactsLoading && (
                 <div className="bc-contacts-empty">Chargement des contacts…</div>
               )}
-              {!contactsLoading && contacts.length === 0 && !contactsError && (
+              {!contactsLoading && contacts.length === 0 && (
                 <div className="bc-contacts-empty">
-                  Aucun contact disponible. Reconnectez WhatsApp pour importer votre répertoire.
+                  Aucun contact disponible. Importez un fichier CSV ou VCF ci-dessus.
                 </div>
               )}
               {filteredContacts.map(c => (
@@ -354,7 +424,7 @@ export default function Broadcast({ socket, activeProfile }) {
             <button className="bc-btn-primary" onClick={handleCreateCampaign} disabled={saving}>
               {saving ? 'Création en cours…' : 'Créer la campagne'}
             </button>
-            <button className="bc-btn-secondary" onClick={() => { setView('list'); setError(''); }}>
+            <button className="bc-btn-secondary" onClick={() => { setView('list'); setError(''); setImportStatus(null); }}>
               Annuler
             </button>
           </div>
@@ -454,7 +524,7 @@ export default function Broadcast({ socket, activeProfile }) {
   return (
     <div className="bc-panel">
       <div className="bc-toolbar">
-        <h2 className="bc-title">Diffusion</h2>
+        <h2 className="bc-title">Campagnes</h2>
         <button className="bc-btn-primary bc-btn-sm" onClick={() => { setView('create'); setError(''); }}>
           <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           Nouvelle campagne
