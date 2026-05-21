@@ -39,4 +39,19 @@ async function profileMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware, profileMiddleware, JWT_SECRET };
+async function adminMiddleware(req, res, next) {
+  try {
+    const account = await prisma.account.findUnique({
+      where: { id: req.accountId },
+      select: { role: true }
+    });
+    if (!account || account.role !== 'admin') {
+      return res.status(403).json({ error: "Accès réservé à l'administrateur" });
+    }
+    next();
+  } catch (err) {
+    return res.status(500).json({ error: 'Erreur vérification des droits' });
+  }
+}
+
+module.exports = { authMiddleware, profileMiddleware, adminMiddleware, JWT_SECRET };
