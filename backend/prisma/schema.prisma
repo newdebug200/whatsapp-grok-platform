@@ -12,6 +12,7 @@ model Account {
   email              String    @unique
   password           String
   name               String
+  role               String    @default("user")
   created_at         DateTime  @default(now())
   reset_token        String?
   reset_token_expiry DateTime?
@@ -27,11 +28,10 @@ model WhatsAppProfile {
   is_connected Boolean  @default(false)
   created_at   DateTime @default(now())
 
-  account   Account     @relation(fields: [account_id], references: [id])
+  account   Account   @relation(fields: [account_id], references: [id])
   botConfig BotConfig?
   contacts  Contact[]
   faqs      FAQ[]
-  statuses  Status[]
 
   @@unique([account_id, phone_number])
 }
@@ -85,14 +85,3 @@ model FAQ {
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
 
-model Status {
-  id         Int      @id @default(autoincrement())
-  profile_id Int
-  content    String
-  type       String   @default("text")
-  view_count Int      @default(0)
-  wa_msg_id  String?
-  created_at DateTime @default(now())
-
-  profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
-}
