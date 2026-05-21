@@ -1,0 +1,214 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
+import './AdminPanel.css';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatDateTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+export default function AdminPanel() {
+  const { account: currentAccount } = useAuth();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [roleLoadingId, setRoleLoadingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [actionMsg, setActionMsg] = useState(null);
+
+  const loadUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await axios.get(`${API_URL}/admin/users`);
+      setUsers(res.data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erreur lors du chargement');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  const showMsg = (msg, isError = false) => {
+    setActionMsg({ text: msg, error: isError });
+    setTimeout(() => setActionMsg(null), 4000);
+  };
+
+  const handleDeleteConfirm = async (userId) => {
+    setDeletingId(userId);
+    try {
+      const res = await axios.delete(`${API_URL}/admin/users/${userId}`);
+      showMsg(res.data.message);
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Erreur lors de la suppression', true);
+    } finally {
+      setDeletingId(null);
+      setConfirmDelete(null);
+    }
+  };
+
+  const handleRoleToggle = async (user) => {
+    const newRole = user.role === 'admin' ? 'user' : 'admin';
+    setRoleLoadingId(user.id);
+    try {
+      await axios.patch(`${API_URL}/admin/users/${user.id}/role`, { role: newRole });
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+      showMsg(`${user.name} est maintenant ${newRole === 'admin' ? 'administrateur' : 'utilisateur'}`);
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Erreur lors du changement de rôle', true);
+    } finally {
+      setRoleLoadingId(null);
+    }
+  };
+
+  const totalMessages = users.reduce((s, u) => s + u.msgSent + u.msgReceived, 0);
+  const totalProfiles = users.reduce((s, u) => s + u.profileCount, 0);
+  const totalContacts = users.reduce((s, u) => s + u.contactCount, 0);
+
+  return (
+    <div className="admin-panel">
+      <div className="admin-header">
+        <h2 className="admin-title">Administration</h2>
+        <button className="admin-refresh-btn" onClick={loadUsers} disabled={loading} title="Rafraîchir">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+            <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+        </button>
+      </div>
+
+      <div className="admin-stats-row">
+        <div className="admin-stat-card">
+          <div className="admin-stat-value">{users.length}</div>
+          <div className="admin-stat-label">Utilisateurs</div>
+        </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-value">{totalProfiles}</div>
+          <div className="admin-stat-label">Profils WhatsApp</div>
+        </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-value">{totalContacts}</div>
+          <div className="admin-stat-label">Contacts totaux</div>
+        </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-value">{totalMessages}</div>
+          <div className="admin-stat-label">Messages traités</div>
+        </div>
+      </div>
+
+      {actionMsg && (
+        <div className={`admin-action-msg ${actionMsg.error ? 'error' : 'success'}`}>
+          {actionMsg.text}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="admin-loading">Chargement des utilisateurs…</div>
+      ) : error ? (
+        <div className="admin-error">{error}</div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Utilisateur</th>
+                <th>Rôle</th>
+                <th>Profils</th>
+                <th>Contacts</th>
+                <th>Msg reçus</th>
+                <th>Msg envoyés</th>
+                <th>FAQs</th>
+                <th>Dernière activité</th>
+                <th>Inscrit le</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(user => (
+                <tr key={user.id} className={user.id === currentAccount?.id ? 'admin-row-self' : ''}>
+                  <td className="admin-cell-user">
+                    <div className="admin-user-avatar">{user.name.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <div className="admin-user-name">
+                        {user.name}
+                        {user.id === currentAccount?.id && <span className="admin-you-badge">moi</span>}
+                      </div>
+                      <div className="admin-user-email">{user.email}</div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`admin-role-badge ${user.role}`}>
+                      {user.role === 'admin' ? 'Admin' : 'User'}
+                    </span>
+                  </td>
+                  <td className="admin-cell-num">{user.profileCount} {user.connectedProfiles > 0 && <span className="admin-connected-dot">●</span>}</td>
+                  <td className="admin-cell-num">{user.contactCount}</td>
+                  <td className="admin-cell-num">{user.msgReceived}</td>
+                  <td className="admin-cell-num">{user.msgSent}</td>
+                  <td className="admin-cell-num">{user.faqCount}</td>
+                  <td className="admin-cell-date">{formatDateTime(user.lastActivity)}</td>
+                  <td className="admin-cell-date">{formatDate(user.created_at)}</td>
+                  <td className="admin-cell-actions">
+                    {user.id !== currentAccount?.id && (
+                      <>
+                        <button
+                          className="admin-btn-role"
+                          onClick={() => handleRoleToggle(user)}
+                          disabled={roleLoadingId === user.id}
+                          title={user.role === 'admin' ? 'Rétrograder en utilisateur' : 'Promouvoir en admin'}
+                        >
+                          {roleLoadingId === user.id ? '…' : user.role === 'admin' ? '↓ User' : '↑ Admin'}
+                        </button>
+                        <button
+                          className="admin-btn-delete"
+                          onClick={() => setConfirmDelete(user)}
+                          disabled={deletingId === user.id}
+                          title="Supprimer ce compte"
+                        >
+                          {deletingId === user.id ? '…' : <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>}
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="admin-confirm-overlay">
+          <div className="admin-confirm-modal">
+            <div className="admin-confirm-title">Supprimer ce compte ?</div>
+            <div className="admin-confirm-desc">
+              Vous êtes sur le point de supprimer <strong>{confirmDelete.name}</strong> ({confirmDelete.email}) ainsi que toutes ses données (profils, contacts, messages, FAQs).
+              <br /><strong>Cette action est irréversible.</strong>
+            </div>
+            <div className="admin-confirm-actions">
+              <button className="admin-confirm-cancel" onClick={() => setConfirmDelete(null)}>Annuler</button>
+              <button
+                className="admin-confirm-ok"
+                onClick={() => handleDeleteConfirm(confirmDelete.id)}
+                disabled={deletingId === confirmDelete.id}
+              >
+                {deletingId === confirmDelete.id ? 'Suppression…' : 'Supprimer définitivement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
