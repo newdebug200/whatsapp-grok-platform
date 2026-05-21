@@ -14,23 +14,38 @@ export default function AuthPage() {
     setError('');
   };
 
+  const validate = () => {
+    if (!form.email.trim()) return 'L\'email est requis';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Format d\'email invalide';
+    if (!form.password) return 'Le mot de passe est requis';
+    if (form.password.length < 8) return 'Le mot de passe doit contenir au moins 8 caractères';
+    if (mode === 'register' && !form.name.trim()) return 'Le nom est requis';
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLoading(true);
     try {
       if (mode === 'login') {
         await login(form.email, form.password);
       } else {
-        if (!form.name.trim()) {
-          setError('Le nom est requis');
-          setLoading(false);
-          return;
-        }
         await register(form.email, form.password, form.name);
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Une erreur est survenue');
+      if (!err.response) {
+        setError('Impossible de contacter le serveur. Vérifiez que le backend est lancé sur le port 3001.');
+      } else {
+        setError(err.response?.data?.error || 'Une erreur serveur est survenue. Réessayez.');
+      }
     } finally {
       setLoading(false);
     }
@@ -77,7 +92,6 @@ export default function AuthPage() {
                   value={form.name}
                   onChange={handleChange}
                   placeholder="Votre nom"
-                  required
                   autoComplete="name"
                 />
               </div>
@@ -91,7 +105,6 @@ export default function AuthPage() {
                 value={form.email}
                 onChange={handleChange}
                 placeholder="votre@email.com"
-                required
                 autoComplete="email"
               />
             </div>
@@ -104,7 +117,6 @@ export default function AuthPage() {
                 value={form.password}
                 onChange={handleChange}
                 placeholder={mode === 'register' ? 'Min. 8 caractères' : '••••••••'}
-                required
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
             </div>
