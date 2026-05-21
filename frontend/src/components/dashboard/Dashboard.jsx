@@ -227,7 +227,7 @@ export default function Dashboard() {
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
     },
     {
-      key: 'broadcast', label: 'Diffusion',
+      key: 'broadcast', label: 'Campagnes',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     },
     {
@@ -298,7 +298,7 @@ export default function Dashboard() {
                     <button className="dropdown-item" onClick={() => { setActivePanel('config'); setShowMenu(false); }}>Configuration du bot</button>
                     <button className="dropdown-item" onClick={() => { setActivePanel('faq'); setShowMenu(false); }}>Gestion FAQ</button>
                     <button className="dropdown-item" onClick={() => { setActivePanel('stats'); setShowMenu(false); }}>Statistiques</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('broadcast'); setShowMenu(false); }}>Diffusion</button>
+                    <button className="dropdown-item" onClick={() => { setActivePanel('broadcast'); setShowMenu(false); }}>Campagnes</button>
                     <button className="dropdown-item" onClick={() => { setActivePanel('settings'); setShowMenu(false); }}>Paramètres</button>
                     <div className="dropdown-divider" />
                     <button className="dropdown-item danger" onClick={logout}>Déconnexion du compte</button>
