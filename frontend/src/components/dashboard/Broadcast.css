@@ -373,6 +373,7 @@
   padding: 2px 4px;
 }
 .bc-select-all:hover { text-decoration: underline; }
+.bc-select-all:disabled { opacity: 0.5; cursor: not-allowed; text-decoration: none; }
 
 .bc-search {
   background: rgba(255,255,255,0.05);
@@ -387,7 +388,7 @@
 .bc-search:focus { border-color: #25d366; }
 
 .bc-contacts-scroll {
-  max-height: 260px;
+  max-height: 240px;
   overflow-y: auto;
   border: 1px solid var(--border, rgba(255,255,255,0.07));
   border-radius: 8px;
@@ -440,6 +441,54 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* ── Import bar ─────────────────────────────────────────────────────────── */
+
+.bc-import-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bc-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.06);
+  border: 1px dashed rgba(255,255,255,0.2);
+  color: var(--text-primary, #e8eaed);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.bc-import-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.35);
+}
+.bc-import-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.bc-import-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #8e9baa);
+  line-height: 1.4;
+}
+
+.bc-import-success {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(37,211,102,0.1);
+  border-left: 3px solid #25d366;
+  border-radius: 6px;
+  color: #25d366;
+  font-size: 0.83rem;
+  font-weight: 500;
 }
 
 /* ── Detail view ────────────────────────────────────────────────────────── */
