@@ -28,10 +28,11 @@ model WhatsAppProfile {
   is_connected Boolean  @default(false)
   created_at   DateTime @default(now())
 
-  account   Account   @relation(fields: [account_id], references: [id])
+  account   Account    @relation(fields: [account_id], references: [id])
   botConfig BotConfig?
   contacts  Contact[]
   faqs      FAQ[]
+  campaigns Campaign[]
 
   @@unique([account_id, phone_number])
 }
@@ -57,8 +58,9 @@ model Contact {
   created_at   DateTime  @default(now())
   ia_paused    Boolean   @default(false)
 
-  messages Message[]
-  profile  WhatsAppProfile @relation(fields: [profile_id], references: [id])
+  messages        Message[]
+  profile         WhatsAppProfile  @relation(fields: [profile_id], references: [id])
+  campaignTargets CampaignTarget[]
 
   @@unique([profile_id, phone_number])
 }
@@ -85,3 +87,38 @@ model FAQ {
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
 
+model Campaign {
+  id           Int       @id @default(autoincrement())
+  profile_id   Int
+  name         String
+  status       String    @default("draft")
+  created_at   DateTime  @default(now())
+  started_at   DateTime?
+  completed_at DateTime?
+
+  profile  WhatsAppProfile   @relation(fields: [profile_id], references: [id])
+  messages CampaignMessage[]
+  targets  CampaignTarget[]
+}
+
+model CampaignMessage {
+  id                  Int    @id @default(autoincrement())
+  campaign_id         Int
+  content             String
+  order_index         Int    @default(0)
+  delay_after_seconds Int    @default(0)
+
+  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+}
+
+model CampaignTarget {
+  id          Int       @id @default(autoincrement())
+  campaign_id Int
+  contact_id  Int
+  status      String    @default("pending")
+  sent_at     DateTime?
+  error       String?
+
+  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+}
