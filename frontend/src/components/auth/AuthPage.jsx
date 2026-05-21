@@ -103,7 +103,7 @@ export default function AuthPage() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                placeholder={mode === 'register' ? 'Min. 6 caractères' : '••••••••'}
+                placeholder={mode === 'register' ? 'Min. 8 caractères' : '••••••••'}
                 required
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
