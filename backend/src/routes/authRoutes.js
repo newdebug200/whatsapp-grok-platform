@@ -31,12 +31,17 @@ router.post('/register', authLimiter, async (req, res) => {
     if (existing) {
       return res.status(400).json({ error: 'Cet email est déjà utilisé' });
     }
+
+    // First account ever becomes admin
+    const accountCount = await prisma.account.count();
+    const role = accountCount === 0 ? 'admin' : 'user';
+
     const hashedPassword = await bcrypt.hash(password, 12);
     const account = await prisma.account.create({
-      data: { email: email.toLowerCase(), password: hashedPassword, name }
+      data: { email: email.toLowerCase(), password: hashedPassword, name, role }
     });
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, account: { id: account.id, email: account.email, name: account.name } });
+    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });
   } catch (error) {
     console.error('Erreur register:', error);
     res.status(500).json({ error: "Erreur lors de l'inscription" });
@@ -58,7 +63,7 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, account: { id: account.id, email: account.email, name: account.name } });
+    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });
   } catch (error) {
     console.error('Erreur login:', error);
     res.status(500).json({ error: 'Erreur lors de la connexion' });
@@ -69,7 +74,7 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const account = await prisma.account.findUnique({
       where: { id: req.accountId },
-      select: { id: true, email: true, name: true, created_at: true }
+      select: { id: true, email: true, name: true, role: true, created_at: true }
     });
     if (!account) return res.status(404).json({ error: 'Compte introuvable' });
     res.json(account);
@@ -157,7 +162,6 @@ router.delete('/account', authMiddleware, async (req, res) => {
       await prisma.contact.deleteMany({ where: { profile_id: { in: profileIds } } });
       await prisma.fAQ.deleteMany({ where: { profile_id: { in: profileIds } } });
       await prisma.botConfig.deleteMany({ where: { profile_id: { in: profileIds } } });
-      await prisma.status.deleteMany({ where: { profile_id: { in: profileIds } } });
       await prisma.whatsAppProfile.deleteMany({ where: { account_id: req.accountId } });
     }
     await prisma.account.delete({ where: { id: req.accountId } });
