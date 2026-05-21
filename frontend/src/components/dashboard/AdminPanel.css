@@ -1,0 +1,308 @@
+.admin-panel {
+  padding: 20px 16px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary, #1a1a2e);
+  margin: 0;
+}
+
+.admin-refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--text-secondary, #666);
+  display: flex;
+  align-items: center;
+  transition: background 0.15s;
+}
+.admin-refresh-btn:hover { background: var(--bg-hover, #f0f0f0); }
+.admin-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.admin-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .admin-stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+.admin-stat-card {
+  background: var(--bg-card, #f8f9ff);
+  border: 1px solid var(--border, #e8eaf0);
+  border-radius: 10px;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.admin-stat-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--accent, #6c5ce7);
+}
+
+.admin-stat-label {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #888);
+  margin-top: 2px;
+}
+
+.admin-action-msg {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.admin-action-msg.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+.admin-action-msg.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.admin-loading,
+.admin-error {
+  padding: 20px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #888);
+}
+.admin-error { color: #c0392b; }
+
+.admin-table-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e8eaf0);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.admin-table thead {
+  background: var(--bg-card, #f5f6fa);
+}
+
+.admin-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border, #e8eaf0);
+}
+
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #eee);
+  vertical-align: middle;
+}
+
+.admin-table tbody tr:last-child td { border-bottom: none; }
+.admin-table tbody tr:hover { background: var(--bg-hover, #fafbff); }
+
+.admin-row-self { background: #f5f3ff !important; }
+
+.admin-cell-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 160px;
+}
+
+.admin-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.admin-user-name {
+  font-weight: 600;
+  color: var(--text-primary, #1a1a2e);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.admin-user-email {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #888);
+}
+
+.admin-you-badge {
+  font-size: 0.65rem;
+  background: #e8e4ff;
+  color: #6c5ce7;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 600;
+}
+
+.admin-role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.admin-role-badge.admin {
+  background: #ffeaa7;
+  color: #b7860b;
+}
+.admin-role-badge.user {
+  background: #dfe6e9;
+  color: #555;
+}
+
+.admin-cell-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #333);
+}
+
+.admin-cell-date {
+  white-space: nowrap;
+  color: var(--text-secondary, #888);
+  font-size: 0.78rem;
+}
+
+.admin-connected-dot {
+  color: #25d366;
+  font-size: 0.6rem;
+  margin-left: 3px;
+}
+
+.admin-cell-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.admin-btn-role {
+  font-size: 0.73rem;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border, #ddd);
+  background: none;
+  cursor: pointer;
+  color: var(--text-primary, #444);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.admin-btn-role:hover { background: #eee; }
+.admin-btn-role:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.admin-btn-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 5px;
+  border: 1px solid #ffd6d6;
+  background: none;
+  cursor: pointer;
+  color: #c0392b;
+  transition: all 0.15s;
+}
+.admin-btn-delete:hover { background: #fff0f0; }
+.admin-btn-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.admin-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.admin-confirm-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 24px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+}
+
+.admin-confirm-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 12px;
+}
+
+.admin-confirm-desc {
+  font-size: 0.88rem;
+  color: #555;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.admin-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.admin-confirm-cancel {
+  padding: 8px 16px;
+  border-radius: 7px;
+  border: 1px solid #ddd;
+  background: none;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: #555;
+}
+.admin-confirm-cancel:hover { background: #f5f5f5; }
+
+.admin-confirm-ok {
+  padding: 8px 16px;
+  border-radius: 7px;
+  border: none;
+  background: #c0392b;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.admin-confirm-ok:hover { background: #a93226; }
+.admin-confirm-ok:disabled { opacity: 0.6; cursor: not-allowed; }
