@@ -28,6 +28,8 @@ export default function Broadcast({ socket, activeProfile }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [contactsError, setContactsError] = useState('');
+  const [contactsLoading, setContactsLoading] = useState(false);
   const [progress, setProgress] = useState({});
 
   const [form, setForm] = useState({
@@ -52,11 +54,20 @@ export default function Broadcast({ socket, activeProfile }) {
   }, []);
 
   const loadContacts = useCallback(async () => {
+    setContactsLoading(true);
+    setContactsError('');
     try {
       const res = await axios.get(`${API_URL}/messages/conversations`);
       setContacts(res.data);
+      if (res.data.length === 0) {
+        setContactsError('Aucun contact trouvé. WhatsApp doit être connecté et avoir reçu au moins un message.');
+      }
     } catch (err) {
       console.error('Erreur chargement contacts:', err.message);
+      const msg = err.response?.data?.error || err.message || 'Erreur de chargement';
+      setContactsError(`Impossible de charger les contacts : ${msg}`);
+    } finally {
+      setContactsLoading(false);
     }
   }, []);
 
@@ -292,10 +303,18 @@ export default function Broadcast({ socket, activeProfile }) {
                 Contacts cibles
                 <span className="bc-hint"> — {form.contactIds.length} sélectionné(s)</span>
               </label>
-              <button className="bc-select-all" onClick={handleSelectAll}>
-                {selectAll ? 'Tout désélectionner' : 'Tout sélectionner'}
-              </button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="bc-select-all" onClick={loadContacts} title="Recharger les contacts" disabled={contactsLoading}>
+                  {contactsLoading ? '…' : '↺'}
+                </button>
+                <button className="bc-select-all" onClick={handleSelectAll}>
+                  {selectAll ? 'Tout désélectionner' : 'Tout sélectionner'}
+                </button>
+              </div>
             </div>
+            {contactsError && (
+              <div className="bc-error" style={{ marginBottom: 8 }}>{contactsError}</div>
+            )}
             <input
               className="bc-search"
               type="text"
@@ -304,7 +323,10 @@ export default function Broadcast({ socket, activeProfile }) {
               placeholder="Rechercher un contact…"
             />
             <div className="bc-contacts-scroll">
-              {contacts.length === 0 && (
+              {contactsLoading && (
+                <div className="bc-contacts-empty">Chargement des contacts…</div>
+              )}
+              {!contactsLoading && contacts.length === 0 && !contactsError && (
                 <div className="bc-contacts-empty">
                   Aucun contact disponible. Reconnectez WhatsApp pour importer votre répertoire.
                 </div>
