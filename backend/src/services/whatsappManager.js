@@ -472,6 +472,42 @@ class WhatsAppManager {
 
   // ─── Campaign runner ──────────────────────────────────────────────────────
 
+  // Natural inter-contact delay: 80% → 20–60s, 20% → 60–180s
+  _campaignContactDelay() {
+    return Math.random() < 0.2
+      ? (60 + Math.random() * 120) * 1000
+      : (20 + Math.random() * 40) * 1000;
+  }
+
+  // Typing duration based on message length (30 chars/s, clamped 2–8s)
+  _typingDuration(text) {
+    return Math.min(Math.max((text.length / 30) * 1000, 2000), 8000);
+  }
+
+  // Send one message with "typing…" indicator; retry once on failure
+  async _sendWithTyping(waClient, waId, content, handle) {
+    const attempt = async () => {
+      try {
+        const chat = await waClient.getChatById(waId);
+        await chat.sendStateTyping();
+        await this._sleep(this._typingDuration(content), handle);
+        if (handle.cancelled) return;
+        await chat.clearState();
+      } catch (_) {
+        // Typing indicator not critical — continue
+      }
+      await waClient.sendMessage(waId, content);
+    };
+    try {
+      await attempt();
+    } catch {
+      // Retry once after 5s
+      await this._sleep(5000, handle);
+      if (handle.cancelled) return;
+      await attempt();
+    }
+  }
+
   async startCampaign(campaignId, profileId) {
     if (this.runningCampaigns.has(campaignId)) return;
 
@@ -531,10 +567,18 @@ class WhatsAppManager {
         for (let i = 0; i < targets.length; i++) {
           if (handle.cancelled) break;
 
-          // Human-like delay between contacts: 30–90 seconds (skip before first)
+          // Anti-ban: 2–5 min break every 20 contacts
+          if (i > 0 && i % 20 === 0) {
+            const breakMs = (120 + Math.random() * 180) * 1000;
+            console.log(`[Campaign ${campaignId}] Pause anti-ban ${Math.round(breakMs / 1000)}s (lot de 20)…`);
+            await this._sleep(breakMs, handle);
+            if (handle.cancelled) break;
+          }
+
+          // Human-like delay between contacts (skip before first)
           if (i > 0) {
-            const delayMs = (30 + Math.random() * 60) * 1000;
-            console.log(`[Campaign ${campaignId}] Pause ${Math.round(delayMs / 1000)}s avant prochain contact…`);
+            const delayMs = this._campaignContactDelay();
+            console.log(`[Campaign ${campaignId}] Attente ${Math.round(delayMs / 1000)}s — contact ${i + 1}/${targets.length}`);
             await this._sleep(delayMs, handle);
             if (handle.cancelled) break;
           }
@@ -547,7 +591,7 @@ class WhatsAppManager {
             for (let j = 0; j < campaign.messages.length; j++) {
               if (handle.cancelled) break;
 
-              // Delay between messages within same contact: 3–10 seconds
+              // Inter-message delay 3–10s (skip before first)
               if (j > 0) {
                 await this._sleep((3 + Math.random() * 7) * 1000, handle);
                 if (handle.cancelled) break;
@@ -555,11 +599,13 @@ class WhatsAppManager {
 
               const msg = campaign.messages[j];
               const content = msg.content.replace(/\{\{name\}\}/gi, contact.name || 'cher(e) client(e)');
-              await waClient.sendMessage(waId, content);
+              await this._sendWithTyping(waClient, waId, content, handle);
 
-              this.prisma.message.create({
-                data: { contact_id: contact.id, content, direction: 'sent', type: 'text', created_at: new Date() }
-              }).catch(() => {});
+              if (!handle.cancelled) {
+                this.prisma.message.create({
+                  data: { contact_id: contact.id, content, direction: 'sent', type: 'text', created_at: new Date() }
+                }).catch(() => {});
+              }
             }
 
             if (!handle.cancelled) {
@@ -569,7 +615,7 @@ class WhatsAppManager {
               });
             }
           } catch (err) {
-            console.error(`[Campaign ${campaignId}] Erreur envoi à ${contact.phone_number}:`, err.message);
+            console.error(`[Campaign ${campaignId}] Echec envoi → ${contact.phone_number}: ${err.message}`);
             await this.prisma.campaignTarget.update({
               where: { id: target.id },
               data: { status: 'failed', error: err.message.slice(0, 200) }
