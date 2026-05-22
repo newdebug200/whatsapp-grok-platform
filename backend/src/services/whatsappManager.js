@@ -588,27 +588,18 @@ class WhatsAppManager {
           const waId = contact.wa_id || (contact.phone_number.replace('+', '') + '@c.us');
 
           try {
-            for (let j = 0; j < campaign.messages.length; j++) {
-              if (handle.cancelled) break;
+            // Pick one random variant — each contact gets exactly one message
+            const variantIdx = Math.floor(Math.random() * campaign.messages.length);
+            const msg = campaign.messages[variantIdx];
+            const content = msg.content.replace(/\{\{name\}\}/gi, contact.name || 'cher(e) client(e)');
 
-              // Inter-message delay 3–10s (skip before first)
-              if (j > 0) {
-                await this._sleep((3 + Math.random() * 7) * 1000, handle);
-                if (handle.cancelled) break;
-              }
-
-              const msg = campaign.messages[j];
-              const content = msg.content.replace(/\{\{name\}\}/gi, contact.name || 'cher(e) client(e)');
-              await this._sendWithTyping(waClient, waId, content, handle);
-
-              if (!handle.cancelled) {
-                this.prisma.message.create({
-                  data: { contact_id: contact.id, content, direction: 'sent', type: 'text', created_at: new Date() }
-                }).catch(() => {});
-              }
-            }
+            console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
+            await this._sendWithTyping(waClient, waId, content, handle);
 
             if (!handle.cancelled) {
+              this.prisma.message.create({
+                data: { contact_id: contact.id, content, direction: 'sent', type: 'text', created_at: new Date() }
+              }).catch(() => {});
               await this.prisma.campaignTarget.update({
                 where: { id: target.id },
                 data: { status: 'sent', sent_at: new Date() }
