@@ -304,8 +304,8 @@ export default function Broadcast({ socket, activeProfile }) {
 
           <div className="bc-field">
             <label className="bc-label">
-              Messages
-              <span className="bc-hint"> — envoyés dans l'ordre avec 3–10 s entre chacun. Utilisez <code>{'{{name}}'}</code> pour le prénom.</span>
+              Variantes de message
+              <span className="bc-hint"> — chaque contact reçoit <strong>un seul message</strong>, tiré au hasard parmi les variantes ci-dessous. Utilisez <code>{'{{name}}'}</code> pour le prénom.</span>
             </label>
             {form.messages.map((msg, i) => (
               <div key={i} className="bc-msg-row">
@@ -328,7 +328,7 @@ export default function Broadcast({ socket, activeProfile }) {
             ))}
             <button className="bc-add-msg" onClick={handleAddMessage}>
               <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              Ajouter un message
+              Ajouter une variante
             </button>
           </div>
 
@@ -487,7 +487,7 @@ export default function Broadcast({ socket, activeProfile }) {
           </div>
 
           <div className="bc-messages-section">
-            <h4 className="bc-section-title">Messages ({detail.messages?.length || 0})</h4>
+            <h4 className="bc-section-title">Variantes ({detail.messages?.length || 0}) — 1 envoyée par contact</h4>
             {detail.messages?.map((m, i) => (
               <div key={m.id} className="bc-msg-preview">
                 <span className="bc-msg-index">{i + 1}</span>
@@ -556,7 +556,7 @@ export default function Broadcast({ socket, activeProfile }) {
                   <span className="bc-badge" style={{ background: statusInfo.color }}>{statusInfo.label}</span>
                 </div>
                 <div className="bc-card-meta">
-                  {c.messages?.length || 0} message(s) · {total} contact(s)
+                  {c.messages?.length || 0} variante(s) · {total} contact(s)
                 </div>
                 {total > 0 && (
                   <div className="bc-card-progress">
