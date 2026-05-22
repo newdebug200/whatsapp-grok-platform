@@ -9,73 +9,205 @@ router.use(profileMiddleware);
 
 // ─── CSV / VCF helpers ────────────────────────────────────────────────────────
 
+/**
+ * Normalize any phone string to E.164 (+XXXXXXXXXXX).
+ * Handles: spaces, dashes, dots, parentheses, +33(0)6..., 00XX..., tel:// URIs,
+ * extensions (ext./x/poste), and various exotic separators.
+ */
 function normalizePhone(raw) {
   if (!raw) return null;
-  let p = String(raw).replace(/[\s\-\.\(\)]/g, '').replace(/[^\d+]/g, '');
+  let p = String(raw).trim();
+
+  // Strip tel:// or tel: URI prefix
+  p = p.replace(/^tel:\/?\/?/i, '');
+
+  // Strip extension suffixes: " ext 123", " x123", " poste 123", "#123"
+  p = p.replace(/[\s,]*(ext\.?|x|poste|p\.?|#)\s*\d+$/i, '');
+
+  // Remove all non-digit characters except leading + (keep + only at start)
+  // First, preserve a leading +
+  const hasPlus = p.startsWith('+');
+  p = p.replace(/[^\d]/g, ''); // strip everything non-digit
+
+  // Handle +CC(0)local — e.g. +33(0)612345 → already stripped by regex above
+  // If original had +, restore it
+  if (hasPlus) p = '+' + p;
+
   if (!p) return null;
+
+  // Handle 00CC → +CC
   if (p.startsWith('00')) p = '+' + p.slice(2);
+  // If no +, add one (number without country code — best effort)
   else if (!p.startsWith('+')) p = '+' + p;
+
+  // Must have at least 8 digits
   if (p.replace(/\D/g, '').length < 8) return null;
+
   return p;
 }
 
-function parseCsv(content) {
-  const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+/**
+ * Parse a single CSV field respecting RFC 4180 quoting.
+ */
+function parseCsvLine(line, delim) {
+  const fields = [];
+  let cur = '';
+  let inQuote = false;
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i += 2; continue; } // escaped quote
+        inQuote = false; i++; continue;
+      }
+      cur += ch; i++;
+    } else {
+      if (ch === '"') { inQuote = true; i++; continue; }
+      if (ch === delim) { fields.push(cur.trim()); cur = ''; i++; continue; }
+      cur += ch; i++;
+    }
+  }
+  fields.push(cur.trim());
+  return fields;
+}
+
+function stripAccents(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function parseCsv(raw) {
+  // Strip UTF-8 BOM
+  const content = raw.replace(/^\uFEFF/, '');
+
+  const lines = content.split(/\r?\n|\r/).map(l => l.trim()).filter(Boolean);
   if (lines.length === 0) return [];
 
-  const delim = lines[0].includes(';') ? ';' : lines[0].includes('\t') ? '\t' : ',';
-  const rows = lines.map(l =>
-    l.split(delim).map(c => c.trim().replace(/^["']|["']$/g, ''))
-  );
+  // Detect delimiter: count occurrences of each candidate in first line
+  const candidates = [',', ';', '\t', '|'];
+  let delim = ',';
+  let maxCount = 0;
+  for (const c of candidates) {
+    const count = (lines[0].split(c).length - 1);
+    if (count > maxCount) { maxCount = count; delim = c; }
+  }
 
-  const nameKeys = ['nom', 'name', 'prenom', 'prénom', 'first', 'contact', 'fullname'];
-  const phoneKeys = ['telephone', 'téléphone', 'tel', 'phone', 'numero', 'numéro', 'mobile', 'portable', 'whatsapp', 'cell'];
+  const rows = lines.map(l => parseCsvLine(l, delim));
+
+  const nameKeys = ['nom', 'name', 'prenom', 'prenom', 'first', 'last', 'contact',
+    'fullname', 'full name', 'display', 'label', 'personne', 'client'];
+  const phoneKeys = ['telephone', 'tel', 'phone', 'numero', 'mobile', 'portable',
+    'whatsapp', 'cell', 'gsm', 'fax', 'handphone', 'hp', 'handphone'];
 
   let nameIdx = -1, phoneIdx = -1;
   let dataRows = rows;
 
-  const header = rows[0].map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  const header = rows[0].map(h => stripAccents(h.toLowerCase().replace(/[\s_\-]/g, '')));
   const hasHeader = header.some(h => nameKeys.some(k => h.includes(k)) || phoneKeys.some(k => h.includes(k)));
 
   if (hasHeader) {
     for (let i = 0; i < header.length; i++) {
-      if (nameIdx === -1 && nameKeys.some(k => header[i].includes(k))) nameIdx = i;
-      if (phoneIdx === -1 && phoneKeys.some(k => header[i].includes(k))) phoneIdx = i;
+      const h = header[i];
+      if (nameIdx === -1 && nameKeys.some(k => h.includes(k))) nameIdx = i;
+      if (phoneIdx === -1 && phoneKeys.some(k => h.includes(k))) phoneIdx = i;
     }
     dataRows = rows.slice(1);
   } else {
-    const col0 = rows[0][0] || '';
-    if (/^[+\d]/.test(col0)) { phoneIdx = 0; nameIdx = 1; }
-    else { nameIdx = 0; phoneIdx = 1; }
+    // No header detected: guess by content — first column that looks like a phone
+    for (let col = 0; col < (rows[0]?.length || 0); col++) {
+      const sample = rows.slice(0, Math.min(5, rows.length)).map(r => r[col] || '');
+      const phoneCount = sample.filter(v => /[\d\+]/.test(v) && v.replace(/\D/g, '').length >= 7).length;
+      if (phoneCount >= Math.ceil(sample.length / 2)) { phoneIdx = col; nameIdx = col === 0 ? 1 : 0; break; }
+    }
+    // Fallback: single column
+    if (phoneIdx === -1) { phoneIdx = 0; nameIdx = -1; }
   }
 
   const contacts = [];
   for (const row of dataRows) {
-    const rawPhone = phoneIdx >= 0 ? row[phoneIdx] : row[0];
-    const rawName = nameIdx >= 0 ? row[nameIdx] : null;
+    if (row.length === 0 || row.every(c => !c)) continue;
+    const rawPhone = row[phoneIdx] ?? '';
+    const rawName = nameIdx >= 0 ? (row[nameIdx] ?? '') : '';
     const phone = normalizePhone(rawPhone);
-    if (phone) contacts.push({ phone, name: rawName?.trim() || null });
+    if (phone) contacts.push({ phone, name: rawName.trim() || null });
   }
   return contacts;
 }
 
-function parseVcf(content) {
+/**
+ * Decode Quoted-Printable encoded string.
+ */
+function decodeQP(s) {
+  return s.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, h) =>
+    String.fromCharCode(parseInt(h, 16))
+  );
+}
+
+/**
+ * Unfold vCard lines (lines starting with SPACE or TAB are continuations).
+ */
+function unfoldVcf(content) {
+  return content.replace(/\r?\n[ \t]/g, '');
+}
+
+/**
+ * Extract the value from a vCard property line, handling encoding/charset params.
+ * e.g. "TEL;TYPE=CELL;ENCODING=QUOTED-PRINTABLE:=33=36..." → "+336..."
+ */
+function vcfPropertyValue(paramStr, valueStr) {
+  const params = (paramStr || '').toUpperCase();
+  let value = valueStr || '';
+  if (params.includes('ENCODING=QUOTED-PRINTABLE') || params.includes('ENCODING=QP')) {
+    value = decodeQP(value);
+  }
+  // Strip charset markers
+  value = value.replace(/\0/g, '').trim();
+  return value;
+}
+
+function parseVcf(raw) {
+  // Strip UTF-8 BOM and unfold
+  const content = unfoldVcf(raw.replace(/^\uFEFF/, ''));
+
   const contacts = [];
+  // Split on BEGIN:VCARD (case-insensitive)
   const vcards = content.split(/BEGIN:VCARD/i).slice(1);
+
   for (const vcard of vcards) {
     let name = null;
-    const fnMatch = vcard.match(/^FN(?:;[^\r\n:]*)?:([^\r\n]+)/im);
-    if (fnMatch) name = fnMatch[1].trim();
-    if (!name) {
-      const nMatch = vcard.match(/^N(?:;[^\r\n:]*)?:([^\r\n]+)/im);
-      if (nMatch) {
-        name = nMatch[1].split(';').filter(Boolean).reverse().join(' ').trim() || null;
+    const phones = [];
+
+    for (const line of vcard.split(/\r?\n|\r/)) {
+      if (!line || /^END:VCARD/i.test(line)) continue;
+
+      // Parse property: [group.]PROPERTY[;params]:value
+      // Supports: FN, N, TEL, item1.TEL, A.TEL, X-ANDROID-CUSTOM, etc.
+      const m = line.match(/^(?:[A-Z0-9_-]+\.)?([A-Z-]+)((?:;[^:]*)*):(.*)$/i);
+      if (!m) continue;
+
+      const prop = m[1].toUpperCase();
+      const params = m[2];
+      const value = vcfPropertyValue(params, m[3]);
+
+      if (prop === 'FN') {
+        // Prefer FN (formatted name)
+        const v = value.trim();
+        if (!name && v) name = v;
+      } else if (prop === 'N' && !name) {
+        // N:Last;First;Middle;Prefix;Suffix
+        const parts = value.split(';').map(p => p.trim()).filter(Boolean);
+        // Reverse to get First Last order
+        if (parts.length > 1) name = [parts[1], parts[0]].filter(Boolean).join(' ');
+        else if (parts.length === 1) name = parts[0];
+      } else if (prop === 'TEL' || prop === 'X-PHONENUMBER') {
+        const phone = normalizePhone(value);
+        if (phone && !phones.includes(phone)) phones.push(phone);
       }
     }
-    const telMatches = [...vcard.matchAll(/^TEL(?:;[^\r\n:]*)?:([^\r\n]+)/gim)];
-    for (const m of telMatches) {
-      const phone = normalizePhone(m[1].trim());
-      if (phone) { contacts.push({ phone, name }); break; }
+
+    // Add one entry per valid phone (first one only, to avoid duplicates)
+    if (phones.length > 0) {
+      contacts.push({ phone: phones[0], name: name || null });
     }
   }
   return contacts;
