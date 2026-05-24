@@ -117,13 +117,20 @@ class WhatsAppManager {
     return null;
   }
 
-  // ─── Sleep helper (cancellable) ───────────────────────────────────────────
+  // ─── Sleep helper (cancellable, with optional keepalive) ─────────────────
 
-  _sleep(ms, handle) {
+  _sleep(ms, handle, waClient = null) {
     return new Promise((resolve) => {
-      const interval = setInterval(() => {
-        if (handle?.cancelled) { clearInterval(interval); resolve(); }
-      }, 500);
+      let elapsed = 0;
+      const TICK = 500;
+      const KEEPALIVE_EVERY = 30000; // ping every 30s to prevent Puppeteer timeout
+      const interval = setInterval(async () => {
+        elapsed += TICK;
+        if (handle?.cancelled) { clearInterval(interval); resolve(); return; }
+        if (waClient && elapsed % KEEPALIVE_EVERY === 0) {
+          try { await waClient.getState(); } catch (_) {}
+        }
+      }, TICK);
       setTimeout(() => { clearInterval(interval); resolve(); }, ms);
     });
   }
@@ -234,7 +241,7 @@ class WhatsAppManager {
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: `session-${sessionId}`, dataPath: SESSION_BASE }),
-      puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 120000 }
+      puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 600000 }
     });
 
     this.clients.set(clientKey, {
@@ -573,7 +580,7 @@ class WhatsAppManager {
           if (i > 0 && i % 20 === 0) {
             const breakMs = (120 + Math.random() * 180) * 1000;
             console.log(`[Campaign ${campaignId}] Pause anti-ban ${Math.round(breakMs / 1000)}s (lot de 20)…`);
-            await this._sleep(breakMs, handle);
+            await this._sleep(breakMs, handle, waClient);
             if (handle.cancelled) break;
           }
 
@@ -581,13 +588,16 @@ class WhatsAppManager {
           if (i > 0) {
             const delayMs = this._campaignContactDelay(campaign.delay_min_seconds, campaign.delay_max_seconds);
             console.log(`[Campaign ${campaignId}] Attente ${Math.round(delayMs / 1000)}s — contact ${i + 1}/${targets.length}`);
-            await this._sleep(delayMs, handle);
+            await this._sleep(delayMs, handle, waClient);
             if (handle.cancelled) break;
           }
 
           const target = targets[i];
           const contact = target.contact;
-          const waId = contact.wa_id || (contact.phone_number.replace('+', '') + '@c.us');
+          // Prefer phone number format; wa_id stored as @lid cannot receive messages
+          const waId = (contact.wa_id && !contact.wa_id.includes('@lid'))
+            ? contact.wa_id
+            : (contact.phone_number.replace('+', '') + '@c.us');
 
           try {
             // Pick one random variant — each contact gets exactly one message
