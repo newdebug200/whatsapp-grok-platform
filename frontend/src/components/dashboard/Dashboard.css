@@ -351,6 +351,7 @@
   display: flex;
   border-bottom: 1px solid #e9edef;
   background: #fff;
+  padding: 0 4px;
 }
 
 /* ===== SOUND TOGGLE ===== */
