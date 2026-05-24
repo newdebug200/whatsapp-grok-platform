@@ -1,0 +1,61 @@
+.sh-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+}
+
+.sh-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px 0;
+  background: #fff;
+  border-bottom: 1px solid #e9edef;
+  flex-shrink: 0;
+}
+
+.sh-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #667781;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  border-radius: 8px 8px 0 0;
+}
+.sh-tab:hover {
+  background: #f0f2f5;
+  color: #111;
+}
+.sh-tab.active {
+  color: #00a884;
+  border-bottom-color: #00a884;
+  font-weight: 600;
+}
+
+.sh-tab-icon {
+  display: flex;
+  align-items: center;
+  opacity: 0.75;
+}
+.sh-tab.active .sh-tab-icon { opacity: 1; }
+
+.sh-tab-label {
+  font-size: 13px;
+}
+
+.sh-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
