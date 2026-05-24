@@ -5,7 +5,8 @@ class MessageHandler {
     this.pendingMessages = new Map();
   }
 
-  async handleIncomingMessage(message, client, prisma, profileId, waManager) {
+  async handleIncomingMessage(message, client, prisma, profileId, waManager, options = {}) {
+    const { skipAI = false } = options;
     try {
       if (message.fromMe) return;
       if (message.from === 'status@broadcast' || message.from.includes('@broadcast')) return;
@@ -64,6 +65,11 @@ class MessageHandler {
 
       if (dbContact.ia_paused) {
         console.log(`Contact ${phoneNumber}: prise en main humaine active, réponse IA désactivée`);
+        return;
+      }
+
+      if (skipAI) {
+        console.log(`Contact ${phoneNumber}: campagne active pour ce profil, réponse IA suspendue`);
         return;
       }
 
