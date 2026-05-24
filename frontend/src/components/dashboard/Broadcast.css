@@ -443,6 +443,115 @@
   flex-wrap: wrap;
 }
 
+/* ── Contacts head actions ──────────────────────────────────────────────── */
+
+.bc-contacts-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.bc-restore-btn { color: #25d366 !important; }
+.bc-hide-all-btn { color: #e74c3c !important; }
+
+/* ── Contact item with remove button ────────────────────────────────────── */
+
+.bc-contact-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #8e9baa);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+}
+.bc-contact-remove:hover {
+  color: #e74c3c;
+  background: rgba(192,57,43,0.1);
+}
+
+/* ── Delay settings ─────────────────────────────────────────────────────── */
+
+.bc-delay-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bc-delay-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bc-delay-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #8e9baa);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 26px;
+}
+
+.bc-delay-input {
+  width: 72px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--text-primary, #e8eaed);
+  font-size: 0.9rem;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+.bc-delay-input:focus { border-color: #25d366; }
+.bc-delay-input::-webkit-inner-spin-button { opacity: 0.4; }
+
+.bc-delay-unit {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #8e9baa);
+}
+
+.bc-delay-arrow {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #8e9baa);
+}
+
+.bc-delay-preview {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #8e9baa);
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+.bc-delay-warn {
+  font-size: 0.78rem;
+  color: #f39c12;
+  margin: 4px 0 0;
+}
+
+.bc-delay-info {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #8e9baa);
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255,255,255,0.07));
+}
+
+.bc-card-delay {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #8e9baa);
+}
+
 /* ── Import bar ─────────────────────────────────────────────────────────── */
 
 .bc-import-bar {
