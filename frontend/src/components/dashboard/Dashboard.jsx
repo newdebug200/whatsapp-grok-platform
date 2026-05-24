@@ -4,12 +4,9 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import ConversationList from './ConversationList';
 import ChatWindow from './ChatWindow';
-import BotConfig from './BotConfig';
-import FAQManager from './FAQManager';
 import Stats from './Stats';
-import Settings from './Settings';
-import AdminPanel from './AdminPanel';
 import Broadcast from './Broadcast';
+import SettingsHub from './SettingsHub';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -39,6 +36,7 @@ export default function Dashboard() {
   const [selectedContact, setSelectedContact] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [activePanel, setActivePanel] = useState('chat');
+  const [settingsInitialTab, setSettingsInitialTab] = useState('config');
   const [mobileView, setMobileView] = useState('list');
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -203,6 +201,12 @@ export default function Dashboard() {
     if (key === 'chat') setUnreadCount(0);
   };
 
+  const goToSettings = (tab = 'config') => {
+    setSettingsInitialTab(tab);
+    setActivePanel('settings');
+    setShowMenu(false);
+  };
+
   const handleRenameProfile = async (profileId, name) => {
     try {
       await axios.put(`${API_URL}/profiles/${profileId}`, { display_name: name.trim() || null });
@@ -219,29 +223,17 @@ export default function Dashboard() {
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
     },
     {
-      key: 'stats', label: 'Statistiques',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
-    },
-    {
-      key: 'faq', label: 'FAQ',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
-    },
-    {
       key: 'broadcast', label: 'Campagnes',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     },
     {
-      key: 'config', label: 'Bot Config',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 012 2 2 2 0 01-2 2 2 2 0 01-2-2 2 2 0 012-2m0 5c.55 0 1 .45 1 1h1a3 3 0 013 3v1a1 1 0 011 1v3a1 1 0 01-1 1v1a3 3 0 01-3 3H9a3 3 0 01-3-3v-1a1 1 0 01-1-1v-3a1 1 0 011-1v-1a3 3 0 013-3h1c0-.55.45-1 1-1zm-3 4a1 1 0 00-1 1v5a1 1 0 001 1h6a1 1 0 001-1v-5a1 1 0 00-1-1H9zm1.5 2a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2zm-4 3h5l-.5 1h-4l-.5-1z"/></svg>
+      key: 'stats', label: 'Statistiques',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
     },
     {
       key: 'settings', label: 'Paramètres',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.95s-.03-.66-.07-1l2.16-1.65c.19-.15.24-.42.12-.64l-2.05-3.55c-.12-.22-.39-.3-.61-.22l-2.55 1.03c-.52-.4-1.08-.73-1.7-.98l-.38-2.71C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.71c-.62.25-1.18.58-1.7.98L4.88 5.08c-.22-.08-.49 0-.61.22L2.22 8.85c-.13.22-.07.49.12.64l2.16 1.65c-.04.34-.07.67-.07 1s.03.65.07.97l-2.16 1.66c-.19.15-.24.42-.12.64l2.05 3.55c.12.22.39.3.61.22l2.55-1.02c.52.4 1.08.73 1.7.98l.38 2.71c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.71c.62-.25 1.18-.58 1.7-.98l2.55 1.02c.22.08.49 0 .61-.22l2.05-3.55c.12-.22.07-.49-.12-.64l-2.16-1.66z"/></svg>
     },
-    ...(account?.role === 'admin' ? [{
-      key: 'admin', label: 'Administration',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4c1.4 0 2.8 1.1 2.8 2.5v.5h.7c.4 0 .5.1.5.5v4c0 .4-.1.5-.5.5H8.5c-.4 0-.5-.1-.5-.5v-4c0-.4.1-.5.5-.5h.7v-.5C9.2 6.1 10.6 5 12 5zm0 1.2c-.8 0-1.3.6-1.3 1.3v.5h2.6v-.5c0-.7-.5-1.3-1.3-1.3zm0 4.1c-.6 0-1 .4-1 1s.4 1 1 1 1-.4 1-1-.4-1-1-1z"/></svg>
-    }] : []),
   ];
 
   const toggleSound = () => {
@@ -295,11 +287,15 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="dropdown-divider" />
-                    <button className="dropdown-item" onClick={() => { setActivePanel('config'); setShowMenu(false); }}>Configuration du bot</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('faq'); setShowMenu(false); }}>Gestion FAQ</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('stats'); setShowMenu(false); }}>Statistiques</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('broadcast'); setShowMenu(false); }}>Campagnes</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('settings'); setShowMenu(false); }}>Paramètres</button>
+                    <button className="dropdown-item" onClick={() => { handleNavClick('chat'); setShowMenu(false); }}>Discussions</button>
+                    <button className="dropdown-item" onClick={() => { handleNavClick('broadcast'); setShowMenu(false); }}>Campagnes</button>
+                    <button className="dropdown-item" onClick={() => { handleNavClick('stats'); setShowMenu(false); }}>Statistiques</button>
+                    <button className="dropdown-item" onClick={() => goToSettings('config')}>Bot Config</button>
+                    <button className="dropdown-item" onClick={() => goToSettings('faq')}>FAQ</button>
+                    <button className="dropdown-item" onClick={() => goToSettings('account')}>Paramètres du compte</button>
+                    {account?.role === 'admin' && (
+                      <button className="dropdown-item" onClick={() => goToSettings('admin')}>Administration</button>
+                    )}
                     <div className="dropdown-divider" />
                     <button className="dropdown-item danger" onClick={logout}>Déconnexion du compte</button>
                   </div>
@@ -367,7 +363,7 @@ export default function Dashboard() {
                   className="profile-dropdown-add"
                   onClick={() => {
                     setShowProfileMenu(false);
-                    setActivePanel('config');
+                    goToSettings('config');
                     handleConnectWhatsApp();
                   }}
                 >
@@ -403,7 +399,7 @@ export default function Dashboard() {
             noProfile ? (
               <div className="no-profile-msg">
                 <p>Connectez un numéro WhatsApp pour commencer.</p>
-                <button className="btn-connect" onClick={() => { setActivePanel('config'); }}>
+                <button className="btn-connect" onClick={() => goToSettings('config')}>
                   Configurer WhatsApp
                 </button>
               </div>
@@ -420,26 +416,23 @@ export default function Dashboard() {
             )
           )}
           {activePanel === 'stats' && (
-            noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <Stats socket={socket} />
-          )}
-          {activePanel === 'faq' && (
-            noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <FAQManager />
+            noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
           )}
           {activePanel === 'broadcast' && (
             noProfile
-              ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} />
+              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
               : <Broadcast socket={socket} activeProfile={activeProfile} />
           )}
-          {activePanel === 'config' && (
-            <BotConfig
+          {activePanel === 'settings' && (
+            <SettingsHub
               waStatus={waStatus}
               onConnectWhatsApp={handleConnectWhatsApp}
               onLogoutWhatsApp={handleLogoutWhatsApp}
               activeProfile={activeProfile}
+              account={account}
+              initialTab={settingsInitialTab}
             />
           )}
-          {activePanel === 'settings' && <Settings />}
-          {activePanel === 'admin' && account?.role === 'admin' && <AdminPanel />}
         </div>
       </div>
 
