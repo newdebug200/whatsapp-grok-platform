@@ -88,13 +88,15 @@ model FAQ {
 }
 
 model Campaign {
-  id           Int       @id @default(autoincrement())
-  profile_id   Int
-  name         String
-  status       String    @default("draft")
-  created_at   DateTime  @default(now())
-  started_at   DateTime?
-  completed_at DateTime?
+  id                Int       @id @default(autoincrement())
+  profile_id        Int
+  name              String
+  status            String    @default("draft")
+  created_at        DateTime  @default(now())
+  started_at        DateTime?
+  completed_at      DateTime?
+  delay_min_seconds Int       @default(20)
+  delay_max_seconds Int       @default(60)
 
   profile  WhatsAppProfile   @relation(fields: [profile_id], references: [id])
   messages CampaignMessage[]
