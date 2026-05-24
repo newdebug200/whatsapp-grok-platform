@@ -47,7 +47,7 @@ export default function Broadcast({ socket, activeProfile }) {
     messages: [{ content: '' }],
     contactIds: [],
     delayMin: 30,
-    delayMax: 90
+    delayMax: 300
   });
   const [contactSearch, setContactSearch] = useState('');
   const [selectAll, setSelectAll] = useState(false);
