@@ -481,6 +481,20 @@ class WhatsAppManager {
 
   // ─── Campaign runner ──────────────────────────────────────────────────────
 
+  // Detect Puppeteer/Chrome errors that make all further sends impossible
+  _isFatalBrowserError(errMsg) {
+    const msg = (errMsg || '').toLowerCase();
+    return (
+      msg.includes('detached frame') ||
+      msg.includes('target closed') ||
+      msg.includes('session closed') ||
+      msg.includes('context was destroyed') ||
+      msg.includes('connection closed') ||
+      msg.includes('browser has disconnected') ||
+      msg.includes('protocol error')
+    );
+  }
+
   // Random delay between campaign contacts using campaign's min/max settings
   _campaignContactDelay(minSec, maxSec) {
     const min = (minSec ?? 20) * 1000;
@@ -628,6 +642,20 @@ class WhatsAppManager {
               where: { id: target.id },
               data: { status: 'failed', error: err.message.slice(0, 200) }
             }).catch(() => {});
+
+            // Fatal browser error — Chrome/Puppeteer is broken, stop immediately
+            if (this._isFatalBrowserError(err.message)) {
+              console.error(`[Campaign ${campaignId}] Erreur Puppeteer fatale — pause automatique`);
+              handle.cancelled = true;
+              await this.prisma.campaign.update({
+                where: { id: campaignId }, data: { status: 'paused' }
+              }).catch(() => {});
+              this.io?.to(`account_${accountId}`).emit('campaign-error', {
+                campaignId,
+                error: 'WhatsApp s\'est déconnecté en cours de campagne (navigateur interne planté). Reconnectez WhatsApp depuis Bot Config, puis relancez la campagne.'
+              });
+              break;
+            }
           }
 
           // Emit real-time progress
