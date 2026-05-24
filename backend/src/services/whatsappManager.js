@@ -472,11 +472,11 @@ class WhatsAppManager {
 
   // ─── Campaign runner ──────────────────────────────────────────────────────
 
-  // Natural inter-contact delay: 80% → 20–60s, 20% → 60–180s
-  _campaignContactDelay() {
-    return Math.random() < 0.2
-      ? (60 + Math.random() * 120) * 1000
-      : (20 + Math.random() * 40) * 1000;
+  // Random delay between campaign contacts using campaign's min/max settings
+  _campaignContactDelay(minSec, maxSec) {
+    const min = (minSec ?? 20) * 1000;
+    const max = (maxSec ?? 60) * 1000;
+    return min + Math.random() * Math.max(0, max - min);
   }
 
   // Typing duration based on message length (30 chars/s, clamped 2–8s)
@@ -577,7 +577,7 @@ class WhatsAppManager {
 
           // Human-like delay between contacts (skip before first)
           if (i > 0) {
-            const delayMs = this._campaignContactDelay();
+            const delayMs = this._campaignContactDelay(campaign.delay_min_seconds, campaign.delay_max_seconds);
             console.log(`[Campaign ${campaignId}] Attente ${Math.round(delayMs / 1000)}s — contact ${i + 1}/${targets.length}`);
             await this._sleep(delayMs, handle);
             if (handle.cancelled) break;
