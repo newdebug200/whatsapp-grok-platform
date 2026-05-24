@@ -246,7 +246,7 @@ class WhatsAppManager {
 
     this.clients.set(clientKey, {
       client, status: 'initializing', accountId,
-      profileId, phoneNumber: null, qrCode: null, lastErrorAt: null
+      profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null
     });
 
     // ── QR ──
@@ -316,6 +316,10 @@ class WhatsAppManager {
         profileId: profile.id, phoneNumber: profile.phone_number
       });
 
+      // Mark connection time — used to ignore queued messages replayed on reconnect
+      const readyEntry = this.clients.get(profile.id);
+      if (readyEntry) readyEntry.readyAt = Date.now();
+
       // Import phone book contacts in background
       this._importContacts(client, profile.id).catch(() => {});
     });
@@ -329,7 +333,17 @@ class WhatsAppManager {
           || this._findEntryByClient(client);
         if (!entry?.entry?.profileId) return;
         const currentProfileId = entry.entry.profileId;
-        await messageHandler.handleIncomingMessage(message, client, this.prisma, currentProfileId, this);
+
+        // Ignore messages replayed on reconnect:
+        // skip if message was sent before the session became ready
+        const readyAt = entry.entry.readyAt || 0;
+        if (message.timestamp * 1000 < readyAt) return;
+        // Also skip anything arriving in the first 20s grace period after reconnect
+        if (Date.now() - readyAt < 20000) return;
+
+        // If a campaign is running for this profile, save message but skip AI
+        const campaignActive = [...this.runningCampaigns.values()].some(h => h.profileId === currentProfileId);
+        await messageHandler.handleIncomingMessage(message, client, this.prisma, currentProfileId, this, { skipAI: campaignActive });
         const contact = await message.getContact();
         const phone = '+' + (contact.number || contact.id.user);
         this.io?.to(`account_${accountId}`).emit('new-message', {
@@ -553,7 +567,7 @@ class WhatsAppManager {
 
     const waClient = found.entry.client;
     const accountId = found.entry.accountId;
-    const handle = { cancelled: false };
+    const handle = { cancelled: false, profileId };
     this.runningCampaigns.set(campaignId, handle);
 
     try {
