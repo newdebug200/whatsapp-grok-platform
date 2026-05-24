@@ -523,6 +523,7 @@ class WhatsAppManager {
 
   // Send one message with "typing…" indicator; retry once on failure
   async _sendWithTyping(waClient, waId, content, handle) {
+    const isNoLidError = (msg) => typeof msg === 'string' && msg.includes('No LID');
     const attempt = async () => {
       try {
         const chat = await waClient.getChatById(waId);
@@ -537,8 +538,10 @@ class WhatsAppManager {
     };
     try {
       await attempt();
-    } catch {
-      // Retry once after 5s
+    } catch (err) {
+      // No LID = number not reachable via WA Web; retrying won't help
+      if (isNoLidError(err.message)) throw err;
+      // Retry once after 5s for other transient errors
       await this._sleep(5000, handle);
       if (handle.cancelled) return;
       await attempt();
