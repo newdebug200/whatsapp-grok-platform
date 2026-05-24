@@ -1,0 +1,2 @@
+ALTER TABLE "Campaign" ADD COLUMN "delay_min_seconds" INTEGER NOT NULL DEFAULT 20;
+ALTER TABLE "Campaign" ADD COLUMN "delay_max_seconds" INTEGER NOT NULL DEFAULT 60;
