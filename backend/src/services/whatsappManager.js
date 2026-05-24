@@ -31,6 +31,7 @@ class WhatsAppManager {
     this.clients = new Map();
     this.contextCache = new Map();
     this.runningCampaigns = new Map(); // campaignId → { cancelled: boolean }
+    this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
     this.io = null;
     this.prisma = null;
   }
@@ -316,6 +317,7 @@ class WhatsAppManager {
     client.on('message', async (message) => {
       try {
         if (message.fromMe) return;
+        if (this.campaignSendingWaIds.has(message.from)) return;
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
           || this._findEntryByClient(client);
         if (!entry?.entry?.profileId) return;
@@ -594,7 +596,12 @@ class WhatsAppManager {
             const content = msg.content.replace(/\{\{name\}\}/gi, contact.name || 'cher(e) client(e)');
 
             console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
-            await this._sendWithTyping(waClient, waId, content, handle);
+            this.campaignSendingWaIds.add(waId);
+            try {
+              await this._sendWithTyping(waClient, waId, content, handle);
+            } finally {
+              setTimeout(() => this.campaignSendingWaIds.delete(waId), 3000);
+            }
 
             if (!handle.cancelled) {
               this.prisma.message.create({
