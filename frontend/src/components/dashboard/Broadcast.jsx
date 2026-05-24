@@ -20,6 +20,14 @@ function IconMegaphone() {
   );
 }
 
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+    </svg>
+  );
+}
+
 export default function Broadcast({ socket, activeProfile }) {
   const [view, setView] = useState('list');
   const [campaigns, setCampaigns] = useState([]);
@@ -37,12 +45,24 @@ export default function Broadcast({ socket, activeProfile }) {
   const [form, setForm] = useState({
     name: '',
     messages: [{ content: '' }],
-    contactIds: []
+    contactIds: [],
+    delayMin: 30,
+    delayMax: 90
   });
   const [contactSearch, setContactSearch] = useState('');
   const [selectAll, setSelectAll] = useState(false);
+  const [hiddenContactIds, setHiddenContactIds] = useState([]);
 
   const fileInputRef = useRef(null);
+
+  const resetForm = () => {
+    setForm({ name: '', messages: [{ content: '' }], contactIds: [], delayMin: 30, delayMax: 90 });
+    setContactSearch('');
+    setSelectAll(false);
+    setHiddenContactIds([]);
+    setImportStatus(null);
+    setError('');
+  };
 
   const loadCampaigns = useCallback(async () => {
     setLoading(true);
@@ -67,7 +87,6 @@ export default function Broadcast({ socket, activeProfile }) {
         setContactsError('Aucun contact trouvé. WhatsApp doit être connecté ou importez un fichier CSV / VCF.');
       }
     } catch (err) {
-      console.error('Erreur chargement contacts:', err.message);
       const msg = err.response?.data?.error || err.message || 'Erreur de chargement';
       setContactsError(`Impossible de charger les contacts : ${msg}`);
     } finally {
@@ -109,7 +128,9 @@ export default function Broadcast({ socket, activeProfile }) {
     };
   }, [socket]);
 
-  const filteredContacts = contacts.filter(c =>
+  // Contacts visible = not hidden + match search
+  const visibleContacts = contacts.filter(c => !hiddenContactIds.includes(c.id));
+  const filteredContacts = visibleContacts.filter(c =>
     !contactSearch ||
     (c.name || '').toLowerCase().includes(contactSearch.toLowerCase()) ||
     c.phone_number.includes(contactSearch)
@@ -134,6 +155,25 @@ export default function Broadcast({ socket, activeProfile }) {
     }
   };
 
+  // Remove contact from the visible list (not from DB)
+  const handleHideContact = (id) => {
+    setHiddenContactIds(prev => [...prev, id]);
+    setForm(prev => ({ ...prev, contactIds: prev.contactIds.filter(x => x !== id) }));
+  };
+
+  // Remove all visible contacts from the list
+  const handleHideAll = () => {
+    const allIds = contacts.map(c => c.id);
+    setHiddenContactIds(allIds);
+    setForm(prev => ({ ...prev, contactIds: [] }));
+    setSelectAll(false);
+  };
+
+  // Restore all hidden contacts
+  const handleRestoreAll = () => {
+    setHiddenContactIds([]);
+  };
+
   const handleAddMessage = () => {
     setForm(prev => ({ ...prev, messages: [...prev.messages, { content: '' }] }));
   };
@@ -150,22 +190,27 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const handleCreateCampaign = async () => {
     if (!form.name.trim()) return setError('Donnez un nom à la campagne');
-    if (form.messages.some(m => !m.content.trim())) return setError('Chaque message doit avoir un contenu');
+    if (form.messages.some(m => !m.content.trim())) return setError('Chaque variante doit avoir un contenu');
     if (form.contactIds.length === 0) return setError('Sélectionnez au moins un contact');
+    if (form.delayMin < 5) return setError('Le délai minimum ne peut pas être inférieur à 5 secondes');
+    if (form.delayMax < form.delayMin) return setError('Le délai maximum doit être supérieur au délai minimum');
+
     setSaving(true);
     setError('');
     try {
       const res = await axios.post(`${API_URL}/broadcast/campaigns`, {
         name: form.name.trim(),
         messages: form.messages.map((m, i) => ({ content: m.content, order_index: i, delay_after_seconds: 0 })),
-        contact_ids: form.contactIds
+        contact_ids: form.contactIds,
+        delay_min_seconds: form.delayMin,
+        delay_max_seconds: form.delayMax
       });
-      setCampaigns(prev => [{ ...res.data, progress: { sent: 0, pending: form.contactIds.length, failed: 0, total: form.contactIds.length } }, ...prev]);
+      setCampaigns(prev => [{
+        ...res.data,
+        progress: { sent: 0, pending: form.contactIds.length, failed: 0, total: form.contactIds.length }
+      }, ...prev]);
       setView('list');
-      setForm({ name: '', messages: [{ content: '' }], contactIds: [] });
-      setContactSearch('');
-      setSelectAll(false);
-      setImportStatus(null);
+      resetForm();
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors de la création');
     } finally {
@@ -177,25 +222,21 @@ export default function Broadcast({ socket, activeProfile }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
-
-    const filename = file.name;
-    const ext = filename.split('.').pop().toLowerCase();
+    const ext = file.name.split('.').pop().toLowerCase();
     if (!['csv', 'vcf'].includes(ext)) {
       setImportStatus({ error: 'Format non supporté. Utilisez un fichier .csv ou .vcf' });
       return;
     }
-
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const content = ev.target.result;
       setImporting(true);
       setImportStatus(null);
       try {
-        const res = await axios.post(`${API_URL}/broadcast/import-contacts`, { content, filename });
+        const res = await axios.post(`${API_URL}/broadcast/import-contacts`, { content: ev.target.result, filename: file.name });
         setImportStatus({ imported: res.data.imported, skipped: res.data.skipped, total: res.data.total });
         await loadContacts();
       } catch (err) {
-        setImportStatus({ error: err.response?.data?.error || 'Erreur lors de l\'import' });
+        setImportStatus({ error: err.response?.data?.error || "Erreur lors de l'import" });
       } finally {
         setImporting(false);
       }
@@ -246,7 +287,7 @@ export default function Broadcast({ socket, activeProfile }) {
       const res = await axios.get(`${API_URL}/broadcast/campaigns/${campaign.id}`);
       setDetail(res.data);
       setView('detail');
-    } catch (err) {
+    } catch {
       setError('Erreur chargement campagne');
     }
   };
@@ -260,25 +301,18 @@ export default function Broadcast({ socket, activeProfile }) {
     return { total, done, pct };
   };
 
-  // ── No profile ─────────────────────────────────────────────────────────────
   if (!activeProfile?.id) {
-    return (
-      <div className="bc-placeholder">
-        <p>Connectez un numéro WhatsApp pour utiliser la diffusion.</p>
-      </div>
-    );
+    return <div className="bc-placeholder"><p>Connectez un numéro WhatsApp pour utiliser la diffusion.</p></div>;
   }
 
-  if (loading) {
-    return <div className="bc-placeholder">Chargement…</div>;
-  }
+  if (loading) return <div className="bc-placeholder">Chargement…</div>;
 
   // ── Create view ────────────────────────────────────────────────────────────
   if (view === 'create') {
     return (
       <div className="bc-panel">
         <div className="bc-toolbar">
-          <button className="bc-back" onClick={() => { setView('list'); setError(''); setImportStatus(null); }}>
+          <button className="bc-back" onClick={() => { setView('list'); resetForm(); }}>
             <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
               <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
             </svg>
@@ -290,6 +324,7 @@ export default function Broadcast({ socket, activeProfile }) {
         {error && <div className="bc-error">{error}</div>}
 
         <div className="bc-form">
+          {/* ── Nom ── */}
           <div className="bc-field">
             <label className="bc-label">Nom de la campagne</label>
             <input
@@ -302,10 +337,11 @@ export default function Broadcast({ socket, activeProfile }) {
             />
           </div>
 
+          {/* ── Variantes ── */}
           <div className="bc-field">
             <label className="bc-label">
               Variantes de message
-              <span className="bc-hint"> — chaque contact reçoit <strong>un seul message</strong>, tiré au hasard parmi les variantes ci-dessous. Utilisez <code>{'{{name}}'}</code> pour le prénom.</span>
+              <span className="bc-hint"> — chaque contact reçoit <strong>un seul message</strong>, tiré au hasard. Utilisez <code>{'{{name}}'}</code> pour le prénom.</span>
             </label>
             {form.messages.map((msg, i) => (
               <div key={i} className="bc-msg-row">
@@ -314,7 +350,7 @@ export default function Broadcast({ socket, activeProfile }) {
                   className="bc-textarea"
                   value={msg.content}
                   onChange={e => handleMessageChange(i, e.target.value)}
-                  placeholder={`Message ${i + 1}…`}
+                  placeholder={`Variante ${i + 1}…`}
                   rows={3}
                 />
                 {form.messages.length > 1 && (
@@ -332,36 +368,78 @@ export default function Broadcast({ socket, activeProfile }) {
             </button>
           </div>
 
+          {/* ── Délai ── */}
+          <div className="bc-field">
+            <label className="bc-label">
+              Délai entre les envois
+              <span className="bc-hint"> — temps aléatoire entre deux contacts</span>
+            </label>
+            <div className="bc-delay-row">
+              <div className="bc-delay-item">
+                <span className="bc-delay-label">Min</span>
+                <input
+                  className="bc-delay-input"
+                  type="number"
+                  min="5"
+                  max="3600"
+                  value={form.delayMin}
+                  onChange={e => setForm(f => ({ ...f, delayMin: Math.max(5, parseInt(e.target.value) || 5) }))}
+                />
+                <span className="bc-delay-unit">s</span>
+              </div>
+              <span className="bc-delay-arrow">→</span>
+              <div className="bc-delay-item">
+                <span className="bc-delay-label">Max</span>
+                <input
+                  className="bc-delay-input"
+                  type="number"
+                  min="5"
+                  max="3600"
+                  value={form.delayMax}
+                  onChange={e => setForm(f => ({ ...f, delayMax: Math.max(f.delayMin, parseInt(e.target.value) || 5) }))}
+                />
+                <span className="bc-delay-unit">s</span>
+              </div>
+              <span className="bc-delay-preview">
+                Envoi aléatoire entre {form.delayMin}s et {form.delayMax}s
+              </span>
+            </div>
+            {form.delayMin < 20 && (
+              <p className="bc-delay-warn">⚠ En dessous de 20s WhatsApp peut détecter l'automatisation.</p>
+            )}
+          </div>
+
+          {/* ── Contacts ── */}
           <div className="bc-field">
             <div className="bc-contacts-head">
               <label className="bc-label">
                 Contacts cibles
-                <span className="bc-hint"> — {form.contactIds.length} sélectionné(s)</span>
+                <span className="bc-hint"> — {form.contactIds.length} sélectionné(s){hiddenContactIds.length > 0 ? ` · ${hiddenContactIds.length} masqué(s)` : ''}</span>
               </label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="bc-contacts-actions">
                 <button className="bc-select-all" onClick={loadContacts} title="Recharger" disabled={contactsLoading}>
                   {contactsLoading ? '…' : '↺'}
                 </button>
+                {hiddenContactIds.length > 0 && (
+                  <button className="bc-select-all bc-restore-btn" onClick={handleRestoreAll}>
+                    Restaurer tous
+                  </button>
+                )}
                 <button className="bc-select-all" onClick={handleSelectAll}>
-                  {selectAll ? 'Tout désélectionner' : 'Tout sélectionner'}
+                  {selectAll ? 'Tout désélect.' : 'Tout sélect.'}
                 </button>
+                {visibleContacts.length > 0 && (
+                  <button className="bc-select-all bc-hide-all-btn" onClick={handleHideAll}>
+                    Tout retirer
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Import CSV / VCF */}
             <div className="bc-import-bar">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.vcf"
-                style={{ display: 'none' }}
-                onChange={handleImportFile}
-              />
-              <button
-                className="bc-import-btn"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
-              >
+              <input ref={fileInputRef} type="file" accept=".csv,.vcf" style={{ display: 'none' }} onChange={handleImportFile} />
+              <button className="bc-import-btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
                 <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15">
                   <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
                 </svg>
@@ -377,7 +455,7 @@ export default function Broadcast({ socket, activeProfile }) {
                     <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
                     {importStatus.imported} contact(s) importé(s)
                     {importStatus.skipped > 0 && ` · ${importStatus.skipped} ignoré(s)`}
-                    {' '}sur {importStatus.total} trouvé(s) dans le fichier
+                    {' '}sur {importStatus.total} trouvé(s)
                   </div>
             )}
 
@@ -392,21 +470,31 @@ export default function Broadcast({ socket, activeProfile }) {
               onChange={e => setContactSearch(e.target.value)}
               placeholder="Rechercher un contact…"
             />
+
             <div className="bc-contacts-scroll">
-              {contactsLoading && (
-                <div className="bc-contacts-empty">Chargement des contacts…</div>
-              )}
+              {contactsLoading && <div className="bc-contacts-empty">Chargement des contacts…</div>}
               {!contactsLoading && contacts.length === 0 && (
                 <div className="bc-contacts-empty">
                   Aucun contact disponible. Importez un fichier CSV ou VCF ci-dessus.
                 </div>
               )}
+              {!contactsLoading && contacts.length > 0 && filteredContacts.length === 0 && hiddenContactIds.length > 0 && (
+                <div className="bc-contacts-empty">
+                  Tous les contacts ont été retirés.{' '}
+                  <button className="bc-select-all" onClick={handleRestoreAll} style={{ display: 'inline' }}>Restaurer</button>
+                </div>
+              )}
               {filteredContacts.map(c => (
-                <label key={c.id} className={`bc-contact-item ${form.contactIds.includes(c.id) ? 'bc-selected' : ''}`}>
+                <div
+                  key={c.id}
+                  className={`bc-contact-item ${form.contactIds.includes(c.id) ? 'bc-selected' : ''}`}
+                  onClick={() => handleToggleContact(c.id)}
+                >
                   <input
                     type="checkbox"
                     checked={form.contactIds.includes(c.id)}
                     onChange={() => handleToggleContact(c.id)}
+                    onClick={e => e.stopPropagation()}
                   />
                   <div className="bc-contact-avatar">
                     {(c.name || c.phone_number)[0].toUpperCase()}
@@ -415,7 +503,14 @@ export default function Broadcast({ socket, activeProfile }) {
                     <span className="bc-contact-name">{c.name || c.phone_number}</span>
                     {c.name && <span className="bc-contact-phone">{c.phone_number}</span>}
                   </div>
-                </label>
+                  <button
+                    className="bc-contact-remove"
+                    title="Retirer de la liste"
+                    onClick={e => { e.stopPropagation(); handleHideContact(c.id); }}
+                  >
+                    <IconTrash />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -424,7 +519,7 @@ export default function Broadcast({ socket, activeProfile }) {
             <button className="bc-btn-primary" onClick={handleCreateCampaign} disabled={saving}>
               {saving ? 'Création en cours…' : 'Créer la campagne'}
             </button>
-            <button className="bc-btn-secondary" onClick={() => { setView('list'); setError(''); setImportStatus(null); }}>
+            <button className="bc-btn-secondary" onClick={() => { setView('list'); resetForm(); }}>
               Annuler
             </button>
           </div>
@@ -464,6 +559,12 @@ export default function Broadcast({ socket, activeProfile }) {
             </div>
             <div className="bc-progress-label">{displayDone} / {total} envoyés ({displayPct}%)</div>
           </div>
+
+          {(detail.delay_min_seconds != null) && (
+            <div className="bc-delay-info">
+              Délai : {detail.delay_min_seconds}s – {detail.delay_max_seconds}s entre chaque contact
+            </div>
+          )}
 
           <div className="bc-detail-actions">
             {(currentStatus === 'draft' || currentStatus === 'paused') && (
@@ -536,7 +637,7 @@ export default function Broadcast({ socket, activeProfile }) {
       {campaigns.length === 0 ? (
         <div className="bc-empty">
           <div className="bc-empty-icon"><IconMegaphone /></div>
-          <p className="bc-empty-text">Aucune campagne. Créez-en une pour envoyer des messages groupés à vos contacts WhatsApp avec des délais humains.</p>
+          <p className="bc-empty-text">Aucune campagne. Créez-en une pour envoyer des messages groupés à vos contacts WhatsApp.</p>
           <button className="bc-btn-primary" onClick={() => { setView('create'); setError(''); }}>
             Créer ma première campagne
           </button>
@@ -557,6 +658,9 @@ export default function Broadcast({ socket, activeProfile }) {
                 </div>
                 <div className="bc-card-meta">
                   {c.messages?.length || 0} variante(s) · {total} contact(s)
+                  {c.delay_min_seconds != null && (
+                    <span className="bc-card-delay"> · {c.delay_min_seconds}–{c.delay_max_seconds}s</span>
+                  )}
                 </div>
                 {total > 0 && (
                   <div className="bc-card-progress">
