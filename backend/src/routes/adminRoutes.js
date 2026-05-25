@@ -150,4 +150,78 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
+// GET /api/admin/profiles — admin's own WhatsApp profiles
+router.get('/profiles', async (req, res) => {
+  try {
+    const profiles = await prisma.whatsAppProfile.findMany({
+      where: { account_id: req.accountId },
+      select: { id: true, phone_number: true, display_name: true, is_connected: true }
+    });
+    res.json(profiles);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur chargement profils' });
+  }
+});
+
+// GET /api/admin/verification-triggers/:profileId
+router.get('/verification-triggers/:profileId', async (req, res) => {
+  try {
+    const profileId = parseInt(req.params.profileId);
+    const profile = await prisma.whatsAppProfile.findFirst({ where: { id: profileId, account_id: req.accountId } });
+    if (!profile) return res.status(403).json({ error: 'Accès refusé' });
+    const triggers = await prisma.verificationTrigger.findMany({
+      where: { profile_id: profileId },
+      orderBy: { created_at: 'asc' }
+    });
+    res.json(triggers);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur chargement triggers' });
+  }
+});
+
+// POST /api/admin/verification-triggers
+router.post('/verification-triggers', async (req, res) => {
+  try {
+    const { profile_id, text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: 'Texte requis' });
+    const profile = await prisma.whatsAppProfile.findFirst({ where: { id: parseInt(profile_id), account_id: req.accountId } });
+    if (!profile) return res.status(403).json({ error: 'Accès refusé' });
+    const trigger = await prisma.verificationTrigger.create({
+      data: { profile_id: parseInt(profile_id), text: text.trim(), is_active: true }
+    });
+    res.json(trigger);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur création trigger' });
+  }
+});
+
+// PATCH /api/admin/verification-triggers/:id
+router.patch('/verification-triggers/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const trigger = await prisma.verificationTrigger.findFirst({ where: { id }, include: { profile: true } });
+    if (!trigger || trigger.profile.account_id !== req.accountId) return res.status(403).json({ error: 'Accès refusé' });
+    const updates = {};
+    if (req.body.is_active !== undefined) updates.is_active = req.body.is_active;
+    if (req.body.text !== undefined) updates.text = req.body.text.trim();
+    const updated = await prisma.verificationTrigger.update({ where: { id }, data: updates });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur mise à jour trigger' });
+  }
+});
+
+// DELETE /api/admin/verification-triggers/:id
+router.delete('/verification-triggers/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const trigger = await prisma.verificationTrigger.findFirst({ where: { id }, include: { profile: true } });
+    if (!trigger || trigger.profile.account_id !== req.accountId) return res.status(403).json({ error: 'Accès refusé' });
+    await prisma.verificationTrigger.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur suppression trigger' });
+  }
+});
+
 module.exports = router;
