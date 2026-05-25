@@ -28,11 +28,12 @@ model WhatsAppProfile {
   is_connected Boolean  @default(false)
   created_at   DateTime @default(now())
 
-  account   Account    @relation(fields: [account_id], references: [id])
-  botConfig BotConfig?
-  contacts  Contact[]
-  faqs      FAQ[]
-  campaigns Campaign[]
+  account              Account               @relation(fields: [account_id], references: [id])
+  botConfig            BotConfig?
+  contacts             Contact[]
+  faqs                 FAQ[]
+  campaigns            Campaign[]
+  verificationTriggers VerificationTrigger[]
 
   @@unique([account_id, phone_number])
 }
@@ -123,4 +124,14 @@ model CampaignTarget {
 
   campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
   contact  Contact  @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+}
+
+model VerificationTrigger {
+  id         Int             @id @default(autoincrement())
+  profile_id Int
+  text       String
+  is_active  Boolean         @default(true)
+  created_at DateTime        @default(now())
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
 }
