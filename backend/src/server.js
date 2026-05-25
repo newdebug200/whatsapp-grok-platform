@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
+const cron = require('node-cron');
 const { JWT_SECRET } = require('./middleware/auth');
 
 const whatsappManager = require('./services/whatsappManager');
@@ -19,6 +20,7 @@ const profileRoutes = require('./routes/profileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const broadcastRoutes = require('./routes/broadcastRoutes');
 const tagRoutes = require('./routes/tagRoutes');
+const quickReplyRoutes = require('./routes/quickReplyRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -40,6 +42,7 @@ app.use('/api/profiles', profileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/quick-replies', quickReplyRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
@@ -106,6 +109,38 @@ io.on('connection', (socket) => {
 
 whatsappManager.setIO(io);
 whatsappManager.setPrisma(prisma);
+
+// ── Cron : vérification des campagnes planifiées (chaque minute) ──
+cron.schedule('* * * * *', async () => {
+  try {
+    const now = new Date();
+    const scheduled = await prisma.campaign.findMany({
+      where: { status: 'scheduled', scheduled_at: { lte: now } },
+      include: { profile: true }
+    });
+
+    for (const campaign of scheduled) {
+      const waStatus = whatsappManager.getStatus(campaign.profile.account_id);
+      if (!waStatus.isConnected) {
+        await prisma.campaign.update({
+          where: { id: campaign.id },
+          data: { status: 'cancelled' }
+        });
+        console.log(`[Cron] Campagne ${campaign.id} "${campaign.name}" annulée — WhatsApp non connecté`);
+        continue;
+      }
+      try {
+        whatsappManager.startCampaign(campaign.id, campaign.profile_id);
+        console.log(`[Cron] Campagne ${campaign.id} "${campaign.name}" démarrée automatiquement`);
+      } catch (err) {
+        await prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'cancelled' } });
+        console.error(`[Cron] Erreur démarrage campagne ${campaign.id}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[Cron] Erreur vérification campagnes planifiées:', err.message);
+  }
+});
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, async () => {
