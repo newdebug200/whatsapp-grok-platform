@@ -36,7 +36,8 @@ router.get('/conversations', profileMiddleware, async (req, res) => {
         messages: {
           orderBy: { created_at: 'desc' },
           take: 1
-        }
+        },
+        tags: { include: { tag: true } }
       }
     });
     const sorted = contacts.sort((a, b) => {
