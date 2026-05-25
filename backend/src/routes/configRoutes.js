@@ -6,7 +6,6 @@ const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 router.use(authMiddleware);
 router.use(profileMiddleware);
 
-// Helper: check if a Prisma error is about an unknown field
 function isUnknownFieldError(err) {
   return err?.constructor?.name === 'PrismaClientValidationError' &&
     err.message.includes('Unknown argument');
@@ -18,33 +17,23 @@ router.get('/bot', async (req, res) => {
       where: { profile_id: req.profileId }
     });
     if (!config) {
-      // Try with new field first; fall back if migration not yet applied
-      try {
-        config = await prisma.botConfig.create({
-          data: {
-            profile_id: req.profileId,
-            bot_name: 'Botora',
-            bot_info: '',
-            bot_behavior: '',
-            ia_enabled: true,
-            response_delay_seconds: 5
-          }
-        });
-      } catch (createErr) {
-        if (isUnknownFieldError(createErr)) {
-          config = await prisma.botConfig.create({
-            data: {
-              profile_id: req.profileId,
-              bot_name: 'Botora',
-              bot_info: '',
-              bot_behavior: '',
-              ia_enabled: true
-            }
-          });
-        } else {
-          throw createErr;
+      config = await prisma.botConfig.create({
+        data: {
+          profile_id: req.profileId,
+          bot_name: 'Botora',
+          bot_info: '',
+          bot_behavior: '',
+          ia_enabled: true,
+          response_delay_seconds: 5,
+          business_hours_enabled: false,
+          open_days: '1,2,3,4,5',
+          open_time: '09:00',
+          close_time: '18:00',
+          timezone: 'UTC',
+          away_message: '',
+          away_once_per_session: true
         }
-      }
+      });
     }
     res.json(config);
   } catch (error) {
@@ -55,49 +44,52 @@ router.get('/bot', async (req, res) => {
 
 router.put('/bot', async (req, res) => {
   try {
-    const { bot_name, bot_info, bot_behavior, ia_enabled, response_delay_seconds } = req.body;
+    const {
+      bot_name, bot_info, bot_behavior, ia_enabled, response_delay_seconds,
+      business_hours_enabled, open_days, open_time, close_time, timezone,
+      away_message, away_once_per_session
+    } = req.body;
 
     const delaySeconds = response_delay_seconds !== undefined
       ? Math.max(1, Math.min(300, parseInt(response_delay_seconds) || 5))
       : undefined;
 
-    const baseCreate = {
-      profile_id: req.profileId,
-      bot_name: bot_name || 'Botora',
-      bot_info: bot_info || '',
-      bot_behavior: bot_behavior || '',
-      ia_enabled: ia_enabled !== undefined ? ia_enabled : true
-    };
-    const baseUpdate = {
-      bot_name: bot_name !== undefined ? bot_name : undefined,
-      bot_info: bot_info !== undefined ? bot_info : undefined,
-      bot_behavior: bot_behavior !== undefined ? bot_behavior : undefined,
-      ia_enabled: ia_enabled !== undefined ? ia_enabled : undefined
+    const data = {
+      ...(bot_name !== undefined && { bot_name }),
+      ...(bot_info !== undefined && { bot_info }),
+      ...(bot_behavior !== undefined && { bot_behavior }),
+      ...(ia_enabled !== undefined && { ia_enabled }),
+      ...(delaySeconds !== undefined && { response_delay_seconds: delaySeconds }),
+      ...(business_hours_enabled !== undefined && { business_hours_enabled }),
+      ...(open_days !== undefined && { open_days }),
+      ...(open_time !== undefined && { open_time }),
+      ...(close_time !== undefined && { close_time }),
+      ...(timezone !== undefined && { timezone }),
+      ...(away_message !== undefined && { away_message }),
+      ...(away_once_per_session !== undefined && { away_once_per_session })
     };
 
-    let config;
-    try {
-      // Try with response_delay_seconds (requires migration)
-      config = await prisma.botConfig.upsert({
-        where: { profile_id: req.profileId },
-        create: { ...baseCreate, response_delay_seconds: delaySeconds ?? 5 },
-        update: { ...baseUpdate, response_delay_seconds: delaySeconds !== undefined ? delaySeconds : undefined }
-      });
-    } catch (upsertErr) {
-      if (isUnknownFieldError(upsertErr)) {
-        // Migration not yet applied — save without the delay field
-        console.warn('[config] response_delay_seconds non disponible — migration Prisma requise. Sauvegarde sans ce champ.');
-        config = await prisma.botConfig.upsert({
-          where: { profile_id: req.profileId },
-          create: baseCreate,
-          update: baseUpdate
-        });
-      } else {
-        throw upsertErr;
-      }
-    }
+    const config = await prisma.botConfig.upsert({
+      where: { profile_id: req.profileId },
+      create: {
+        profile_id: req.profileId,
+        bot_name: bot_name || 'Botora',
+        bot_info: bot_info || '',
+        bot_behavior: bot_behavior || '',
+        ia_enabled: ia_enabled !== undefined ? ia_enabled : true,
+        response_delay_seconds: delaySeconds ?? 5,
+        business_hours_enabled: business_hours_enabled ?? false,
+        open_days: open_days || '1,2,3,4,5',
+        open_time: open_time || '09:00',
+        close_time: close_time || '18:00',
+        timezone: timezone || 'UTC',
+        away_message: away_message || '',
+        away_once_per_session: away_once_per_session !== undefined ? away_once_per_session : true
+      },
+      update: data
+    });
 
-    res.json({ success: true, config, migrationRequired: !config.response_delay_seconds });
+    res.json({ success: true, config });
   } catch (error) {
     console.error('Erreur PUT bot config:', error);
     res.status(500).json({ error: 'Erreur lors de la sauvegarde de la configuration' });
