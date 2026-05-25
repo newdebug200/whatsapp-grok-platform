@@ -18,6 +18,7 @@ export default function TagManager({ activeProfile }) {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [contactsError, setContactsError] = useState('');
 
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#25d366');
@@ -42,10 +43,15 @@ export default function TagManager({ activeProfile }) {
   }, []);
 
   const loadContacts = useCallback(async () => {
+    setContactsError('');
     try {
       const res = await axios.get(`${API_URL}/tags/contacts`);
       setContacts(res.data);
-    } catch {}
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Impossible de charger les contacts';
+      setContactsError(msg);
+      console.error('TagManager loadContacts:', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -98,6 +104,7 @@ export default function TagManager({ activeProfile }) {
   };
 
   const handleOpenAssign = async (tag) => {
+    await loadContacts();
     const currentIds = contacts
       .filter(c => c.tags?.some(ct => ct.tag_id === tag.id))
       .map(c => c.id);
@@ -142,10 +149,18 @@ export default function TagManager({ activeProfile }) {
   });
 
   if (!activeProfile?.id) {
-    return <div style={{ padding: 40, color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>Connectez un numéro WhatsApp pour gérer les tags.</div>;
+    return (
+      <div style={{ padding: 40, color: 'var(--text-muted, #667781)', textAlign: 'center' }}>
+        Connectez un numéro WhatsApp pour gérer les tags.
+      </div>
+    );
   }
 
-  if (loading) return <div style={{ padding: 40, color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>Chargement…</div>;
+  if (loading) return (
+    <div style={{ padding: 40, color: 'var(--text-muted, #667781)', textAlign: 'center' }}>
+      Chargement…
+    </div>
+  );
 
   return (
     <div className="tm-panel">
@@ -154,7 +169,9 @@ export default function TagManager({ activeProfile }) {
           <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
         </svg>
         <h2 className="tm-title">Étiquettes (Tags)</h2>
-        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)' }}>{tags.length} tag{tags.length !== 1 ? 's' : ''}</span>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #667781)' }}>
+          {tags.length} tag{tags.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       <div className="tm-body">
@@ -191,7 +208,8 @@ export default function TagManager({ activeProfile }) {
                 key={c}
                 onClick={() => setNewColor(c)}
                 style={{
-                  width: 22, height: 22, borderRadius: '50%', background: c, border: newColor === c ? '2px solid #fff' : '2px solid transparent',
+                  width: 22, height: 22, borderRadius: '50%', background: c,
+                  border: newColor === c ? '2px solid var(--text-primary, #111)' : '2px solid transparent',
                   cursor: 'pointer', padding: 0, transition: 'border-color 0.12s'
                 }}
                 title={c}
@@ -261,7 +279,7 @@ export default function TagManager({ activeProfile }) {
             <div className="tm-assign-head">
               <h3>
                 <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: assignTag.color, marginRight: 8 }} />
-                {assignTag.name}
+                Assigner — {assignTag.name}
               </h3>
               <button className="tm-icon-btn" onClick={() => setAssignTag(null)}>
                 <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
@@ -269,47 +287,78 @@ export default function TagManager({ activeProfile }) {
             </div>
 
             <div className="tm-assign-body">
-              <input
-                className="tm-assign-search"
-                type="text"
-                placeholder="Rechercher un contact…"
-                value={assignSearch}
-                onChange={e => setAssignSearch(e.target.value)}
-              />
-              <div className="tm-assign-list">
-                {filteredAssignContacts.length === 0 && (
-                  <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem', padding: '10px 0' }}>Aucun contact trouvé</div>
-                )}
-                {filteredAssignContacts.map(c => {
-                  const checked = assignSelected.includes(c.id);
-                  return (
-                    <div
-                      key={c.id}
-                      className={`tm-assign-contact ${checked ? 'checked' : ''}`}
-                      onClick={() => setAssignSelected(prev =>
-                        prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id]
-                      )}
-                    >
-                      <input type="checkbox" checked={checked} onChange={() => {}} onClick={e => e.stopPropagation()} />
-                      <div className="tm-assign-avatar" style={{ background: getColor(c.id) }}>
-                        {(c.name || c.phone_number)[0].toUpperCase()}
+              {contactsError ? (
+                <div className="tm-error" style={{ margin: 0 }}>
+                  {contactsError}
+                  <button
+                    onClick={loadContacts}
+                    style={{ marginLeft: 10, background: 'none', border: 'none', color: '#25d366', cursor: 'pointer', fontSize: '0.82rem', textDecoration: 'underline' }}
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              ) : contacts.length === 0 ? (
+                <div className="tm-assign-no-contacts">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" style={{ opacity: 0.3, marginBottom: 8 }}>
+                    <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                  </svg>
+                  <p>Aucun contact disponible</p>
+                  <p style={{ fontSize: '0.78rem' }}>
+                    Importez des contacts via <strong>Campagnes → Importer CSV/VCF</strong> ou attendez des messages WhatsApp entrants.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <input
+                    className="tm-assign-search"
+                    type="text"
+                    placeholder="Rechercher un contact…"
+                    value={assignSearch}
+                    onChange={e => setAssignSearch(e.target.value)}
+                  />
+                  <div className="tm-assign-list">
+                    {filteredAssignContacts.length === 0 ? (
+                      <div className="tm-assign-search-empty">
+                        Aucun contact ne correspond à « {assignSearch} »
                       </div>
-                      <div>
-                        <div className="tm-assign-name">{c.name || c.phone_number}</div>
-                        {c.name && <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)' }}>{c.phone_number}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    ) : (
+                      filteredAssignContacts.map(c => {
+                        const checked = assignSelected.includes(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            className={`tm-assign-contact ${checked ? 'checked' : ''}`}
+                            onClick={() => setAssignSelected(prev =>
+                              prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id]
+                            )}
+                          >
+                            <input type="checkbox" checked={checked} onChange={() => {}} onClick={e => e.stopPropagation()} />
+                            <div className="tm-assign-avatar" style={{ background: getColor(c.id) }}>
+                              {(c.name || c.phone_number)[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="tm-assign-name">{c.name || c.phone_number}</div>
+                              {c.name && <div className="tm-assign-phone">{c.phone_number}</div>}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="tm-assign-foot">
-              <span style={{ flex: 1, fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)', alignSelf: 'center' }}>
+              <span className="tm-assign-count">
                 {assignSelected.length} sélectionné(s)
               </span>
               <button className="tm-assign-cancel" onClick={() => setAssignTag(null)}>Annuler</button>
-              <button className="tm-assign-save" onClick={handleAssignSave} disabled={assignSaving}>
+              <button
+                className="tm-assign-save"
+                onClick={handleAssignSave}
+                disabled={assignSaving || contacts.length === 0}
+              >
                 {assignSaving ? 'Enregistrement…' : 'Enregistrer'}
               </button>
             </div>
