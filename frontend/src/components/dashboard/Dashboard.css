@@ -1475,3 +1475,74 @@
 [data-theme="dark"] .top-contact-name { color: var(--text-primary, #e9edef); }
 [data-theme="dark"] .top-contact-phone { color: var(--text-secondary, #8696a0); }
 [data-theme="dark"] .top-contact-rank { color: var(--text-muted, #667781); }
+
+/* ── Tag filter bar ── */
+.tag-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 8px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+.tag-filter-bar::-webkit-scrollbar { display: none; }
+
+.tag-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid #e9edef;
+  background: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #667781;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.tag-filter-chip.active {
+  background: #e9edef;
+  color: #111b21;
+  border-color: #e9edef;
+}
+.tag-filter-chip:hover:not(.active) { background: rgba(0,0,0,0.04); }
+
+.tag-filter-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Contact tag chips ── */
+.contact-tags-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 2px 0 1px;
+}
+
+.contact-tag-chip {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Dark mode tag filter */
+[data-theme="dark"] .tag-filter-chip {
+  border-color: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.45);
+}
+[data-theme="dark"] .tag-filter-chip.active {
+  background: rgba(255,255,255,0.1);
+  color: #e9edef;
+  border-color: rgba(255,255,255,0.2);
+}
+[data-theme="dark"] .tag-filter-chip:hover:not(.active) { background: rgba(255,255,255,0.06); }
