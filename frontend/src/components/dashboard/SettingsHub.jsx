@@ -54,7 +54,6 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
             onClick={() => setTab(t.key)}
           >
             <span className="sh-tab-icon">{t.icon}</span>
-            <span className="sh-tab-label">{t.label}</span>
           </button>
         ))}
       </div>
