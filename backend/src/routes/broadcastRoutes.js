@@ -241,13 +241,22 @@ router.get('/campaigns', async (req, res) => {
 // POST /api/broadcast/campaigns
 router.post('/campaigns', async (req, res) => {
   try {
-    const { name, messages, contact_ids, tag_id, delay_min_seconds, delay_max_seconds } = req.body;
+    const { name, messages, contact_ids, tag_id, delay_min_seconds, delay_max_seconds, scheduled_at } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Nom de campagne requis' });
     if (!Array.isArray(messages) || messages.length === 0)
       return res.status(400).json({ error: 'Au moins un message requis' });
 
     const delayMin = Math.max(5, parseInt(delay_min_seconds) || 20);
     const delayMax = Math.max(delayMin, parseInt(delay_max_seconds) || 60);
+
+    let scheduledAtDate = null;
+    let campaignStatus = 'draft';
+    if (scheduled_at) {
+      scheduledAtDate = new Date(scheduled_at);
+      if (isNaN(scheduledAtDate.getTime())) return res.status(400).json({ error: 'Date de planification invalide' });
+      if (scheduledAtDate <= new Date()) return res.status(400).json({ error: 'La date de planification doit être dans le futur' });
+      campaignStatus = 'scheduled';
+    }
 
     let resolvedContactIds = [];
 
@@ -282,6 +291,8 @@ router.post('/campaigns', async (req, res) => {
       data: {
         profile_id: req.profileId,
         name: name.trim(),
+        status: campaignStatus,
+        scheduled_at: scheduledAtDate,
         delay_min_seconds: delayMin,
         delay_max_seconds: delayMax,
         ...(tag_id ? { tag_id: parseInt(tag_id) } : {}),
