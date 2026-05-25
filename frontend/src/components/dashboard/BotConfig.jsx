@@ -20,10 +20,16 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const [waError, setWaError] = useState('');
   const [cooldownLeft, setCooldownLeft] = useState(0);
 
+  // Sensitive keywords state
+  const [keywords, setKeywords] = useState([]);
+  const [newKeyword, setNewKeyword] = useState('');
+  const [kwSaving, setKwSaving] = useState(false);
+  const [kwMsg, setKwMsg] = useState('');
+
   const cooldownTimer = useRef(null);
   const cooldownInterval = useRef(null);
 
-  useEffect(() => { loadConfig(); }, []);
+  useEffect(() => { loadConfig(); loadKeywords(); }, []);
 
   useEffect(() => {
     const { status, qrCode, isConnected } = waStatus;
@@ -83,6 +89,47 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     } catch (err) {
       console.error('Erreur chargement config:', err);
     }
+  };
+
+  const loadKeywords = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/config/keywords`);
+      setKeywords(res.data);
+    } catch {}
+  };
+
+  const handleAddKeyword = async () => {
+    const kw = newKeyword.trim();
+    if (!kw) return;
+    setKwSaving(true);
+    setKwMsg('');
+    try {
+      const res = await axios.post(`${API_URL}/config/keywords`, { keyword: kw });
+      setKeywords(prev => [...prev, res.data]);
+      setNewKeyword('');
+    } catch (err) {
+      setKwMsg(err.response?.data?.error || 'Erreur lors de l\'ajout.');
+    } finally {
+      setKwSaving(false);
+    }
+  };
+
+  const handleToggleKeyword = async (kw) => {
+    try {
+      const res = await axios.patch(`${API_URL}/config/keywords/${kw.id}`, { is_active: !kw.is_active });
+      setKeywords(prev => prev.map(k => k.id === kw.id ? res.data : k));
+    } catch {}
+  };
+
+  const handleDeleteKeyword = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/config/keywords/${id}`);
+      setKeywords(prev => prev.filter(k => k.id !== id));
+    } catch {}
+  };
+
+  const handleKwKeyDown = (e) => {
+    if (e.key === 'Enter') handleAddKeyword();
   };
 
   const handleSave = async () => {
@@ -252,6 +299,98 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
         <button className="save-btn" onClick={handleSave} disabled={saving}>
           {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegardé !' : 'Sauvegarder'}
         </button>
+      </div>
+
+      {/* ── Sujets sensibles ── */}
+      <div className="config-section" style={{ marginTop: 24 }}>
+        <div className="section-label">Sujets sensibles</div>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 14, lineHeight: 1.5 }}>
+          Si un message reçu contient l'un de ces mots, le bot se tait automatiquement et la conversation est transmise à un humain.
+        </p>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <input
+            type="text"
+            value={newKeyword}
+            onChange={e => setNewKeyword(e.target.value)}
+            onKeyDown={handleKwKeyDown}
+            placeholder="Ex : avocat, remboursement, plainte…"
+            style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border, #e0e0e0)', fontSize: '0.9rem', background: 'var(--bg-secondary, #f5f5f5)', color: 'var(--text-primary, #111)' }}
+          />
+          <button
+            onClick={handleAddKeyword}
+            disabled={kwSaving || !newKeyword.trim()}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent, #25d366)', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem', opacity: (!newKeyword.trim() || kwSaving) ? 0.5 : 1 }}
+          >
+            + Ajouter
+          </button>
+        </div>
+
+        {kwMsg && (
+          <div style={{ background: '#fdecea', color: '#c0392b', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem', marginBottom: 8 }}>
+            {kwMsg}
+          </div>
+        )}
+
+        {keywords.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '18px 0', color: 'var(--text-secondary, #aaa)', fontSize: '0.85rem' }}>
+            Aucun mot-clé configuré
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {keywords.map(kw => (
+              <div
+                key={kw.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: 'var(--bg-secondary, #f5f5f5)',
+                  border: '1px solid var(--border, #e0e0e0)',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  opacity: kw.is_active ? 1 : 0.5
+                }}
+              >
+                <span style={{ fontSize: '1rem' }}>🔑</span>
+                <span style={{ flex: 1, fontWeight: 500, fontSize: '0.9rem', color: 'var(--text-primary, #111)' }}>
+                  {kw.keyword}
+                </span>
+                <button
+                  onClick={() => handleToggleKeyword(kw)}
+                  title={kw.is_active ? 'Désactiver' : 'Activer'}
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: 20,
+                    border: '1px solid var(--border, #ddd)',
+                    background: kw.is_active ? '#eafbea' : 'var(--bg-primary, #fff)',
+                    color: kw.is_active ? '#27ae60' : 'var(--text-secondary, #999)',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {kw.is_active ? 'Actif' : 'Inactif'}
+                </button>
+                <button
+                  onClick={() => handleDeleteKeyword(kw.id)}
+                  title="Supprimer"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#e74c3c',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    padding: '2px 4px',
+                    lineHeight: 1
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
