@@ -6,6 +6,7 @@ import ConversationList from './ConversationList';
 import ChatWindow from './ChatWindow';
 import Stats from './Stats';
 import Broadcast from './Broadcast';
+import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import './Dashboard.css';
 
@@ -227,6 +228,10 @@ export default function Dashboard() {
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     },
     {
+      key: 'tags', label: 'Tags',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+    },
+    {
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
     },
@@ -414,6 +419,11 @@ export default function Dashboard() {
                 onConnectWhatsApp={handleConnectWhatsApp}
               />
             )
+          )}
+          {activePanel === 'tags' && (
+            noProfile
+              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
+              : <TagManager activeProfile={activeProfile} />
           )}
           {activePanel === 'stats' && (
             noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
