@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -7,6 +7,19 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function ConversationList({ contacts, selectedContact, onSelectContact, onContactsUpdate, waStatus, socket, onConnectWhatsApp }) {
   const [search, setSearch] = useState('');
+  const [tags, setTags] = useState([]);
+  const [activeTagId, setActiveTagId] = useState(null);
+
+  const loadTags = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_URL}/tags`);
+      setTags(res.data);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadTags();
+  }, [loadTags]);
 
   useEffect(() => {
     if (socket) {
@@ -32,7 +45,9 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
 
   const filtered = contacts.filter(c => {
     const q = search.toLowerCase();
-    return c.phone_number?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q);
+    const matchSearch = !q || c.phone_number?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q);
+    const matchTag = !activeTagId || c.tags?.some(ct => ct.tag_id === activeTagId);
+    return matchSearch && matchTag;
   });
 
   const formatTime = (ts) => {
@@ -77,14 +92,42 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         </div>
       </div>
 
+      {tags.length > 0 && (
+        <div className="tag-filter-bar">
+          <button
+            className={`tag-filter-chip ${!activeTagId ? 'active' : ''}`}
+            onClick={() => setActiveTagId(null)}
+          >
+            Tous
+          </button>
+          {tags.map(tag => (
+            <button
+              key={tag.id}
+              className={`tag-filter-chip ${activeTagId === tag.id ? 'active' : ''}`}
+              style={activeTagId === tag.id ? { background: tag.color, borderColor: tag.color } : { borderColor: tag.color, color: tag.color }}
+              onClick={() => setActiveTagId(prev => prev === tag.id ? null : tag.id)}
+            >
+              <span
+                className="tag-filter-dot"
+                style={{ background: activeTagId === tag.id ? '#fff' : tag.color }}
+              />
+              {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="contacts-scroll">
         {filtered.length === 0 ? (
-          <div className="empty-list">{search ? 'Aucun résultat' : 'Aucune conversation'}</div>
+          <div className="empty-list">
+            {search || activeTagId ? 'Aucun résultat' : 'Aucune conversation'}
+          </div>
         ) : (
           filtered.map(contact => {
             const lastMsg = contact.messages[0];
             const isSelected = selectedContact?.id === contact.id;
             const isPaused = contact.ia_paused;
+            const contactTags = contact.tags?.map(ct => ct.tag).filter(Boolean) || [];
             return (
               <div
                 key={contact.id}
@@ -108,6 +151,24 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                       {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
                     </div>
                   </div>
+                  {contactTags.length > 0 && (
+                    <div className="contact-tags-row">
+                      {contactTags.slice(0, 3).map(tag => (
+                        <span
+                          key={tag.id}
+                          className="contact-tag-chip"
+                          style={{ background: tag.color + '22', color: tag.color, borderColor: tag.color + '55' }}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                      {contactTags.length > 3 && (
+                        <span className="contact-tag-chip" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderColor: 'rgba(255,255,255,0.1)' }}>
+                          +{contactTags.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="contact-row">
                     <span className="contact-preview">
                       {lastMsg
