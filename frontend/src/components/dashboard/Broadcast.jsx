@@ -32,6 +32,7 @@ export default function Broadcast({ socket, activeProfile }) {
   const [view, setView] = useState('list');
   const [campaigns, setCampaigns] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [tags, setTags] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,21 +47,26 @@ export default function Broadcast({ socket, activeProfile }) {
     name: '',
     messages: [{ content: '' }],
     contactIds: [],
+    tagId: null,
     delayMin: 30,
     delayMax: 300
   });
+  const [targetMode, setTargetMode] = useState('manual'); // 'manual' | 'tag'
   const [contactSearch, setContactSearch] = useState('');
+  const [contactTagFilter, setContactTagFilter] = useState(null);
   const [selectAll, setSelectAll] = useState(false);
   const [hiddenContactIds, setHiddenContactIds] = useState([]);
 
   const fileInputRef = useRef(null);
 
   const resetForm = () => {
-    setForm({ name: '', messages: [{ content: '' }], contactIds: [], delayMin: 30, delayMax: 90 });
+    setForm({ name: '', messages: [{ content: '' }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90 });
     setContactSearch('');
+    setContactTagFilter(null);
     setSelectAll(false);
     setHiddenContactIds([]);
     setImportStatus(null);
+    setTargetMode('manual');
     setError('');
   };
 
@@ -94,12 +100,20 @@ export default function Broadcast({ socket, activeProfile }) {
     }
   }, []);
 
+  const loadTags = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_URL}/tags`);
+      setTags(res.data);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (activeProfile?.id) {
       loadCampaigns();
       loadContacts();
+      loadTags();
     }
-  }, [activeProfile, loadCampaigns, loadContacts]);
+  }, [activeProfile, loadCampaigns, loadContacts, loadTags]);
 
   useEffect(() => {
     if (!socket) return;
@@ -128,13 +142,15 @@ export default function Broadcast({ socket, activeProfile }) {
     };
   }, [socket]);
 
-  // Contacts visible = not hidden + match search
+  // Contacts visible = not hidden + match search + match tag filter
   const visibleContacts = contacts.filter(c => !hiddenContactIds.includes(c.id));
-  const filteredContacts = visibleContacts.filter(c =>
-    !contactSearch ||
-    (c.name || '').toLowerCase().includes(contactSearch.toLowerCase()) ||
-    c.phone_number.includes(contactSearch)
-  );
+  const filteredContacts = visibleContacts.filter(c => {
+    const matchSearch = !contactSearch ||
+      (c.name || '').toLowerCase().includes(contactSearch.toLowerCase()) ||
+      c.phone_number.includes(contactSearch);
+    const matchTag = !contactTagFilter || c.tags?.some(ct => ct.tag_id === contactTagFilter);
+    return matchSearch && matchTag;
+  });
 
   const handleToggleContact = (id) => {
     setForm(prev => ({
@@ -191,23 +207,32 @@ export default function Broadcast({ socket, activeProfile }) {
   const handleCreateCampaign = async () => {
     if (!form.name.trim()) return setError('Donnez un nom à la campagne');
     if (form.messages.some(m => !m.content.trim())) return setError('Chaque variante doit avoir un contenu');
-    if (form.contactIds.length === 0) return setError('Sélectionnez au moins un contact');
+    if (targetMode === 'tag' && !form.tagId) return setError('Sélectionnez un tag cible');
+    if (targetMode === 'manual' && form.contactIds.length === 0) return setError('Sélectionnez au moins un contact');
     if (form.delayMin < 5) return setError('Le délai minimum ne peut pas être inférieur à 5 secondes');
     if (form.delayMax < form.delayMin) return setError('Le délai maximum doit être supérieur au délai minimum');
 
     setSaving(true);
     setError('');
     try {
-      const res = await axios.post(`${API_URL}/broadcast/campaigns`, {
+      const payload = {
         name: form.name.trim(),
         messages: form.messages.map((m, i) => ({ content: m.content, order_index: i, delay_after_seconds: 0 })),
-        contact_ids: form.contactIds,
         delay_min_seconds: form.delayMin,
         delay_max_seconds: form.delayMax
-      });
+      };
+      if (targetMode === 'tag') {
+        payload.tag_id = form.tagId;
+      } else {
+        payload.contact_ids = form.contactIds;
+      }
+      const res = await axios.post(`${API_URL}/broadcast/campaigns`, payload);
+      const total = targetMode === 'tag'
+        ? (tags.find(t => t.id === form.tagId)?._count?.contacts ?? 0)
+        : form.contactIds.length;
       setCampaigns(prev => [{
         ...res.data,
-        progress: { sent: 0, pending: form.contactIds.length, failed: 0, total: form.contactIds.length }
+        progress: { sent: 0, pending: total, failed: 0, total }
       }, ...prev]);
       setView('list');
       resetForm();
@@ -411,108 +436,213 @@ export default function Broadcast({ socket, activeProfile }) {
 
           {/* ── Contacts ── */}
           <div className="bc-field">
-            <div className="bc-contacts-head">
-              <label className="bc-label">
-                Contacts cibles
-                <span className="bc-hint"> — {form.contactIds.length} sélectionné(s){hiddenContactIds.length > 0 ? ` · ${hiddenContactIds.length} masqué(s)` : ''}</span>
-              </label>
-              <div className="bc-contacts-actions">
-                <button className="bc-select-all" onClick={loadContacts} title="Recharger" disabled={contactsLoading}>
-                  {contactsLoading ? '…' : '↺'}
-                </button>
-                {hiddenContactIds.length > 0 && (
-                  <button className="bc-select-all bc-restore-btn" onClick={handleRestoreAll}>
-                    Restaurer tous
-                  </button>
-                )}
-                <button className="bc-select-all" onClick={handleSelectAll}>
-                  {selectAll ? 'Tout désélect.' : 'Tout sélect.'}
-                </button>
-                {visibleContacts.length > 0 && (
-                  <button className="bc-select-all bc-hide-all-btn" onClick={handleHideAll}>
-                    Tout retirer
-                  </button>
+            <label className="bc-label">Contacts cibles</label>
+
+            {/* ── Target mode toggle ── */}
+            <div className="bc-target-mode-row">
+              <button
+                className={`bc-mode-btn ${targetMode === 'manual' ? 'active' : ''}`}
+                onClick={() => setTargetMode('manual')}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                Sélection manuelle
+              </button>
+              <button
+                className={`bc-mode-btn ${targetMode === 'tag' ? 'active' : ''}`}
+                onClick={() => setTargetMode('tag')}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+                Cibler par tag
+              </button>
+            </div>
+
+            {/* ── Tag targeting mode ── */}
+            {targetMode === 'tag' && (
+              <div className="bc-tag-target-section">
+                {tags.length === 0 ? (
+                  <div className="bc-contacts-empty">Aucun tag créé. Allez dans l'onglet Tags pour en créer.</div>
+                ) : (
+                  <>
+                    <p className="bc-tag-target-hint">Tous les contacts ayant ce tag recevront la campagne.</p>
+                    <div className="bc-tag-chips">
+                      {tags.map(tag => (
+                        <button
+                          key={tag.id}
+                          className={`bc-tag-chip ${form.tagId === tag.id ? 'active' : ''}`}
+                          style={form.tagId === tag.id
+                            ? { background: tag.color, borderColor: tag.color, color: '#fff' }
+                            : { borderColor: tag.color, color: tag.color }
+                          }
+                          onClick={() => setForm(f => ({ ...f, tagId: f.tagId === tag.id ? null : tag.id }))}
+                        >
+                          <span style={{
+                            display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                            background: form.tagId === tag.id ? '#fff' : tag.color,
+                            marginRight: 6
+                          }} />
+                          {tag.name}
+                          <span style={{ marginLeft: 6, opacity: 0.7, fontSize: '0.78rem' }}>
+                            ({tag._count?.contacts ?? 0})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
-            </div>
-
-            {/* Import CSV / VCF */}
-            <div className="bc-import-bar">
-              <input ref={fileInputRef} type="file" accept=".csv,.vcf" style={{ display: 'none' }} onChange={handleImportFile} />
-              <button className="bc-import-btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-                <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15">
-                  <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
-                </svg>
-                {importing ? 'Import en cours…' : 'Importer CSV / VCF'}
-              </button>
-              <span className="bc-import-hint">CSV : colonnes nom/téléphone · VCF : contacts exportés depuis votre téléphone</span>
-            </div>
-
-            {importStatus && (
-              importStatus.error
-                ? <div className="bc-error" style={{ marginTop: 0 }}>{importStatus.error}</div>
-                : <div className="bc-import-success">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                    {importStatus.imported} contact(s) importé(s)
-                    {importStatus.skipped > 0 && ` · ${importStatus.skipped} ignoré(s)`}
-                    {' '}sur {importStatus.total} trouvé(s)
-                  </div>
             )}
 
-            {contactsError && !importStatus && (
-              <div className="bc-error" style={{ marginBottom: 0, marginTop: 0 }}>{contactsError}</div>
-            )}
-
-            <input
-              className="bc-search"
-              type="text"
-              value={contactSearch}
-              onChange={e => setContactSearch(e.target.value)}
-              placeholder="Rechercher un contact…"
-            />
-
-            <div className="bc-contacts-scroll">
-              {contactsLoading && <div className="bc-contacts-empty">Chargement des contacts…</div>}
-              {!contactsLoading && contacts.length === 0 && (
-                <div className="bc-contacts-empty">
-                  Aucun contact disponible. Importez un fichier CSV ou VCF ci-dessus.
-                </div>
-              )}
-              {!contactsLoading && contacts.length > 0 && filteredContacts.length === 0 && hiddenContactIds.length > 0 && (
-                <div className="bc-contacts-empty">
-                  Tous les contacts ont été retirés.{' '}
-                  <button className="bc-select-all" onClick={handleRestoreAll} style={{ display: 'inline' }}>Restaurer</button>
-                </div>
-              )}
-              {filteredContacts.map(c => (
-                <div
-                  key={c.id}
-                  className={`bc-contact-item ${form.contactIds.includes(c.id) ? 'bc-selected' : ''}`}
-                  onClick={() => handleToggleContact(c.id)}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.contactIds.includes(c.id)}
-                    onChange={() => handleToggleContact(c.id)}
-                    onClick={e => e.stopPropagation()}
-                  />
-                  <div className="bc-contact-avatar">
-                    {(c.name || c.phone_number)[0].toUpperCase()}
+            {/* ── Manual targeting mode ── */}
+            {targetMode === 'manual' && (
+              <>
+                <div className="bc-contacts-head" style={{ marginTop: 10 }}>
+                  <span className="bc-hint">{form.contactIds.length} sélectionné(s){hiddenContactIds.length > 0 ? ` · ${hiddenContactIds.length} masqué(s)` : ''}</span>
+                  <div className="bc-contacts-actions">
+                    <button className="bc-select-all" onClick={loadContacts} title="Recharger" disabled={contactsLoading}>
+                      {contactsLoading ? '…' : '↺'}
+                    </button>
+                    {hiddenContactIds.length > 0 && (
+                      <button className="bc-select-all bc-restore-btn" onClick={handleRestoreAll}>
+                        Restaurer tous
+                      </button>
+                    )}
+                    <button className="bc-select-all" onClick={handleSelectAll}>
+                      {selectAll ? 'Tout désélect.' : 'Tout sélect.'}
+                    </button>
+                    {visibleContacts.length > 0 && (
+                      <button className="bc-select-all bc-hide-all-btn" onClick={handleHideAll}>
+                        Tout retirer
+                      </button>
+                    )}
                   </div>
-                  <div className="bc-contact-info">
-                    <span className="bc-contact-name">{c.name || c.phone_number}</span>
-                    {c.name && <span className="bc-contact-phone">{c.phone_number}</span>}
-                  </div>
-                  <button
-                    className="bc-contact-remove"
-                    title="Retirer de la liste"
-                    onClick={e => { e.stopPropagation(); handleHideContact(c.id); }}
-                  >
-                    <IconTrash />
+                </div>
+
+                {/* Import CSV / VCF */}
+                <div className="bc-import-bar">
+                  <input ref={fileInputRef} type="file" accept=".csv,.vcf" style={{ display: 'none' }} onChange={handleImportFile} />
+                  <button className="bc-import-btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15">
+                      <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                    </svg>
+                    {importing ? 'Import en cours…' : 'Importer CSV / VCF'}
                   </button>
+                  <span className="bc-import-hint">CSV : colonnes nom/téléphone · VCF : contacts exportés depuis votre téléphone</span>
                 </div>
-              ))}
-            </div>
+
+                {importStatus && (
+                  importStatus.error
+                    ? <div className="bc-error" style={{ marginTop: 0 }}>{importStatus.error}</div>
+                    : <div className="bc-import-success">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                        {importStatus.imported} contact(s) importé(s)
+                        {importStatus.skipped > 0 && ` · ${importStatus.skipped} ignoré(s)`}
+                        {' '}sur {importStatus.total} trouvé(s)
+                      </div>
+                )}
+
+                {contactsError && !importStatus && (
+                  <div className="bc-error" style={{ marginBottom: 0, marginTop: 0 }}>{contactsError}</div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    className="bc-search"
+                    style={{ flex: 1, marginBottom: 0 }}
+                    type="text"
+                    value={contactSearch}
+                    onChange={e => setContactSearch(e.target.value)}
+                    placeholder="Rechercher un contact…"
+                  />
+                </div>
+
+                {/* Tag filter chips */}
+                {tags.length > 0 && (
+                  <div className="bc-tag-filter-bar">
+                    <button
+                      className={`bc-tag-filter-chip ${!contactTagFilter ? 'active' : ''}`}
+                      onClick={() => setContactTagFilter(null)}
+                    >
+                      Tous
+                    </button>
+                    {tags.map(tag => (
+                      <button
+                        key={tag.id}
+                        className={`bc-tag-filter-chip ${contactTagFilter === tag.id ? 'active' : ''}`}
+                        style={contactTagFilter === tag.id
+                          ? { background: tag.color, borderColor: tag.color, color: '#fff' }
+                          : { borderColor: tag.color + '99', color: tag.color }
+                        }
+                        onClick={() => setContactTagFilter(prev => prev === tag.id ? null : tag.id)}
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="bc-contacts-scroll">
+                  {contactsLoading && <div className="bc-contacts-empty">Chargement des contacts…</div>}
+                  {!contactsLoading && contacts.length === 0 && (
+                    <div className="bc-contacts-empty">
+                      Aucun contact disponible. Importez un fichier CSV ou VCF ci-dessus.
+                    </div>
+                  )}
+                  {!contactsLoading && contacts.length > 0 && filteredContacts.length === 0 && (
+                    <div className="bc-contacts-empty">
+                      {hiddenContactIds.length > 0 ? (
+                        <>Tous les contacts ont été retirés.{' '}
+                          <button className="bc-select-all" onClick={handleRestoreAll} style={{ display: 'inline' }}>Restaurer</button>
+                        </>
+                      ) : 'Aucun contact pour ce filtre.'}
+                    </div>
+                  )}
+                  {filteredContacts.map(c => (
+                    <div
+                      key={c.id}
+                      className={`bc-contact-item ${form.contactIds.includes(c.id) ? 'bc-selected' : ''}`}
+                      onClick={() => handleToggleContact(c.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.contactIds.includes(c.id)}
+                        onChange={() => handleToggleContact(c.id)}
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <div className="bc-contact-avatar">
+                        {(c.name || c.phone_number)[0].toUpperCase()}
+                      </div>
+                      <div className="bc-contact-info">
+                        <span className="bc-contact-name">{c.name || c.phone_number}</span>
+                        {c.name && <span className="bc-contact-phone">{c.phone_number}</span>}
+                        {c.tags?.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
+                            {c.tags.slice(0, 2).map(ct => ct.tag && (
+                              <span
+                                key={ct.tag_id}
+                                style={{
+                                  fontSize: '0.7rem', padding: '1px 6px', borderRadius: 10,
+                                  background: ct.tag.color + '22', color: ct.tag.color,
+                                  border: `1px solid ${ct.tag.color}44`
+                                }}
+                              >
+                                {ct.tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        className="bc-contact-remove"
+                        title="Retirer de la liste"
+                        onClick={e => { e.stopPropagation(); handleHideContact(c.id); }}
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="bc-form-actions">
