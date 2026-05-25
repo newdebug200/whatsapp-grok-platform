@@ -3,6 +3,31 @@ const axios = require('axios');
 class MessageHandler {
   constructor() {
     this.pendingMessages = new Map();
+    this.awaySentMap = new Map();
+  }
+
+  _isWithinBusinessHours(botConfig) {
+    if (!botConfig.business_hours_enabled) return true;
+
+    const tz = botConfig.timezone || 'UTC';
+    let tzDate;
+    try {
+      tzDate = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+    } catch (_) {
+      tzDate = new Date();
+    }
+
+    const dayOfWeek = tzDate.getDay();
+    const openDays = (botConfig.open_days || '1,2,3,4,5').split(',').map(Number);
+    if (!openDays.includes(dayOfWeek)) return false;
+
+    const currentMinutes = tzDate.getHours() * 60 + tzDate.getMinutes();
+    const [openH, openM] = (botConfig.open_time || '09:00').split(':').map(Number);
+    const [closeH, closeM] = (botConfig.close_time || '18:00').split(':').map(Number);
+    const openMinutes = openH * 60 + openM;
+    const closeMinutes = closeH * 60 + closeM;
+
+    return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
   }
 
   async handleIncomingMessage(message, client, prisma, profileId, waManager, options = {}) {
@@ -64,7 +89,7 @@ class MessageHandler {
       }
 
       // ── Verification trigger check ──
-      // Runs before ia_paused so it always responds, even in human-takeover mode
+      // Runs before business hours check — triggers always work 24/7
       if (!message.hasMedia && message.body) {
         const triggers = await prisma.verificationTrigger.findMany({
           where: { profile_id: profileId, is_active: true }
@@ -72,12 +97,10 @@ class MessageHandler {
         const matched = triggers.find(t => t.text === message.body);
         if (matched) {
           try {
-            // ── Step 1: Resolve sender's LID ──
             let senderLid;
             if (waId.endsWith('@lid')) {
               senderLid = waId.split('@')[0];
             } else {
-              // @c.us contact — ask WhatsApp for their real ID (may return @lid)
               try {
                 const numId = await client.getNumberId(waId.split('@')[0]);
                 senderLid = numId ? numId.user : waId.split('@')[0];
@@ -86,7 +109,6 @@ class MessageHandler {
               }
             }
 
-            // ── Step 2: Sync LIDs for numbers that don't have one yet (max 50) ──
             try {
               const listRes = await axios.get(
                 'https://dressur.site/crud/user/find_number_not_have_lid',
@@ -121,10 +143,8 @@ class MessageHandler {
               }
             } catch (syncErr) {
               console.warn('[Verification] Sync LID ignoré:', syncErr.message);
-              // Non-blocking — continue to verification even if sync fails
             }
 
-            // ── Step 3: Verify sender using their LID ──
             const apiRes = await axios.get(
               `https://dressur.site/crud/user/find_whatsapp_is_activatable/${senderLid}`,
               { timeout: 10000, responseType: 'text' }
@@ -169,7 +189,7 @@ class MessageHandler {
             }
           }).catch(() => {});
           console.log(`[Keyword] Contact ${phoneNumber} flaggé — mot-clé: "${matched.keyword}"`);
-          return; // Bot stays silent — awaiting human
+          return;
         }
       }
 
@@ -236,6 +256,31 @@ class MessageHandler {
         return;
       }
 
+      // ── Business hours check ──
+      if (botConfig.business_hours_enabled && !this._isWithinBusinessHours(botConfig)) {
+        const awayMsg = botConfig.away_message?.trim();
+        if (awayMsg) {
+          const awayKey = `${profileId}_${contact.id}`;
+          const lastSent = this.awaySentMap.get(awayKey);
+          const cooldownMs = 8 * 60 * 60 * 1000; // 8 heures
+          const shouldSend = !botConfig.away_once_per_session || !lastSent || (Date.now() - lastSent > cooldownMs);
+          if (shouldSend) {
+            this.awaySentMap.set(awayKey, Date.now());
+            try {
+              await client.sendMessage(from, awayMsg);
+              waManager.addToCache(profileId, contact.id, 'sent', awayMsg);
+              prisma.message.create({
+                data: { contact_id: contact.id, content: awayMsg, direction: 'sent', type: 'text', created_at: new Date() }
+              }).catch(() => {});
+              console.log(`[Heures bureau] Message hors-horaires envoyé à ${from}`);
+            } catch (err) {
+              console.error('[Heures bureau] Erreur envoi message hors-horaires:', err.message);
+            }
+          }
+        }
+        return;
+      }
+
       const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
       const hasInfo = (botConfig.bot_info?.trim().length > 0) || faqs.length > 0;
       if (!hasInfo) {
@@ -243,12 +288,12 @@ class MessageHandler {
         return;
       }
 
+      // ── Full conversation history ──
       let recentMessages = waManager.getFromCache(profileId, contact.id);
       if (recentMessages.length === 0) {
         const dbMessages = await prisma.message.findMany({
           where: { contact_id: contact.id },
-          orderBy: { created_at: 'asc' },
-          take: 15
+          orderBy: { created_at: 'asc' }
         });
         recentMessages = dbMessages.map(m => ({ direction: m.direction, content: m.content }));
         for (const m of recentMessages) waManager.addToCache(profileId, contact.id, m.direction, m.content);
@@ -262,8 +307,15 @@ class MessageHandler {
 
   async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager) {
     try {
-      const systemPrompt = this._buildSystemPrompt(botConfig.bot_name, botConfig.bot_info, botConfig.bot_behavior);
-      const userPrompt = this._buildUserPrompt(messageText, recentMessages, faqs);
+      const systemPrompt = this._buildSystemPrompt(botConfig.bot_name, botConfig.bot_info, botConfig.bot_behavior, faqs);
+
+      // Build history as proper user/assistant messages for Groq
+      const historyMessages = recentMessages
+        .filter(m => m.content && !/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(m.content))
+        .map(m => ({
+          role: m.direction === 'received' ? 'user' : 'assistant',
+          content: m.content
+        }));
 
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
@@ -271,7 +323,8 @@ class MessageHandler {
           model: 'llama-3.3-70b-versatile',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
+            ...historyMessages,
+            { role: 'user', content: messageText }
           ],
           temperature: 0.2,
           max_tokens: 400
@@ -302,9 +355,14 @@ class MessageHandler {
     }
   }
 
-  _buildSystemPrompt(botName, botInfo, botBehavior) {
+  _buildSystemPrompt(botName, botInfo, botBehavior, faqs = []) {
     let prompt = `Tu es ${botName || 'Botora'}, un assistant intelligent sur WhatsApp.\n\n`;
     if (botInfo?.trim()) prompt += `📋 INFORMATIONS SUR TON DOMAINE :\n${botInfo}\n\n`;
+    if (faqs.length > 0) {
+      prompt += `📚 FAQ :\n`;
+      faqs.forEach(faq => { prompt += `Q: ${faq.question}\nR: ${faq.answer}\n`; });
+      prompt += '\n';
+    }
     if (botBehavior?.trim()) prompt += `🎯 RÈGLES DE COMPORTEMENT :\n${botBehavior}\n\n`;
     prompt += `⚙️ RÈGLES STRICTES :
 1. Tu réponds UNIQUEMENT selon les informations fournies ci-dessus.
@@ -313,25 +371,6 @@ class MessageHandler {
 4. Réponses en texte brut uniquement (pas de HTML, pas de markdown complexe).
 5. Maximum 200 mots par réponse.
 6. Sois précis, utile et courtois.`;
-    return prompt;
-  }
-
-  _buildUserPrompt(currentMessage, recentMessages, faqs) {
-    let prompt = '';
-    if (faqs.length > 0) {
-      prompt += `FAQ disponibles :\n`;
-      faqs.forEach(faq => { prompt += `Q: ${faq.question}\nR: ${faq.answer}\n`; });
-      prompt += '\n';
-    }
-    if (recentMessages.length > 0) {
-      prompt += `Historique récent :\n`;
-      recentMessages.forEach(msg => {
-        const role = msg.direction === 'received' ? 'Utilisateur' : 'Assistant';
-        prompt += `${role}: ${msg.content}\n`;
-      });
-      prompt += '\n';
-    }
-    prompt += `Message(s) de l'utilisateur :\n${currentMessage}`;
     return prompt;
   }
 }
