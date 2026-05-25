@@ -37,6 +37,7 @@ model WhatsAppProfile {
   sensitiveKeywords    SensitiveKeyword[]
   sensitiveFlags       SensitiveFlag[]
   tags                 Tag[]
+  quickReplies         QuickReply[]
 
   @@unique([account_id, phone_number])
 }
@@ -49,6 +50,14 @@ model BotConfig {
   bot_behavior           String  @default("")
   ia_enabled             Boolean @default(true)
   response_delay_seconds Int     @default(5)
+
+  business_hours_enabled Boolean @default(false)
+  open_days              String  @default("1,2,3,4,5")
+  open_time              String  @default("09:00")
+  close_time             String  @default("18:00")
+  timezone               String  @default("UTC")
+  away_message           String  @default("")
+  away_once_per_session  Boolean @default(true)
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
@@ -118,12 +127,24 @@ model FAQ {
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
 
+model QuickReply {
+  id         Int      @id @default(autoincrement())
+  profile_id Int
+  title      String
+  content    String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+}
+
 model Campaign {
   id                Int       @id @default(autoincrement())
   profile_id        Int
   name              String
   status            String    @default("draft")
   created_at        DateTime  @default(now())
+  scheduled_at      DateTime?
   started_at        DateTime?
   completed_at      DateTime?
   delay_min_seconds Int       @default(20)
