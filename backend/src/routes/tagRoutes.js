@@ -40,6 +40,32 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET /api/tags/contacts?tag_id=X — get contacts (optionally filtered by tag)
+// NOTE: this must be defined BEFORE /:id routes to avoid route shadowing
+router.get('/contacts', async (req, res) => {
+  try {
+    const tagId = req.query.tag_id ? parseInt(req.query.tag_id) : null;
+
+    const where = { profile_id: req.profileId };
+    if (tagId) {
+      where.tags = { some: { tag_id: tagId } };
+    }
+
+    const contacts = await prisma.contact.findMany({
+      where,
+      include: {
+        tags: { include: { tag: true } },
+        messages: { orderBy: { created_at: 'desc' }, take: 1 }
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    res.json(contacts);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors du chargement des contacts' });
+  }
+});
+
 // PUT /api/tags/:id — update a tag
 router.put('/:id', async (req, res) => {
   try {
@@ -125,31 +151,6 @@ router.delete('/:id/contacts/:contactId', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors du retrait du tag' });
-  }
-});
-
-// GET /api/tags/contacts?tag_id=X — get contacts filtered by tag
-router.get('/contacts', async (req, res) => {
-  try {
-    const tagId = req.query.tag_id ? parseInt(req.query.tag_id) : null;
-
-    const where = { profile_id: req.profileId };
-    if (tagId) {
-      where.tags = { some: { tag_id: tagId } };
-    }
-
-    const contacts = await prisma.contact.findMany({
-      where,
-      include: {
-        tags: { include: { tag: true } },
-        messages: { orderBy: { created_at: 'desc' }, take: 1 }
-      },
-      orderBy: { name: 'asc' }
-    });
-
-    res.json(contacts);
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur lors du chargement des contacts' });
   }
 });
 
