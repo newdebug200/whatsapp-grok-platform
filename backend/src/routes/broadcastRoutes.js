@@ -241,18 +241,38 @@ router.get('/campaigns', async (req, res) => {
 // POST /api/broadcast/campaigns
 router.post('/campaigns', async (req, res) => {
   try {
-    const { name, messages, contact_ids, delay_min_seconds, delay_max_seconds } = req.body;
+    const { name, messages, contact_ids, tag_id, delay_min_seconds, delay_max_seconds } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Nom de campagne requis' });
     if (!Array.isArray(messages) || messages.length === 0)
       return res.status(400).json({ error: 'Au moins un message requis' });
-    if (!Array.isArray(contact_ids) || contact_ids.length === 0)
-      return res.status(400).json({ error: 'Sélectionnez au moins un contact' });
 
     const delayMin = Math.max(5, parseInt(delay_min_seconds) || 20);
     const delayMax = Math.max(delayMin, parseInt(delay_max_seconds) || 60);
 
+    let resolvedContactIds = [];
+
+    if (tag_id) {
+      // Target contacts by tag
+      const tag = await prisma.tag.findFirst({
+        where: { id: parseInt(tag_id), profile_id: req.profileId }
+      });
+      if (!tag) return res.status(404).json({ error: 'Tag introuvable' });
+
+      const tagContacts = await prisma.contactTag.findMany({
+        where: { tag_id: tag.id },
+        select: { contact_id: true }
+      });
+      resolvedContactIds = tagContacts.map(t => t.contact_id);
+      if (resolvedContactIds.length === 0)
+        return res.status(400).json({ error: 'Aucun contact associé à ce tag' });
+    } else {
+      if (!Array.isArray(contact_ids) || contact_ids.length === 0)
+        return res.status(400).json({ error: 'Sélectionnez au moins un contact ou un tag' });
+      resolvedContactIds = contact_ids.map(Number);
+    }
+
     const contacts = await prisma.contact.findMany({
-      where: { id: { in: contact_ids.map(Number) }, profile_id: req.profileId },
+      where: { id: { in: resolvedContactIds }, profile_id: req.profileId },
       select: { id: true }
     });
     if (contacts.length === 0)
@@ -264,6 +284,7 @@ router.post('/campaigns', async (req, res) => {
         name: name.trim(),
         delay_min_seconds: delayMin,
         delay_max_seconds: delayMax,
+        ...(tag_id ? { tag_id: parseInt(tag_id) } : {}),
         messages: {
           create: messages.map((m, i) => ({
             content: m.content,
