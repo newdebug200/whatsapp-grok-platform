@@ -71,25 +71,73 @@ class MessageHandler {
         });
         const matched = triggers.find(t => t.text === message.body);
         if (matched) {
-          let phone = phoneNumber.replace('+', '');
-          // Bénin numbers: 229 + 8 digits (11 total) → insert 01 after 229
-          if (phone.startsWith('229') && phone.length === 11) {
-            phone = '22901' + phone.slice(3);
-          }
           try {
+            // ── Step 1: Resolve sender's LID ──
+            let senderLid;
+            if (waId.endsWith('@lid')) {
+              senderLid = waId.split('@')[0];
+            } else {
+              // @c.us contact — ask WhatsApp for their real ID (may return @lid)
+              try {
+                const numId = await client.getNumberId(waId.split('@')[0]);
+                senderLid = numId ? numId.user : waId.split('@')[0];
+              } catch (_) {
+                senderLid = waId.split('@')[0];
+              }
+            }
+
+            // ── Step 2: Sync LIDs for numbers that don't have one yet (max 50) ──
+            try {
+              const listRes = await axios.get(
+                'https://dressur.site/crud/user/find_number_not_have_lid',
+                { timeout: 8000 }
+              );
+              const numbersWithoutLid = Array.isArray(listRes.data)
+                ? listRes.data.slice(0, 50)
+                : [];
+
+              if (numbersWithoutLid.length > 0) {
+                console.log(`[Verification] Sync LID pour ${numbersWithoutLid.length} numéro(s)`);
+                const lidEntries = await Promise.all(
+                  numbersWithoutLid.map(async (num) => {
+                    try {
+                      const numId = await client.getNumberId(String(num));
+                      return numId ? { phone: String(num), lid: numId.user } : null;
+                    } catch (_) { return null; }
+                  })
+                );
+                const number_and_lid = {};
+                for (const entry of lidEntries) {
+                  if (entry) number_and_lid[entry.phone] = entry.lid;
+                }
+                if (Object.keys(number_and_lid).length > 0) {
+                  await axios.post(
+                    'https://dressur.site/crud/user/number_and_lid',
+                    { number_and_lid },
+                    { timeout: 15000, responseType: 'text' }
+                  );
+                  console.log(`[Verification] Sync LID OK — ${Object.keys(number_and_lid).length} entrée(s) envoyée(s)`);
+                }
+              }
+            } catch (syncErr) {
+              console.warn('[Verification] Sync LID ignoré:', syncErr.message);
+              // Non-blocking — continue to verification even if sync fails
+            }
+
+            // ── Step 3: Verify sender using their LID ──
             const apiRes = await axios.get(
-              `https://dressur.site/crud/user/find_whatsapp_is_activatable/${phone}`,
+              `https://dressur.site/crud/user/find_whatsapp_is_activatable/${senderLid}`,
               { timeout: 10000, responseType: 'text' }
             );
             const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
-            const fullReply = `${replyText}\n\n📱 Numéro vérifié : +${phone}`;
+            const fullReply = `${replyText}\n\n📱 LID détecté : ${senderLid}`;
             await client.sendMessage(waId, fullReply);
             waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
             prisma.message.create({
               data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date() }
             }).catch(() => {});
           } catch (err) {
-            console.error('[Verification] Erreur API:', err.message);
+            console.error('[Verification] Erreur:', err.message);
           }
           return;
         }
