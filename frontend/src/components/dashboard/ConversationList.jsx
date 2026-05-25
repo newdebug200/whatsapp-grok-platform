@@ -98,9 +98,13 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                   <div className="contact-row">
                     <span className="contact-name">{getDisplayName(contact)}</span>
                     <div className="contact-row-right">
-                      <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
-                        {isPaused ? '👤' : '🤖'}
-                      </span>
+                      {isPaused && contact.sensitive_flagged ? (
+                        <span className="contact-mode-badge flagged" title="En attente humain — sujet sensible détecté">🚨</span>
+                      ) : (
+                        <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
+                          {isPaused ? '👤' : '🤖'}
+                        </span>
+                      )}
                       {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
                     </div>
                   </div>
