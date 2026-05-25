@@ -3,54 +3,59 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-primary);
 }
 
 .sh-tabs {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 8px 12px 0;
-  background: #fff;
-  border-bottom: 1px solid #e9edef;
+  padding: 8px 8px 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .sh-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  justify-content: center;
+  width: 42px;
+  height: 36px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  font-size: 13px;
-  font-weight: 500;
-  color: #667781;
+  color: var(--text-secondary);
   cursor: pointer;
-  white-space: nowrap;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   border-radius: 8px 8px 0 0;
+  flex-shrink: 0;
+  position: relative;
 }
+
 .sh-tab:hover {
-  background: #f0f2f5;
-  color: #111;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
+
 .sh-tab.active {
-  color: #00a884;
-  border-bottom-color: #00a884;
-  font-weight: 600;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .sh-tab-icon {
   display: flex;
   align-items: center;
-  opacity: 0.75;
+  opacity: 0.7;
 }
-.sh-tab.active .sh-tab-icon { opacity: 1; }
 
+.sh-tab.active .sh-tab-icon {
+  opacity: 1;
+}
+
+/* Hide labels — icon-only mode */
 .sh-tab-label {
-  font-size: 13px;
+  display: none;
 }
 
 .sh-content {
