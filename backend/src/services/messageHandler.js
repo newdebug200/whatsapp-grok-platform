@@ -148,6 +148,31 @@ class MessageHandler {
         return;
       }
 
+      // ── Sensitive keyword detection ──
+      if (!message.hasMedia && message.body) {
+        const keywords = await prisma.sensitiveKeyword.findMany({
+          where: { profile_id: profileId, is_active: true }
+        });
+        const bodyLower = message.body.toLowerCase();
+        const matched = keywords.find(k => bodyLower.includes(k.keyword.toLowerCase()));
+        if (matched) {
+          await prisma.contact.update({
+            where: { id: dbContact.id },
+            data: { ia_paused: true, sensitive_flagged: true }
+          });
+          prisma.sensitiveFlag.create({
+            data: {
+              profile_id: profileId,
+              contact_id: dbContact.id,
+              keyword_matched: matched.keyword,
+              message_content: message.body.slice(0, 500)
+            }
+          }).catch(() => {});
+          console.log(`[Keyword] Contact ${phoneNumber} flaggé — mot-clé: "${matched.keyword}"`);
+          return; // Bot stays silent — awaiting human
+        }
+      }
+
       if (skipAI) {
         console.log(`Contact ${phoneNumber}: campagne active pour ce profil, réponse IA suspendue`);
         return;
