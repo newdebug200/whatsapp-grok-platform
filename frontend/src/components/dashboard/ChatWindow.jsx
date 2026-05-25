@@ -27,10 +27,14 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [iaPaused, setIaPaused] = useState(false);
   const [togglingIA, setTogglingIA] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [quickReplies, setQuickReplies] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const emojiRef = useRef(null);
+  const templatesRef = useRef(null);
 
   useEffect(() => {
     if (contact) {
@@ -65,6 +69,16 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showEmoji]);
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (templatesRef.current && !templatesRef.current.contains(e.target)) {
+        setShowTemplates(false);
+      }
+    };
+    if (showTemplates) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showTemplates]);
+
   const loadMessages = async (contactId) => {
     setLoading(true);
     try {
@@ -78,6 +92,19 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       console.error('Erreur chargement messages:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadQuickReplies = async () => {
+    if (quickReplies.length > 0) return;
+    setLoadingTemplates(true);
+    try {
+      const res = await axios.get(`${API_URL}/quick-replies`);
+      setQuickReplies(res.data);
+    } catch (err) {
+      console.error('Erreur chargement templates:', err);
+    } finally {
+      setLoadingTemplates(false);
     }
   };
 
@@ -99,6 +126,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     setSendError('');
     setSending(true);
     setShowEmoji(false);
+    setShowTemplates(false);
     try {
       await axios.post(`${API_URL}/messages/send`, { contactId: contact.id, content: text });
       setIaPaused(true);
@@ -142,6 +170,24 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     const newText = inputText.slice(0, start) + emoji + inputText.slice(end);
     setInputText(newText);
     setTimeout(() => { input.focus(); input.setSelectionRange(start + emoji.length, start + emoji.length); }, 0);
+  };
+
+  const insertTemplate = (content) => {
+    setInputText(content);
+    setShowTemplates(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+      const len = content.length;
+      inputRef.current?.setSelectionRange(len, len);
+    }, 0);
+  };
+
+  const handleToggleTemplates = () => {
+    if (!showTemplates) {
+      loadQuickReplies();
+      setShowEmoji(false);
+    }
+    setShowTemplates(v => !v);
   };
 
   const getInitial = (c) => (c.name || c.phone_number || '?').charAt(0).toUpperCase();
@@ -265,6 +311,47 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         </button>
       )}
 
+      {/* ── Templates picker ── */}
+      {showTemplates && (
+        <div className="emoji-picker" ref={templatesRef} style={{ maxHeight: 300, overflowY: 'auto' }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border, rgba(255,255,255,0.08))', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary, #8e9baa)' }}>
+            ⚡ Réponses rapides
+          </div>
+          {loadingTemplates ? (
+            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary, #8e9baa)', fontSize: '0.85rem' }}>Chargement…</div>
+          ) : quickReplies.length === 0 ? (
+            <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary, #8e9baa)', fontSize: '0.85rem' }}>
+              Aucun template. Créez-en dans Paramètres → Templates.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {quickReplies.map(qr => (
+                <button
+                  key={qr.id}
+                  onClick={() => insertTemplate(qr.content)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', gap: 2,
+                    padding: '10px 14px', textAlign: 'left', background: 'none',
+                    border: 'none', borderBottom: '1px solid var(--border, rgba(255,255,255,0.05))',
+                    cursor: 'pointer', color: 'var(--text-primary, #e8eaed)',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary, rgba(255,255,255,0.05))'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--accent, #25d366)' }}>
+                    {qr.title}
+                  </span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #8e9baa)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
+                    {qr.content}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {showEmoji && (
         <div className="emoji-picker" ref={emojiRef}>
           <div className="emoji-cats">
@@ -287,8 +374,17 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
       <div className="chat-input-bar">
         <button
+          className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
+          onClick={handleToggleTemplates}
+          title="Réponses rapides"
+          type="button"
+          style={{ fontSize: '1rem', fontWeight: 700 }}
+        >
+          ⚡
+        </button>
+        <button
           className={`emoji-toggle-btn ${showEmoji ? 'active' : ''}`}
-          onClick={() => setShowEmoji(v => !v)}
+          onClick={() => { setShowEmoji(v => !v); setShowTemplates(false); }}
           title="Emojis"
           type="button"
         >
