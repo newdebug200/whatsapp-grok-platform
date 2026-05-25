@@ -18,6 +18,7 @@ const statsRoutes = require('./routes/statsRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const broadcastRoutes = require('./routes/broadcastRoutes');
+const tagRoutes = require('./routes/tagRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -38,6 +39,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
+app.use('/api/tags', tagRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
