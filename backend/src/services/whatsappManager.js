@@ -625,10 +625,27 @@ class WhatsAppManager {
 
           const target = targets[i];
           const contact = target.contact;
-          // Prefer phone number format; wa_id stored as @lid cannot receive messages
-          const waId = (contact.wa_id && !contact.wa_id.includes('@lid'))
-            ? contact.wa_id
-            : (contact.phone_number.replace('+', '') + '@c.us');
+
+          // Resolve the real WhatsApp ID to handle @lid accounts
+          let waId;
+          try {
+            const rawPhone = contact.phone_number.replace('+', '');
+            const numId = await waClient.getNumberId(rawPhone);
+            if (!numId) {
+              console.log(`[Campaign ${campaignId}] Numéro non WhatsApp — ${contact.phone_number}`);
+              await this.prisma.campaignTarget.update({
+                where: { id: target.id },
+                data: { status: 'failed', error: 'Numéro non enregistré sur WhatsApp' }
+              }).catch(() => {});
+              continue;
+            }
+            waId = numId._serialized;
+          } catch (_) {
+            // Fallback if getNumberId throws
+            waId = (contact.wa_id && !contact.wa_id.includes('@lid'))
+              ? contact.wa_id
+              : (contact.phone_number.replace('+', '') + '@c.us');
+          }
 
           try {
             // Pick one random variant — each contact gets exactly one message
