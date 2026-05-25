@@ -126,11 +126,16 @@ router.post('/toggle-ia/:contactId', profileMiddleware, async (req, res) => {
       where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    const newPaused = !contact.ia_paused;
     const updated = await prisma.contact.update({
       where: { id: contact.id },
-      data: { ia_paused: !contact.ia_paused }
+      data: {
+        ia_paused: newPaused,
+        // When human releases the contact (unpausing), clear sensitive flag too
+        ...(newPaused === false ? { sensitive_flagged: false } : {})
+      }
     });
-    res.json({ success: true, ia_paused: updated.ia_paused });
+    res.json({ success: true, ia_paused: updated.ia_paused, sensitive_flagged: updated.sensitive_flagged });
   } catch (error) {
     console.error('Erreur toggle IA:', error);
     res.status(500).json({ error: "Erreur lors du changement de mode IA" });
