@@ -63,6 +63,37 @@ class MessageHandler {
         waManager.addToCache(profileId, dbContact.id, 'received', message.body || '');
       }
 
+      // ── Verification trigger check ──
+      // Runs before ia_paused so it always responds, even in human-takeover mode
+      if (!message.hasMedia && message.body) {
+        const triggers = await prisma.verificationTrigger.findMany({
+          where: { profile_id: profileId, is_active: true }
+        });
+        const matched = triggers.find(t => t.text === message.body);
+        if (matched) {
+          let phone = phoneNumber.replace('+', '');
+          // Bénin numbers: 229 + 8 digits (11 total) → insert 01 after 229
+          if (phone.startsWith('229') && phone.length === 11) {
+            phone = '22901' + phone.slice(3);
+          }
+          try {
+            const apiRes = await axios.get(
+              `https://dressur.site/crud/user/find_whatsapp_is_activatable/${phone}`,
+              { timeout: 10000, responseType: 'text' }
+            );
+            const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
+            await client.sendMessage(waId, replyText);
+            waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
+            prisma.message.create({
+              data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date() }
+            }).catch(() => {});
+          } catch (err) {
+            console.error('[Verification] Erreur API:', err.message);
+          }
+          return;
+        }
+      }
+
       if (dbContact.ia_paused) {
         console.log(`Contact ${phoneNumber}: prise en main humaine active, réponse IA désactivée`);
         return;
