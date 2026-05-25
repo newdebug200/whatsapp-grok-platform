@@ -1546,3 +1546,31 @@
   border-color: rgba(255,255,255,0.2);
 }
 [data-theme="dark"] .tag-filter-chip:hover:not(.active) { background: rgba(255,255,255,0.06); }
+
+/* ── Dark theme — panel & config overrides ── */
+[data-theme="dark"] .panel-desc { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .wa-status-row.connected { background: rgba(37,211,102,0.12); color: #25d366; }
+[data-theme="dark"] .wa-status-row.disconnected { background: rgba(231,76,60,0.1); color: #e74c3c; }
+[data-theme="dark"] .connected .wa-dot { background: #25d366; }
+[data-theme="dark"] .disconnected .wa-dot { background: #e74c3c; }
+[data-theme="dark"] .btn-disconnect { background: rgba(231,76,60,0.1); color: #e74c3c; border-color: rgba(231,76,60,0.2); }
+[data-theme="dark"] .btn-disconnect:hover:not(:disabled) { background: rgba(231,76,60,0.18); }
+[data-theme="dark"] .wa-error-banner { background: rgba(192,57,43,0.15); color: #e74c3c; border-left-color: #c0392b; }
+[data-theme="dark"] .close-chat-btn:hover { background: var(--bg-hover, #2a3942); color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .config-section { border-color: var(--border, #2a3942); }
+[data-theme="dark"] .config-error { background: rgba(192,57,43,0.15); color: #e74c3c; }
+[data-theme="dark"] .faq-item { background: var(--bg-primary, #1f2c34); border-color: var(--border, #2a3942); }
+[data-theme="dark"] .faq-q { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .faq-a { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .faq-empty { color: var(--text-muted, #667781); }
+[data-theme="dark"] .faq-form input,
+[data-theme="dark"] .faq-form textarea { background: var(--bg-primary, #1f2c34); border-color: var(--border, #2a3942); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .save-btn { background: var(--accent, #00a884); }
+
+/* ── Dark theme — SettingsHub ── */
+[data-theme="dark"] .sh-wrapper { background: var(--sidebar-bg, #111b21); }
+[data-theme="dark"] .sh-tabs { background: var(--sidebar-bg, #111b21); border-bottom-color: var(--border, #2a3942); }
+[data-theme="dark"] .sh-tab { color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .sh-tab:hover { background: var(--bg-hover, #2a3942); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .sh-tab.active { color: var(--accent, #00a884); border-bottom-color: var(--accent, #00a884); }
+[data-theme="dark"] .sh-content { background: var(--bg-secondary, #111b21); }
