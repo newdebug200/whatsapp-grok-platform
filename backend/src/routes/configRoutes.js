@@ -104,4 +104,76 @@ router.put('/bot', async (req, res) => {
   }
 });
 
+// ── Sensitive Keywords ──
+
+router.get('/keywords', async (req, res) => {
+  try {
+    const keywords = await prisma.sensitiveKeyword.findMany({
+      where: { profile_id: req.profileId },
+      orderBy: { created_at: 'asc' }
+    });
+    res.json(keywords);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur chargement mots-clés' });
+  }
+});
+
+router.post('/keywords', async (req, res) => {
+  try {
+    const { keyword } = req.body;
+    if (!keyword?.trim()) return res.status(400).json({ error: 'Mot-clé requis' });
+    const created = await prisma.sensitiveKeyword.create({
+      data: { profile_id: req.profileId, keyword: keyword.trim(), is_active: true }
+    });
+    res.json(created);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur création mot-clé' });
+  }
+});
+
+router.patch('/keywords/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const kw = await prisma.sensitiveKeyword.findFirst({ where: { id, profile_id: req.profileId } });
+    if (!kw) return res.status(404).json({ error: 'Mot-clé introuvable' });
+    const updates = {};
+    if (req.body.is_active !== undefined) updates.is_active = req.body.is_active;
+    if (req.body.keyword !== undefined) updates.keyword = req.body.keyword.trim();
+    const updated = await prisma.sensitiveKeyword.update({ where: { id }, data: updates });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur mise à jour mot-clé' });
+  }
+});
+
+router.delete('/keywords/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const kw = await prisma.sensitiveKeyword.findFirst({ where: { id, profile_id: req.profileId } });
+    if (!kw) return res.status(404).json({ error: 'Mot-clé introuvable' });
+    await prisma.sensitiveKeyword.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur suppression mot-clé' });
+  }
+});
+
+// ── Sensitive Flags Journal ──
+
+router.get('/flags', async (req, res) => {
+  try {
+    const flags = await prisma.sensitiveFlag.findMany({
+      where: { profile_id: req.profileId },
+      orderBy: { flagged_at: 'desc' },
+      take: 200,
+      include: {
+        contact: { select: { phone_number: true, name: true, ia_paused: true, sensitive_flagged: true } }
+      }
+    });
+    res.json(flags);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur chargement journal' });
+  }
+});
+
 module.exports = router;
