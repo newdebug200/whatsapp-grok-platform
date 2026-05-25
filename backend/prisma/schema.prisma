@@ -34,6 +34,8 @@ model WhatsAppProfile {
   faqs                 FAQ[]
   campaigns            Campaign[]
   verificationTriggers VerificationTrigger[]
+  sensitiveKeywords    SensitiveKeyword[]
+  sensitiveFlags       SensitiveFlag[]
 
   @@unique([account_id, phone_number])
 }
@@ -51,17 +53,19 @@ model BotConfig {
 }
 
 model Contact {
-  id           Int       @id @default(autoincrement())
-  profile_id   Int
-  phone_number String
-  wa_id        String?
-  name         String?
-  created_at   DateTime  @default(now())
-  ia_paused    Boolean   @default(false)
+  id                Int       @id @default(autoincrement())
+  profile_id        Int
+  phone_number      String
+  wa_id             String?
+  name              String?
+  created_at        DateTime  @default(now())
+  ia_paused         Boolean   @default(false)
+  sensitive_flagged Boolean   @default(false)
 
-  messages        Message[]
-  profile         WhatsAppProfile  @relation(fields: [profile_id], references: [id])
-  campaignTargets CampaignTarget[]
+  messages          Message[]
+  profile           WhatsAppProfile  @relation(fields: [profile_id], references: [id])
+  campaignTargets   CampaignTarget[]
+  sensitiveFlagLogs SensitiveFlag[]
 
   @@unique([profile_id, phone_number])
 }
@@ -134,4 +138,26 @@ model VerificationTrigger {
   created_at DateTime        @default(now())
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+}
+
+model SensitiveKeyword {
+  id         Int             @id @default(autoincrement())
+  profile_id Int
+  keyword    String
+  is_active  Boolean         @default(true)
+  created_at DateTime        @default(now())
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+}
+
+model SensitiveFlag {
+  id              Int             @id @default(autoincrement())
+  profile_id      Int
+  contact_id      Int
+  keyword_matched String
+  message_content String
+  flagged_at      DateTime        @default(now())
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  contact Contact         @relation(fields: [contact_id], references: [id], onDelete: Cascade)
 }
