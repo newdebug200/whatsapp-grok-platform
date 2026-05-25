@@ -306,3 +306,202 @@
 }
 .admin-confirm-ok:hover { background: #a93226; }
 .admin-confirm-ok:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── Verification Section ── */
+.admin-verif-section {
+  background: var(--bg-card, #f8f9ff);
+  border: 1px solid var(--border, #e8eaf0);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-verif-header { display: flex; flex-direction: column; gap: 4px; }
+
+.admin-verif-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-verif-icon { color: #25a864; flex-shrink: 0; }
+
+.admin-verif-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary, #1a1a2e);
+  margin: 0;
+}
+
+.admin-verif-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #666);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.admin-verif-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-verif-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary, #555);
+  white-space: nowrap;
+}
+
+.admin-verif-select {
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border, #e0e0e0);
+  background: #fff;
+  font-size: 0.85rem;
+  color: var(--text-primary, #1a1a2e);
+  cursor: pointer;
+  min-width: 180px;
+}
+
+.admin-verif-msg {
+  padding: 8px 12px;
+  border-radius: 7px;
+  font-size: 0.83rem;
+  font-weight: 500;
+}
+.admin-verif-msg.success { background: #e8f8ef; color: #1a7a44; }
+.admin-verif-msg.error { background: #fdf0f0; color: #c0392b; }
+
+.admin-verif-add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-verif-input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border, #e0e0e0);
+  font-size: 0.85rem;
+  background: #fff;
+  color: var(--text-primary, #1a1a2e);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-verif-input:focus { border-color: #25a864; }
+.admin-verif-input::placeholder { color: #aaa; }
+
+.admin-verif-add-btn {
+  padding: 8px 16px;
+  border-radius: 7px;
+  border: none;
+  background: #25a864;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.admin-verif-add-btn:hover { background: #1e8f54; }
+.admin-verif-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.admin-verif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-verif-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e8eaf0);
+  background: #fff;
+  transition: opacity 0.15s;
+}
+.admin-verif-item.inactive { opacity: 0.55; }
+
+.admin-verif-item-text {
+  font-size: 0.87rem;
+  font-family: monospace;
+  color: var(--text-primary, #1a1a2e);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-verif-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.admin-verif-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.admin-verif-toggle input { display: none; }
+
+.admin-verif-toggle-track {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: #ccc;
+  position: relative;
+  transition: background 0.2s;
+}
+.admin-verif-toggle input:checked + .admin-verif-toggle-track { background: #25a864; }
+
+.admin-verif-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.admin-verif-toggle input:checked ~ .admin-verif-toggle-track .admin-verif-toggle-thumb { transform: translateX(16px); }
+
+.admin-verif-toggle-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  min-width: 40px;
+}
+
+.admin-verif-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: #999;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+.admin-verif-delete-btn:hover { background: #fdf0f0; color: #c0392b; }
+
+.admin-verif-loading,
+.admin-verif-no-triggers,
+.admin-verif-empty-profiles {
+  font-size: 0.83rem;
+  color: var(--text-secondary, #888);
+  padding: 6px 0;
+  font-style: italic;
+}
