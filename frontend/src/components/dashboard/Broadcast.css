@@ -690,3 +690,88 @@
 .bc-status-sent { color: #25d366; font-size: 0.8rem; font-weight: 600; }
 .bc-status-failed { color: #e74c3c; font-size: 0.8rem; font-weight: 600; cursor: help; }
 .bc-status-pending { color: var(--text-secondary, #8e9baa); font-size: 0.8rem; }
+
+/* ── Target mode toggle ── */
+.bc-target-mode-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.bc-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.5);
+  font-size: 0.83rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bc-mode-btn:hover { background: rgba(255,255,255,0.08); color: #e8eaed; }
+.bc-mode-btn.active {
+  background: rgba(37,211,102,0.12);
+  border-color: rgba(37,211,102,0.4);
+  color: #25d366;
+  font-weight: 600;
+}
+
+/* ── Tag target section ── */
+.bc-tag-target-section {
+  padding: 12px 0;
+}
+
+.bc-tag-target-hint {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.35);
+  margin: 0 0 12px 0;
+}
+
+.bc-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bc-tag-chip {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid;
+  background: transparent;
+  font-size: 0.83rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bc-tag-chip:hover { opacity: 0.85; }
+
+/* ── Tag filter bar in contact list ── */
+.bc-tag-filter-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.bc-tag-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: rgba(255,255,255,0.45);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.bc-tag-filter-chip:hover { background: rgba(255,255,255,0.06); }
+.bc-tag-filter-chip.active { background: rgba(255,255,255,0.1); color: #e8eaed; border-color: rgba(255,255,255,0.25); }
