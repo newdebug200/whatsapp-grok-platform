@@ -15,6 +15,181 @@ function formatDateTime(d) {
   return new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function VerificationSection() {
+  const [profiles, setProfiles] = useState([]);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [triggers, setTriggers] = useState([]);
+  const [newText, setNewText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const showMsg = (text, error = false) => {
+    setMsg({ text, error });
+    setTimeout(() => setMsg(null), 3500);
+  };
+
+  useEffect(() => {
+    axios.get(`${API_URL}/admin/profiles`)
+      .then(r => {
+        setProfiles(r.data);
+        if (r.data.length > 0) setSelectedProfileId(String(r.data[0].id));
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadTriggers = useCallback(async (profileId) => {
+    if (!profileId) return;
+    setLoading(true);
+    try {
+      const r = await axios.get(`${API_URL}/admin/verification-triggers/${profileId}`);
+      setTriggers(r.data);
+    } catch {
+      setTriggers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedProfileId) loadTriggers(selectedProfileId);
+  }, [selectedProfileId, loadTriggers]);
+
+  const handleAdd = async () => {
+    if (!newText.trim() || !selectedProfileId) return;
+    setSaving(true);
+    try {
+      const r = await axios.post(`${API_URL}/admin/verification-triggers`, {
+        profile_id: parseInt(selectedProfileId),
+        text: newText.trim()
+      });
+      setTriggers(prev => [...prev, r.data]);
+      setNewText('');
+      showMsg('Déclencheur ajouté');
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Erreur', true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = async (trigger) => {
+    try {
+      const r = await axios.patch(`${API_URL}/admin/verification-triggers/${trigger.id}`, {
+        is_active: !trigger.is_active
+      });
+      setTriggers(prev => prev.map(t => t.id === trigger.id ? r.data : t));
+    } catch {
+      showMsg('Erreur mise à jour', true);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/admin/verification-triggers/${id}`);
+      setTriggers(prev => prev.filter(t => t.id !== id));
+      showMsg('Déclencheur supprimé');
+    } catch {
+      showMsg('Erreur suppression', true);
+    }
+  };
+
+  return (
+    <div className="admin-verif-section">
+      <div className="admin-verif-header">
+        <div className="admin-verif-title-row">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" className="admin-verif-icon">
+            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+          </svg>
+          <h3 className="admin-verif-title">Vérification WhatsApp</h3>
+        </div>
+        <p className="admin-verif-desc">
+          Quand un utilisateur envoie exactement l'un de ces textes, le bot vérifie son numéro via l'API externe et lui renvoie le résultat. L'IA ne répond pas.
+        </p>
+      </div>
+
+      {profiles.length === 0 ? (
+        <div className="admin-verif-empty-profiles">Aucun profil WhatsApp configuré.</div>
+      ) : (
+        <>
+          <div className="admin-verif-profile-row">
+            <label className="admin-verif-label">Profil WhatsApp</label>
+            <select
+              className="admin-verif-select"
+              value={selectedProfileId}
+              onChange={e => setSelectedProfileId(e.target.value)}
+            >
+              {profiles.map(p => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.phone_number}{p.display_name ? ` — ${p.display_name}` : ''}{p.is_connected ? ' ●' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {msg && (
+            <div className={`admin-verif-msg ${msg.error ? 'error' : 'success'}`}>{msg.text}</div>
+          )}
+
+          <div className="admin-verif-add-row">
+            <input
+              className="admin-verif-input"
+              type="text"
+              placeholder="Texte déclencheur exact (ex: confirm whatsapp)"
+              value={newText}
+              onChange={e => setNewText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            />
+            <button
+              className="admin-verif-add-btn"
+              onClick={handleAdd}
+              disabled={saving || !newText.trim()}
+            >
+              {saving ? '…' : '+ Ajouter'}
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="admin-verif-loading">Chargement…</div>
+          ) : triggers.length === 0 ? (
+            <div className="admin-verif-no-triggers">Aucun déclencheur configuré pour ce profil.</div>
+          ) : (
+            <div className="admin-verif-list">
+              {triggers.map(t => (
+                <div key={t.id} className={`admin-verif-item ${t.is_active ? 'active' : 'inactive'}`}>
+                  <span className="admin-verif-item-text">"{t.text}"</span>
+                  <div className="admin-verif-item-actions">
+                    <label className="admin-verif-toggle" title={t.is_active ? 'Désactiver' : 'Activer'}>
+                      <input
+                        type="checkbox"
+                        checked={t.is_active}
+                        onChange={() => handleToggle(t)}
+                      />
+                      <span className="admin-verif-toggle-track">
+                        <span className="admin-verif-toggle-thumb" />
+                      </span>
+                      <span className="admin-verif-toggle-label">{t.is_active ? 'Actif' : 'Inactif'}</span>
+                    </label>
+                    <button
+                      className="admin-verif-delete-btn"
+                      onClick={() => handleDelete(t.id)}
+                      title="Supprimer"
+                    >
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const { account: currentAccount } = useAuth();
   const [users, setUsers] = useState([]);
@@ -87,6 +262,8 @@ export default function AdminPanel() {
           </svg>
         </button>
       </div>
+
+      <VerificationSection />
 
       <div className="admin-stats-row">
         <div className="admin-stat-card">
