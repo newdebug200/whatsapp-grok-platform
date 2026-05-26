@@ -252,7 +252,7 @@ class MessageHandler {
 
       const botConfig = cachedBotConfig || await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
       if (!botConfig || !botConfig.ia_enabled) {
-        console.log(`Profil ${profileId}: bot IA désactivé, aucune réponse envoyée.`);
+        console.log(`Profil ${profileId}: bot IA désactivé dans la configuration — aucune réponse envoyée.`);
         return;
       }
 
@@ -262,7 +262,7 @@ class MessageHandler {
         if (awayMsg) {
           const awayKey = `${profileId}_${contact.id}`;
           const lastSent = this.awaySentMap.get(awayKey);
-          const cooldownMs = 8 * 60 * 60 * 1000; // 8 heures
+          const cooldownMs = 8 * 60 * 60 * 1000;
           const shouldSend = !botConfig.away_once_per_session || !lastSent || (Date.now() - lastSent > cooldownMs);
           if (shouldSend) {
             this.awaySentMap.set(awayKey, Date.now());
@@ -278,15 +278,14 @@ class MessageHandler {
             }
           }
         }
+        console.log(`Profil ${profileId}: hors des heures d'ouverture — réponse IA annulée.`);
         return;
       }
 
+      // BUG FIX: removed the hasInfo check that was silently blocking all responses
+      // when bot_info and FAQs were empty. The bot can still respond using bot_behavior
+      // and Groq's general knowledge within the system prompt boundaries.
       const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
-      const hasInfo = (botConfig.bot_info?.trim().length > 0) || faqs.length > 0;
-      if (!hasInfo) {
-        console.log(`Profil ${profileId}: aucune FAQ ni bot_info configurés — réponse IA annulée.`);
-        return;
-      }
 
       // ── Full conversation history ──
       let recentMessages = waManager.getFromCache(profileId, contact.id);
@@ -306,6 +305,19 @@ class MessageHandler {
   }
 
   async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager) {
+    // Support both GROQ_API_KEY and GROK_API_KEY spellings
+    const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+
+    if (!apiKey) {
+      console.error(`[Groq] Clé API manquante — définissez GROQ_API_KEY dans votre fichier .env`);
+      waManager.emitToProfileAccount(profileId, 'bot-error', {
+        profileId,
+        contactPhone: contact.phone_number || from,
+        error: "Clé API Groq manquante. Ajoutez GROQ_API_KEY dans votre fichier .env et redémarrez le serveur."
+      });
+      return;
+    }
+
     try {
       const systemPrompt = this._buildSystemPrompt(botConfig.bot_name, botConfig.bot_info, botConfig.bot_behavior, faqs);
 
@@ -331,7 +343,7 @@ class MessageHandler {
         },
         {
           headers: {
-            Authorization: `Bearer ${process.env.GROK_API_KEY}`,
+            Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
           },
           timeout: 30000
@@ -346,11 +358,24 @@ class MessageHandler {
       }).catch(() => {});
       console.log(`Réponse IA envoyée à ${from} pour le profil ${profileId}`);
     } catch (error) {
-      console.error('Erreur API Groq:', error.message);
+      const status = error.response?.status;
+      let errorMsg = "Le bot IA n'a pas pu répondre.";
+      if (status === 401) {
+        errorMsg = "Clé API Groq invalide ou expirée. Vérifiez GROQ_API_KEY dans votre .env.";
+        console.error(`[Groq] Clé API invalide (401) — vérifiez GROQ_API_KEY dans le .env`);
+      } else if (status === 429) {
+        errorMsg = "Limite de quota Groq atteinte. Réessayez dans quelques instants.";
+        console.error(`[Groq] Quota dépassé (429)`);
+      } else if (status === 503 || status === 502) {
+        errorMsg = "API Groq temporairement indisponible. Réessayez dans un moment.";
+        console.error(`[Groq] Service indisponible (${status})`);
+      } else {
+        console.error('Erreur API Groq:', error.message);
+      }
       waManager.emitToProfileAccount(profileId, 'bot-error', {
         profileId,
         contactPhone: contact.phone_number || from,
-        error: "Le bot IA n'a pas pu répondre. Vérifiez votre clé API Groq dans le fichier .env."
+        error: errorMsg
       });
     }
   }
