@@ -115,18 +115,25 @@ router.post('/:id/contacts', async (req, res) => {
     if (!Array.isArray(contact_ids) || contact_ids.length === 0)
       return res.status(400).json({ error: 'contact_ids requis' });
 
-    const contacts = await prisma.contact.findMany({
+    const matchingContacts = await prisma.contact.findMany({
       where: { id: { in: contact_ids.map(Number) }, profile_id: req.profileId },
       select: { id: true }
     });
 
-    await prisma.contactTag.createMany({
-      data: contacts.map(c => ({ contact_id: c.id, tag_id: tag.id })),
-      skipDuplicates: true
-    });
+    // Use upsert loop instead of createMany+skipDuplicates for reliable SQLite support
+    let assigned = 0;
+    for (const c of matchingContacts) {
+      await prisma.contactTag.upsert({
+        where: { contact_id_tag_id: { contact_id: c.id, tag_id: tag.id } },
+        create: { contact_id: c.id, tag_id: tag.id },
+        update: {}
+      });
+      assigned++;
+    }
 
-    res.json({ success: true, assigned: contacts.length });
+    res.json({ success: true, assigned });
   } catch (err) {
+    console.error('Erreur assignation tag:', err);
     res.status(500).json({ error: "Erreur lors de l'assignation du tag" });
   }
 });
