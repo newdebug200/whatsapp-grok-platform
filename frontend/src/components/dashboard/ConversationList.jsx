@@ -9,6 +9,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const [search, setSearch] = useState('');
   const [tags, setTags] = useState([]);
   const [activeTagId, setActiveTagId] = useState(null);
+  const [showOlderConversations, setShowOlderConversations] = useState(false);
 
   const loadTags = useCallback(async () => {
     try {
@@ -50,6 +51,15 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     return matchSearch && matchTag;
   });
 
+  const getLastMessageTime = (contact) => {
+    if (contact.messages[0]?.created_at) return new Date(contact.messages[0].created_at).getTime();
+    return new Date(contact.created_at).getTime();
+  };
+
+  const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+  const recentFiltered = filtered.filter(c => getLastMessageTime(c) >= cutoff24h);
+  const olderFiltered = filtered.filter(c => getLastMessageTime(c) < cutoff24h);
+
   const formatTime = (ts) => {
     if (!ts) return '';
     const date = new Date(ts);
@@ -66,6 +76,66 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const getDisplayName = (contact) => contact.name || contact.phone_number;
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[id % avatarColors.length];
+
+  const renderContact = (contact) => {
+    const lastMsg = contact.messages[0];
+    const isSelected = selectedContact?.id === contact.id;
+    const isPaused = contact.ia_paused;
+    const contactTags = contact.tags?.map(ct => ct.tag).filter(Boolean) || [];
+    return (
+      <div
+        key={contact.id}
+        className={`contact-item ${isSelected ? 'selected' : ''}`}
+        onClick={() => onSelectContact(contact)}
+      >
+        <div className="contact-avatar" style={{ background: getColor(contact.id) }}>
+          {getInitial(contact)}
+        </div>
+        <div className="contact-info">
+          <div className="contact-row">
+            <span className="contact-name">{getDisplayName(contact)}</span>
+            <div className="contact-row-right">
+              {isPaused && contact.sensitive_flagged ? (
+                <span className="contact-mode-badge flagged" title="En attente humain — sujet sensible détecté">🚨</span>
+              ) : (
+                <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
+                  {isPaused ? '👤' : '🤖'}
+                </span>
+              )}
+              {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
+            </div>
+          </div>
+          {contactTags.length > 0 && (
+            <div className="contact-tags-row">
+              {contactTags.slice(0, 3).map(tag => (
+                <span
+                  key={tag.id}
+                  className="contact-tag-chip"
+                  style={{ background: tag.color + '22', color: tag.color, borderColor: tag.color + '55' }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {contactTags.length > 3 && (
+                <span className="contact-tag-chip" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderColor: 'rgba(255,255,255,0.1)' }}>
+                  +{contactTags.length - 3}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="contact-row">
+            <span className="contact-preview">
+              {lastMsg
+                ? (lastMsg.direction === 'sent' ? '✓ ' : '') + lastMsg.content.substring(0, 45) + (lastMsg.content.length > 45 ? '…' : '')
+                : 'Aucun message'}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const hasNoResults = filtered.length === 0;
 
   return (
     <div className="conversation-list">
@@ -85,10 +155,10 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             type="text"
             placeholder="Rechercher une discussion..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setShowOlderConversations(true); }}
             className="search-input"
           />
-          {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
+          {search && <button className="search-clear" onClick={() => { setSearch(''); setShowOlderConversations(false); }}>✕</button>}
         </div>
       </div>
 
@@ -118,68 +188,41 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
       )}
 
       <div className="contacts-scroll">
-        {filtered.length === 0 ? (
+        {hasNoResults ? (
           <div className="empty-list">
             {search || activeTagId ? 'Aucun résultat' : 'Aucune conversation'}
           </div>
         ) : (
-          filtered.map(contact => {
-            const lastMsg = contact.messages[0];
-            const isSelected = selectedContact?.id === contact.id;
-            const isPaused = contact.ia_paused;
-            const contactTags = contact.tags?.map(ct => ct.tag).filter(Boolean) || [];
-            return (
-              <div
-                key={contact.id}
-                className={`contact-item ${isSelected ? 'selected' : ''}`}
-                onClick={() => onSelectContact(contact)}
-              >
-                <div className="contact-avatar" style={{ background: getColor(contact.id) }}>
-                  {getInitial(contact)}
-                </div>
-                <div className="contact-info">
-                  <div className="contact-row">
-                    <span className="contact-name">{getDisplayName(contact)}</span>
-                    <div className="contact-row-right">
-                      {isPaused && contact.sensitive_flagged ? (
-                        <span className="contact-mode-badge flagged" title="En attente humain — sujet sensible détecté">🚨</span>
-                      ) : (
-                        <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
-                          {isPaused ? '👤' : '🤖'}
-                        </span>
-                      )}
-                      {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
-                    </div>
-                  </div>
-                  {contactTags.length > 0 && (
-                    <div className="contact-tags-row">
-                      {contactTags.slice(0, 3).map(tag => (
-                        <span
-                          key={tag.id}
-                          className="contact-tag-chip"
-                          style={{ background: tag.color + '22', color: tag.color, borderColor: tag.color + '55' }}
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
-                      {contactTags.length > 3 && (
-                        <span className="contact-tag-chip" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderColor: 'rgba(255,255,255,0.1)' }}>
-                          +{contactTags.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div className="contact-row">
-                    <span className="contact-preview">
-                      {lastMsg
-                        ? (lastMsg.direction === 'sent' ? '✓ ' : '') + lastMsg.content.substring(0, 45) + (lastMsg.content.length > 45 ? '…' : '')
-                        : 'Aucun message'}
-                    </span>
-                  </div>
-                </div>
+          <>
+            {recentFiltered.length === 0 && !showOlderConversations && olderFiltered.length > 0 && (
+              <div className="empty-list" style={{ paddingBottom: 8 }}>
+                Aucune discussion dans les dernières 24h
               </div>
-            );
-          })
+            )}
+
+            {recentFiltered.map(contact => renderContact(contact))}
+
+            {olderFiltered.length > 0 && (
+              showOlderConversations ? (
+                <>
+                  <div className="older-conversations-separator">
+                    <span>Discussions plus anciennes</span>
+                  </div>
+                  {olderFiltered.map(contact => renderContact(contact))}
+                </>
+              ) : (
+                <button
+                  className="load-older-btn"
+                  onClick={() => setShowOlderConversations(true)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                  {olderFiltered.length} discussion{olderFiltered.length > 1 ? 's' : ''} plus ancienne{olderFiltered.length > 1 ? 's' : ''}
+                </button>
+              )
+            )}
+          </>
         )}
       </div>
     </div>
