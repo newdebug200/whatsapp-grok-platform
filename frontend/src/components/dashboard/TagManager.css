@@ -353,6 +353,33 @@
 }
 .tm-assign-cancel:hover { background: rgba(255,255,255,0.14); }
 
+/* ── Custom checkbox in assign modal ── */
+.tm-assign-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.25);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s;
+}
+.tm-assign-checkbox.checked {
+  background: #25d366;
+  border-color: #25d366;
+}
+
+/* ── Shift+click hint ── */
+.tm-assign-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted, #667781);
+  text-align: center;
+  padding: 2px 0 4px;
+  letter-spacing: 0.01em;
+}
+
 /* ── Empty state in assign modal ── */
 .tm-assign-no-contacts {
   display: flex;
