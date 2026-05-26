@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import './TagManager.css';
 
@@ -33,6 +33,9 @@ export default function TagManager({ activeProfile }) {
   const [assignSelected, setAssignSelected] = useState([]);
   const [assignSaving, setAssignSaving] = useState(false);
 
+  // Track last clicked index for shift+click range selection
+  const lastSelectedIdx = useRef(null);
+
   const loadTags = useCallback(async () => {
     try {
       const res = await axios.get(`${API_URL}/tags`);
@@ -47,10 +50,12 @@ export default function TagManager({ activeProfile }) {
     try {
       const res = await axios.get(`${API_URL}/tags/contacts`);
       setContacts(res.data);
+      return res.data;
     } catch (err) {
       const msg = err.response?.data?.error || 'Impossible de charger les contacts';
       setContactsError(msg);
       console.error('TagManager loadContacts:', err);
+      return null;
     }
   }, []);
 
@@ -104,18 +109,50 @@ export default function TagManager({ activeProfile }) {
   };
 
   const handleOpenAssign = async (tag) => {
-    await loadContacts();
-    const currentIds = contacts
+    const fresh = await loadContacts();
+    const contactsToUse = fresh ?? contacts;
+    const currentIds = contactsToUse
       .filter(c => c.tags?.some(ct => ct.tag_id === tag.id))
       .map(c => c.id);
+    lastSelectedIdx.current = null;
     setAssignTag(tag);
     setAssignSelected(currentIds);
     setAssignSearch('');
   };
 
+  // Handles click with optional shift+click range selection
+  const handleContactClick = (e, contact, idx) => {
+    const filtered = filteredAssignContactsRef.current;
+
+    if (e.shiftKey && lastSelectedIdx.current !== null) {
+      const from = Math.min(lastSelectedIdx.current, idx);
+      const to = Math.max(lastSelectedIdx.current, idx);
+      const rangeIds = filtered.slice(from, to + 1).map(c => c.id);
+      // Use anchor's state to decide add or remove
+      const anchorId = filtered[lastSelectedIdx.current].id;
+      const anchorChecked = assignSelected.includes(anchorId);
+      setAssignSelected(prev => {
+        if (anchorChecked) {
+          const toAdd = rangeIds.filter(id => !prev.includes(id));
+          return [...prev, ...toAdd];
+        } else {
+          return prev.filter(id => !rangeIds.includes(id));
+        }
+      });
+    } else {
+      setAssignSelected(prev =>
+        prev.includes(contact.id)
+          ? prev.filter(x => x !== contact.id)
+          : [...prev, contact.id]
+      );
+      lastSelectedIdx.current = idx;
+    }
+  };
+
   const handleAssignSave = async () => {
     if (!assignTag) return;
     setAssignSaving(true);
+    setError('');
     try {
       const currentIds = contacts
         .filter(c => c.tags?.some(ct => ct.tag_id === assignTag.id))
@@ -126,18 +163,22 @@ export default function TagManager({ activeProfile }) {
 
       const calls = [];
       if (toAdd.length > 0) {
-        calls.push(axios.post(`${API_URL}/tags/${assignTag.id}/contacts`, { contact_ids: toAdd }));
+        calls.push(
+          axios.post(`${API_URL}/tags/${assignTag.id}/contacts`, { contact_ids: toAdd })
+        );
       }
       for (const cid of toRemove) {
-        calls.push(axios.delete(`${API_URL}/tags/${assignTag.id}/contacts/${cid}`));
+        calls.push(
+          axios.delete(`${API_URL}/tags/${assignTag.id}/contacts/${cid}`)
+        );
       }
       await Promise.all(calls);
 
-      await loadContacts();
-      await loadTags();
+      await Promise.all([loadContacts(), loadTags()]);
       setAssignTag(null);
     } catch (err) {
-      setError(err.response?.data?.error || "Erreur lors de l'assignation");
+      const msg = err.response?.data?.error || "Erreur lors de l'assignation";
+      setError(msg);
     } finally {
       setAssignSaving(false);
     }
@@ -147,6 +188,14 @@ export default function TagManager({ activeProfile }) {
     const q = assignSearch.toLowerCase();
     return !q || (c.name || '').toLowerCase().includes(q) || c.phone_number.includes(q);
   });
+
+  // Keep a stable ref for shift+click so handlers see the latest filtered list
+  const filteredAssignContactsRef = useRef(filteredAssignContacts);
+  useEffect(() => {
+    filteredAssignContactsRef.current = filteredAssignContacts;
+    // Reset shift anchor when search changes
+    lastSelectedIdx.current = null;
+  }, [assignSearch]);
 
   if (!activeProfile?.id) {
     return (
@@ -227,27 +276,25 @@ export default function TagManager({ activeProfile }) {
             tags.map(tag => (
               <div key={tag.id} className="tm-tag-item">
                 {editingId === tag.id ? (
-                  <>
-                    <div className="tm-edit-row">
-                      <input
-                        className="tm-color-picker"
-                        type="color"
-                        value={editColor}
-                        onChange={e => setEditColor(e.target.value)}
-                      />
-                      <input
-                        className="tm-input"
-                        type="text"
-                        value={editName}
-                        onChange={e => setEditName(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(tag); if (e.key === 'Escape') setEditingId(null); }}
-                        maxLength={40}
-                        autoFocus
-                      />
-                      <button className="tm-btn-save" onClick={() => handleSaveEdit(tag)}>✓</button>
-                      <button className="tm-btn-cancel" onClick={() => setEditingId(null)}>✕</button>
-                    </div>
-                  </>
+                  <div className="tm-edit-row">
+                    <input
+                      className="tm-color-picker"
+                      type="color"
+                      value={editColor}
+                      onChange={e => setEditColor(e.target.value)}
+                    />
+                    <input
+                      className="tm-input"
+                      type="text"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(tag); if (e.key === 'Escape') setEditingId(null); }}
+                      maxLength={40}
+                      autoFocus
+                    />
+                    <button className="tm-btn-save" onClick={() => handleSaveEdit(tag)}>✓</button>
+                    <button className="tm-btn-cancel" onClick={() => setEditingId(null)}>✕</button>
+                  </div>
                 ) : (
                   <>
                     <span className="tm-tag-dot" style={{ background: tag.color }} />
@@ -316,27 +363,39 @@ export default function TagManager({ activeProfile }) {
                     value={assignSearch}
                     onChange={e => setAssignSearch(e.target.value)}
                   />
+
+                  {filteredAssignContacts.length > 1 && (
+                    <div className="tm-assign-hint">
+                      Shift+clic pour sélectionner une plage
+                    </div>
+                  )}
+
                   <div className="tm-assign-list">
                     {filteredAssignContacts.length === 0 ? (
                       <div className="tm-assign-search-empty">
-                        Aucun contact ne correspond à « {assignSearch} »
+                        Aucun contact ne correspond à «&nbsp;{assignSearch}&nbsp;»
                       </div>
                     ) : (
-                      filteredAssignContacts.map(c => {
+                      filteredAssignContacts.map((c, idx) => {
                         const checked = assignSelected.includes(c.id);
                         return (
                           <div
                             key={c.id}
                             className={`tm-assign-contact ${checked ? 'checked' : ''}`}
-                            onClick={() => setAssignSelected(prev =>
-                              prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id]
-                            )}
+                            onClick={e => handleContactClick(e, c, idx)}
+                            title={checked ? 'Désélectionner' : 'Sélectionner'}
                           >
-                            <input type="checkbox" checked={checked} onChange={() => {}} onClick={e => e.stopPropagation()} />
+                            <span className={`tm-assign-checkbox ${checked ? 'checked' : ''}`}>
+                              {checked && (
+                                <svg viewBox="0 0 12 12" fill="none" width="10" height="10">
+                                  <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </span>
                             <div className="tm-assign-avatar" style={{ background: getColor(c.id) }}>
                               {(c.name || c.phone_number)[0].toUpperCase()}
                             </div>
-                            <div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
                               <div className="tm-assign-name">{c.name || c.phone_number}</div>
                               {c.name && <div className="tm-assign-phone">{c.phone_number}</div>}
                             </div>
@@ -351,7 +410,7 @@ export default function TagManager({ activeProfile }) {
 
             <div className="tm-assign-foot">
               <span className="tm-assign-count">
-                {assignSelected.length} sélectionné(s)
+                {assignSelected.length} sélectionné{assignSelected.length !== 1 ? 's' : ''}
               </span>
               <button className="tm-assign-cancel" onClick={() => setAssignTag(null)}>Annuler</button>
               <button
