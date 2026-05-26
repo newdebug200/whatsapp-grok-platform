@@ -14,12 +14,27 @@ const DAYS = [
   { value: 0, label: 'Dim' },
 ];
 
-const TIMEZONES = [
-  'UTC', 'Europe/Paris', 'Europe/Brussels', 'Europe/Zurich',
-  'Africa/Casablanca', 'Africa/Tunis', 'Africa/Algiers',
-  'America/New_York', 'America/Chicago', 'America/Los_Angeles',
-  'America/Sao_Paulo', 'Asia/Dubai', 'Asia/Beirut', 'Asia/Riyadh',
+const BROWSER_TZ = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (_) { return 'UTC'; }
+})();
+
+const BASE_TIMEZONES = [
+  'UTC',
+  'Europe/Paris', 'Europe/Brussels', 'Europe/Zurich', 'Europe/London',
+  'Europe/Madrid', 'Europe/Rome', 'Europe/Berlin', 'Europe/Amsterdam',
+  'Africa/Casablanca', 'Africa/Tunis', 'Africa/Algiers', 'Africa/Dakar',
+  'Africa/Lagos', 'Africa/Nairobi', 'Africa/Cairo', 'Africa/Abidjan',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Sao_Paulo', 'America/Toronto', 'America/Montreal',
+  'Asia/Dubai', 'Asia/Beirut', 'Asia/Riyadh', 'Asia/Kuwait',
+  'Asia/Amman', 'Asia/Baghdad', 'Asia/Jerusalem', 'Asia/Kolkata',
+  'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Singapore',
+  'Australia/Sydney', 'Pacific/Auckland',
 ];
+
+const TIMEZONES = BASE_TIMEZONES.includes(BROWSER_TZ)
+  ? BASE_TIMEZONES
+  : [BROWSER_TZ, ...BASE_TIMEZONES];
 
 export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp }) {
   const [config, setConfig] = useState({
@@ -32,7 +47,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     open_days: '1,2,3,4,5',
     open_time: '09:00',
     close_time: '18:00',
-    timezone: 'UTC',
+    timezone: BROWSER_TZ,
     away_message: '',
     away_once_per_session: true
   });
@@ -352,10 +367,24 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <div style={labelStyle}>Fuseau horaire</div>
+              <div style={{ ...labelStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Fuseau horaire</span>
+                <button
+                  type="button"
+                  onClick={() => setConfig(c => ({ ...c, timezone: BROWSER_TZ }))}
+                  title={`Utiliser le fuseau détecté : ${BROWSER_TZ}`}
+                  style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent, #25d366)', background: 'none', border: '1px solid var(--accent, #25d366)', borderRadius: 12, padding: '2px 8px', cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}
+                >
+                  Détecter ({BROWSER_TZ})
+                </button>
+              </div>
               <select value={config.timezone} onChange={e => setConfig(c => ({ ...c, timezone: e.target.value }))}
                 style={{ ...fieldStyle, width: '100%' }}>
-                {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                {TIMEZONES.map(tz => (
+                  <option key={tz} value={tz}>
+                    {tz === BROWSER_TZ ? `${tz} (votre PC)` : tz}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -392,8 +421,12 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
       {/* ── Sujets sensibles ── */}
       <div className="config-section" style={sectionStyle}>
         <div className="section-label">Sujets sensibles</div>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 14, lineHeight: 1.5 }}>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 8, lineHeight: 1.5 }}>
           Si un message reçu contient l'un de ces mots, le bot se tait automatiquement et la conversation est transmise à un humain.
+        </p>
+        <p style={{ fontSize: '0.78rem', color: 'var(--accent, #25d366)', marginBottom: 14, lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontSize: '0.85rem' }}>ℹ️</span>
+          La détection est insensible à la casse — <strong>avocat</strong>, <strong>Avocat</strong> et <strong>AVOCAT</strong> seront tous détectés, peu importe comment vous avez saisi le mot.
         </p>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
