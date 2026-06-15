@@ -150,8 +150,7 @@ class MessageHandler {
               { timeout: 10000, responseType: 'text' }
             );
             const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
-            const fullReply = `${replyText}\n\n📱 LID détecté : ${senderLid}`;
-            await client.sendMessage(waId, fullReply);
+            await client.sendMessage(waId, replyText);
             waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
             prisma.message.create({
               data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date() }
