@@ -91,7 +91,7 @@ io.on('connection', (socket) => {
       });
       if (!profile) { socket.emit('initial-contacts', []); return; }
       const contacts = await prisma.contact.findMany({
-        where: { profile_id: profileId },
+        where: { profile_id: profileId, messages: { some: {} } },
         include: { messages: { orderBy: { created_at: 'desc' }, take: 1 } },
         orderBy: { created_at: 'desc' }
       });
