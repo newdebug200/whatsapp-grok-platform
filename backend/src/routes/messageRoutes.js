@@ -31,7 +31,7 @@ router.post('/logout', async (req, res) => {
 router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
     const contacts = await prisma.contact.findMany({
-      where: { profile_id: req.profileId },
+      where: { profile_id: req.profileId, messages: { some: {} } },
       include: {
         messages: {
           orderBy: { created_at: 'desc' },
