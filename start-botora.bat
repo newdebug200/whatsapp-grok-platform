@@ -60,75 +60,84 @@ if not exist "backend\.env" (
 :: ─────────────────────────────────────────────
 :: 3. Installer les dependances backend
 :: ─────────────────────────────────────────────
-if not exist "backend\node_modules" (
-    echo  [INSTALL] Premiere installation — dependances backend...
-    echo  (Cela peut prendre quelques minutes)
+echo  [INSTALL] Mise a jour des dependances backend...
+cd backend
+call npm install --silent
+if %errorlevel% neq 0 (
     echo.
-    cd backend
-    call npm install
-    if %errorlevel% neq 0 (
-        echo.
-        echo  [ERREUR] npm install backend a echoue.
-        pause
-        exit /b 1
-    )
-    cd ..
-    echo.
-    echo  [OK] Dependances backend installees
-    echo.
-) else (
-    echo  [OK] Dependances backend presentes
-    echo.
+    echo  [ERREUR] npm install backend a echoue.
+    pause
+    exit /b 1
 )
+echo  [OK] Dependances backend a jour
+echo.
 
 :: ─────────────────────────────────────────────
 :: 4. Migration base de donnees Prisma
+::    — Gestion automatique des migrations bloquees
 :: ─────────────────────────────────────────────
-echo  [DB] Verification et migration de la base de donnees...
-cd backend
-call npx prisma migrate deploy 2>nul
+echo  [DB] Synchronisation de la base de donnees...
+
+:: Etape 4a : marquer toutes les migrations echouees connues comme "rolled back"
+::            (evite l'erreur P3009 qui bloque migrate deploy)
+echo  [DB] Verification des migrations en echec...
+call npx prisma migrate resolve --rolled-back 20260615000000_add_business_hours_sensitive_quickreply >nul 2>&1
+
+:: Etape 4b : regénérer le client Prisma depuis le schema
+call npx prisma generate >nul 2>&1
+
+:: Etape 4c : appliquer les nouvelles migrations
+echo  [DB] Application des migrations...
+call npx prisma migrate deploy >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  [DB] migrate deploy a echoue — utilisation de db push en secours...
+    call npx prisma db push >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo.
+        echo  [ERREUR] Impossible de synchroniser la base de donnees.
+        echo  Verifiez votre fichier backend\.env (DATABASE_URL).
+        cd ..
+        pause
+        exit /b 1
+    )
+    echo  [OK] Base de donnees synchronisee via db push
+) else (
+    echo  [OK] Migrations appliquees avec succes
+)
+
 cd ..
-echo  [OK] Base de donnees prete
 echo.
 
 :: ─────────────────────────────────────────────
 :: 5. Installer les dependances frontend
 :: ─────────────────────────────────────────────
-if not exist "frontend\node_modules" (
-    echo  [INSTALL] Premiere installation — dependances frontend...
-    echo  (Cela peut prendre quelques minutes)
+echo  [INSTALL] Mise a jour des dependances frontend...
+cd frontend
+call npm install --silent
+if %errorlevel% neq 0 (
     echo.
-    cd frontend
-    call npm install
-    if %errorlevel% neq 0 (
-        echo.
-        echo  [ERREUR] npm install frontend a echoue.
-        pause
-        exit /b 1
-    )
-    cd ..
-    echo.
-    echo  [OK] Dependances frontend installees
-    echo.
-) else (
-    echo  [OK] Dependances frontend presentes
-    echo.
+    echo  [ERREUR] npm install frontend a echoue.
+    pause
+    exit /b 1
 )
+cd ..
+echo  [OK] Dependances frontend a jour
+echo.
 
 :: ─────────────────────────────────────────────
 :: 6. Demarrer le backend dans une nouvelle fenetre
 :: ─────────────────────────────────────────────
 echo  [START] Demarrage du backend sur http://localhost:3001
-start "Botora — Backend" cmd /k "title Botora — Backend && cd /d "%~dp0backend" && npm run dev"
+start "Botora — Backend" cmd /k "title Botora Backend && cd /d "%~dp0backend" && npm run dev"
 
-:: Attendre que le backend demarre avant le frontend
+:: Attendre que le backend demarre
 timeout /t 3 /nobreak >nul
 
 :: ─────────────────────────────────────────────
 :: 7. Demarrer le frontend dans une nouvelle fenetre
 :: ─────────────────────────────────────────────
 echo  [START] Demarrage du frontend sur http://localhost:5173
-start "Botora — Frontend" cmd /k "title Botora — Frontend && cd /d "%~dp0frontend" && npm run dev"
+start "Botora — Frontend" cmd /k "title Botora Frontend && cd /d "%~dp0frontend" && npm run dev"
 
 :: ─────────────────────────────────────────────
 :: 8. Ouvrir le navigateur apres 4 secondes
