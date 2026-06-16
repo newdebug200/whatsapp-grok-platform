@@ -80,115 +80,77 @@ class MessageHandler {
           content: mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || ''),
           direction: 'received',
           type: message.type || 'text',
-          created_at: new Date(message.timestamp * 1000)
+          created_at: new Date()
         }
-      }).catch(err => console.error('[DB] Erreur save message:', err.message));
+      }).catch(() => {});
 
-      if (!message.hasMedia) {
-        waManager.addToCache(profileId, dbContact.id, 'received', message.body || '');
-      }
+      waManager.addToCache(profileId, dbContact.id, 'received', mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || ''));
 
-      // ── Verification trigger check ──
-      // Runs before business hours check — triggers always work 24/7
-      if (!message.hasMedia && message.body) {
-        const triggers = await prisma.verificationTrigger.findMany({
-          where: { profile_id: profileId, is_active: true }
-        });
-        const matched = triggers.find(t => t.text === message.body);
-        if (matched) {
-          try {
-            let senderLid;
-            if (waId.endsWith('@lid')) {
-              senderLid = waId.split('@')[0];
-            } else {
-              try {
-                const numId = await client.getNumberId(waId.split('@')[0]);
-                senderLid = numId ? numId.user : waId.split('@')[0];
-              } catch (_) {
-                senderLid = waId.split('@')[0];
-              }
-            }
-
-            try {
-              const listRes = await axios.get(
-                'https://dressur.site/crud/user/find_number_not_have_lid',
-                { timeout: 8000 }
-              );
-              const numbersWithoutLid = Array.isArray(listRes.data)
-                ? listRes.data.slice(0, 50)
-                : [];
-
-              if (numbersWithoutLid.length > 0) {
-                console.log(`[Verification] Sync LID pour ${numbersWithoutLid.length} numéro(s)`);
-                const lidEntries = await Promise.all(
-                  numbersWithoutLid.map(async (num) => {
-                    try {
-                      const numId = await client.getNumberId(String(num));
-                      return numId ? { phone: String(num), lid: numId.user } : null;
-                    } catch (_) { return null; }
-                  })
-                );
-                const number_and_lid = {};
-                for (const entry of lidEntries) {
-                  if (entry) number_and_lid[entry.phone] = entry.lid;
-                }
-                if (Object.keys(number_and_lid).length > 0) {
-                  await axios.post(
-                    'https://dressur.site/crud/user/number_and_lid',
-                    { number_and_lid },
-                    { timeout: 15000, responseType: 'text' }
-                  );
-                  console.log(`[Verification] Sync LID OK — ${Object.keys(number_and_lid).length} entrée(s) envoyée(s)`);
-                }
-              }
-            } catch (syncErr) {
-              console.warn('[Verification] Sync LID ignoré:', syncErr.message);
-            }
-
-            const apiRes = await axios.get(
-              `https://dressur.site/crud/user/find_whatsapp_is_activatable/${senderLid}`,
-              { timeout: 10000, responseType: 'text' }
-            );
-            const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
-            await client.sendMessage(waId, replyText);
-            waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
-            prisma.message.create({
-              data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date() }
-            }).catch(() => {});
-          } catch (err) {
-            console.error('[Verification] Erreur:', err.message);
-          }
-          return;
-        }
-      }
-
-      if (dbContact.ia_paused) {
-        console.log(`Contact ${phoneNumber}: prise en main humaine active, réponse IA désactivée`);
+      // ── Check global IA feature flag ──
+      const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
+      if (iaGlobalCfg && iaGlobalCfg.value === 'false') {
+        console.log(`[PlatformConfig] IA globalement désactivée — aucune réponse envoyée.`);
         return;
       }
 
-      // ── Sensitive keyword detection ──
-      if (!message.hasMedia && message.body) {
-        const keywords = await prisma.sensitiveKeyword.findMany({
-          where: { profile_id: profileId, is_active: true }
+      // ── Check account is not blocked ──
+      const profile = await prisma.whatsAppProfile.findUnique({
+        where: { id: profileId },
+        select: { account_id: true }
+      });
+      if (profile) {
+        const account = await prisma.account.findUnique({
+          where: { id: profile.account_id },
+          select: { is_blocked: true }
         });
-        const bodyLower = message.body.toLowerCase();
-        const matched = keywords.find(k => bodyLower.includes(k.keyword.toLowerCase()));
-        if (matched) {
-          await prisma.contact.update({
-            where: { id: dbContact.id },
-            data: { ia_paused: true, sensitive_flagged: true }
-          });
-          prisma.sensitiveFlag.create({
-            data: {
-              profile_id: profileId,
-              contact_id: dbContact.id,
-              keyword_matched: matched.keyword,
-              message_content: message.body.slice(0, 500)
-            }
-          }).catch(() => {});
-          console.log(`[Keyword] Contact ${phoneNumber} flaggé — mot-clé: "${matched.keyword}"`);
+        if (account?.is_blocked) {
+          console.log(`[Block] Compte ${profile.account_id} bloqué — traitement du message annulé.`);
           return;
+        }
+      }
+
+      // ── Verification trigger check ──
+      const verificationTriggerEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'verification_triggers_enabled' } });
+      if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
+        if (!message.hasMedia && message.body) {
+          const triggers = await prisma.verificationTrigger.findMany({
+            where: { profile_id: profileId, is_active: true }
+          });
+          const bodyTrimmed = message.body.trim().toLowerCase();
+          const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
+          if (matchedTrigger) {
+            console.log(`[Verification] Déclencheur matché: "${matchedTrigger.text}" pour ${phoneNumber}`);
+            await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
+            return;
+          }
+        }
+      }
+
+      // ── Sensitive keyword detection ──
+      const sensitiveEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'sensitive_keywords_enabled' } });
+      if (!sensitiveEnabledCfg || sensitiveEnabledCfg.value !== 'false') {
+        if (!message.hasMedia && message.body) {
+          const keywords = await prisma.sensitiveKeyword.findMany({
+            where: { profile_id: profileId, is_active: true }
+          });
+          const bodyLower = message.body.toLowerCase();
+          const matched = keywords.find(k => bodyLower.includes(k.keyword.toLowerCase()));
+          if (matched) {
+            await prisma.contact.update({
+              where: { id: dbContact.id },
+              data: { ia_paused: true, sensitive_flagged: true }
+            });
+            prisma.sensitiveFlag.create({
+              data: {
+                profile_id: profileId,
+                contact_id: dbContact.id,
+                keyword_matched: matched.keyword,
+                message_content: message.body.slice(0, 500)
+              }
+            }).catch(() => {});
+            console.log(`[Keyword] Contact ${phoneNumber} flaggé — mot-clé: "${matched.keyword}"`);
+            return;
+          }
         }
       }
 
@@ -213,6 +175,28 @@ class MessageHandler {
       this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs, botConfig);
     } catch (error) {
       console.error('Erreur traitement message:', error);
+    }
+  }
+
+  async _handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager) {
+    try {
+      const verifyUrl = process.env.VERIFY_API_URL;
+      if (!verifyUrl) {
+        console.log('[Verification] VERIFY_API_URL non défini');
+        return;
+      }
+      const verifyResp = await axios.get(`${verifyUrl}?phone=${encodeURIComponent(phoneNumber)}`, { timeout: 10000 });
+      const result = verifyResp.data;
+      const replyText = result?.verified
+        ? `✅ Numéro vérifié : ${phoneNumber}`
+        : `❌ Numéro non vérifié : ${phoneNumber}`;
+      await client.sendMessage(waId, replyText);
+      waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
+      prisma.message.create({
+        data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date() }
+      }).catch(() => {});
+    } catch (err) {
+      console.error('[Verification] Erreur:', err.message);
     }
   }
 
@@ -281,9 +265,6 @@ class MessageHandler {
         return;
       }
 
-      // BUG FIX: removed the hasInfo check that was silently blocking all responses
-      // when bot_info and FAQs were empty. The bot can still respond using bot_behavior
-      // and Groq's general knowledge within the system prompt boundaries.
       const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
 
       // ── Full conversation history ──
@@ -304,7 +285,6 @@ class MessageHandler {
   }
 
   async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager) {
-    // Support both GROQ_API_KEY and GROK_API_KEY spellings
     const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
 
     if (!apiKey) {
@@ -317,10 +297,47 @@ class MessageHandler {
       return;
     }
 
+    // ── Credit check ──
+    let accountId = null;
+    let currentBalance = null;
+    let creditsEnabled = false;
+
+    try {
+      const creditsEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'credits_enabled' } });
+      creditsEnabled = creditsEnabledCfg?.value === 'true';
+
+      if (creditsEnabled) {
+        const profileRow = await prisma.whatsAppProfile.findUnique({
+          where: { id: profileId },
+          select: { account_id: true }
+        });
+        accountId = profileRow?.account_id;
+
+        if (accountId) {
+          const accountRow = await prisma.account.findUnique({
+            where: { id: accountId },
+            select: { credit_balance: true }
+          });
+          currentBalance = accountRow?.credit_balance ?? 0;
+
+          if (currentBalance <= 0) {
+            console.log(`[Credits] Compte ${accountId} — solde épuisé (${currentBalance}), réponse IA annulée`);
+            waManager.emitToProfileAccount(profileId, 'bot-error', {
+              profileId,
+              contactPhone: contact.phone_number || from,
+              error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger."
+            });
+            return;
+          }
+        }
+      }
+    } catch (creditCheckErr) {
+      console.error('[Credits] Erreur vérification solde:', creditCheckErr.message);
+    }
+
     try {
       const systemPrompt = this._buildSystemPrompt(botConfig.bot_name, botConfig.bot_info, botConfig.bot_behavior, faqs);
 
-      // Build history as proper user/assistant messages for Groq
       const historyMessages = recentMessages
         .filter(m => m.content && !/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(m.content))
         .map(m => ({
@@ -350,12 +367,42 @@ class MessageHandler {
       );
 
       const aiResponse = response.data.choices[0].message.content;
+      const totalTokens = response.data.usage?.total_tokens || 0;
+
       await client.sendMessage(from, aiResponse);
       waManager.addToCache(profileId, contact.id, 'sent', aiResponse);
       prisma.message.create({
         data: { contact_id: contact.id, content: aiResponse, direction: 'sent', type: 'text', created_at: new Date() }
       }).catch(() => {});
       console.log(`Réponse IA envoyée à ${from} pour le profil ${profileId}`);
+
+      // ── Deduct credits ──
+      if (creditsEnabled && accountId && totalTokens > 0) {
+        try {
+          const creditRateCfg = await prisma.platformConfig.findUnique({ where: { key: 'credit_per_1000_tokens' } });
+          const creditRate = parseFloat(creditRateCfg?.value || '1');
+          const creditsToDeduct = parseFloat(((totalTokens / 1000) * creditRate).toFixed(4));
+
+          await prisma.$transaction([
+            prisma.account.update({
+              where: { id: accountId },
+              data: { credit_balance: { decrement: creditsToDeduct } }
+            }),
+            prisma.creditTransaction.create({
+              data: {
+                account_id: accountId,
+                amount: -creditsToDeduct,
+                type: 'debit',
+                description: `Réponse IA — ${totalTokens} tokens`,
+                tokens_used: totalTokens
+              }
+            })
+          ]);
+          console.log(`[Credits] Compte ${accountId} — ${creditsToDeduct} crédits déduits (${totalTokens} tokens)`);
+        } catch (deductErr) {
+          console.error('[Credits] Erreur déduction:', deductErr.message);
+        }
+      }
     } catch (error) {
       const status = error.response?.status;
       let errorMsg = "Le bot IA n'a pas pu répondre.";
