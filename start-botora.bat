@@ -84,35 +84,21 @@ echo  [OK] Dependances backend installees
 echo.
 
 :: ─────────────────────────────────────────────
-:: 4. Migration base de donnees Prisma
-::    — On pre-resout toutes les migrations connues comme bloquees
-::    — Puis on applique les migrations manquantes
+:: 4. Synchronisation base de donnees Prisma
+::    — db push est plus rapide et plus fiable que migrate deploy
+::    — pour SQLite auto-heberge (pas de risque de blocage)
 :: ─────────────────────────────────────────────
 echo  [DB] Synchronisation de la base de donnees...
-
-:: Pre-resoudre toutes les migrations potentiellement bloquees
-:: (silencieux — ces commandes echouent sans consequence si deja ok)
-call npx prisma migrate resolve --rolled-back 20260615000000_add_business_hours_sensitive_quickreply >nul 2>&1
-call npx prisma migrate resolve --rolled-back 20260615120000_add_credits_platform_config >nul 2>&1
-
-:: Appliquer les migrations (sortie supprimee pour eviter les messages rouges Prisma)
-echo  [DB] Application des migrations...
-call npx prisma migrate deploy >nul 2>&1
+call npx prisma db push --accept-data-loss >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  [DB] Fallback : synchronisation directe du schema...
-    call npx prisma db push --accept-data-loss >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo.
-        echo  [ERREUR] Impossible de synchroniser la base de donnees.
-        echo  Verifiez votre fichier backend\.env (DATABASE_URL).
-        cd ..
-        pause
-        exit /b 1
-    )
-    echo  [OK] Base de donnees synchronisee via db push
-) else (
-    echo  [OK] Migrations appliquees avec succes
+    echo.
+    echo  [ERREUR] Impossible de synchroniser la base de donnees.
+    echo  Verifiez votre fichier backend\.env (DATABASE_URL).
+    cd ..
+    pause
+    exit /b 1
 )
+echo  [OK] Base de donnees synchronisee
 
 cd ..
 echo.
