@@ -172,7 +172,14 @@ export default function Dashboard() {
 
     s.on('bot-error', (data) => {
       setBotError(data);
-      setTimeout(() => setBotError(null), 8000);
+      const isCritical = data?.error?.toLowerCase().includes('clé api') ||
+                         data?.error?.toLowerCase().includes('api key') ||
+                         data?.error?.toLowerCase().includes('manquante') ||
+                         data?.error?.toLowerCase().includes('invalide') ||
+                         data?.error?.toLowerCase().includes('crédits');
+      if (!isCritical) {
+        setTimeout(() => setBotError(null), 8000);
+      }
     });
 
     s.on('reconnect', () => {
