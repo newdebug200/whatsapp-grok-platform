@@ -85,18 +85,25 @@ echo.
 
 :: ─────────────────────────────────────────────
 :: 4. Synchronisation base de donnees Prisma
-::    — db push est plus rapide et plus fiable que migrate deploy
-::    — pour SQLite auto-heberge (pas de risque de blocage)
+::    — On utilise le binaire local directement (evite npx + reseau)
+::    — La premiere fois peut prendre 1-2 min si telechargement necessaire
 :: ─────────────────────────────────────────────
 echo  [DB] Synchronisation de la base de donnees...
-call npx prisma db push --accept-data-loss >nul 2>&1
+echo  (premiere fois : peut prendre 1-2 minutes, patientez)
+
+node_modules\.bin\prisma db push --accept-data-loss --skip-generate
 if %errorlevel% neq 0 (
     echo.
-    echo  [ERREUR] Impossible de synchroniser la base de donnees.
-    echo  Verifiez votre fichier backend\.env (DATABASE_URL).
-    cd ..
-    pause
-    exit /b 1
+    echo  [DB] Tentative alternative...
+    node -e "const {execSync}=require('child_process');execSync('node node_modules/prisma/build/index.js db push --accept-data-loss --skip-generate',{stdio:'inherit',cwd:process.cwd()})"
+    if %errorlevel% neq 0 (
+        echo.
+        echo  [ERREUR] Impossible de synchroniser la base de donnees.
+        echo  Verifiez votre fichier backend\.env (DATABASE_URL).
+        cd ..
+        pause
+        exit /b 1
+    )
 )
 echo  [OK] Base de donnees synchronisee
 
