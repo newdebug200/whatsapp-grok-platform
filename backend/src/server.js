@@ -146,8 +146,8 @@ cron.schedule('* * * * *', async () => {
 
 // ── Validation de la clé API Groq au démarrage ──────────────────────────────
 const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
-const GROQ_PLACEHOLDERS = ['your_groq_api_key_here', 'your-groq-api-key', 'gsk_xxxx', 'votre_clé_groq', ''];
-const isPlaceholder = !GROQ_KEY || GROQ_PLACEHOLDERS.some(p => GROQ_KEY.toLowerCase().includes(p.toLowerCase()) || GROQ_KEY === p);
+const GROQ_PLACEHOLDERS = new Set(['your_groq_api_key_here', 'your-groq-api-key', 'gsk_xxxx', 'votre_clé_groq', 'your_grok_api_key', 'changeme']);
+const isPlaceholder = !GROQ_KEY || GROQ_KEY.trim().length < 20 || GROQ_PLACEHOLDERS.has(GROQ_KEY.trim().toLowerCase());
 if (isPlaceholder) {
   console.error('');
   console.error('╔══════════════════════════════════════════════════════════════════╗');
