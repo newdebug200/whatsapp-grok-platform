@@ -119,14 +119,14 @@ cd ..
 echo  [OK] Dependances frontend installees
 echo.
 
-:: Stocker le chemin racine avant tout changement de repertoire
-set "BOTORA_ROOT=%~dp0"
-
 :: ─────────────────────────────────────────────
 :: 6. Demarrer le backend dans une nouvelle fenetre
+::    /d definit le repertoire de travail sans guillemets imbriques
 :: ─────────────────────────────────────────────
 echo  [START] Demarrage du backend...
-start "Botora Backend" cmd /k "title Botora Backend && cd /d "%BOTORA_ROOT%backend" && set PUPPETEER_SKIP_DOWNLOAD=true && set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && npm run dev"
+set BOTORA_BACK=%~dp0backend
+set BOTORA_FRONT=%~dp0frontend
+start "Botora Backend" /d "%BOTORA_BACK%" cmd /k "title Botora Backend & set PUPPETEER_SKIP_DOWNLOAD=true & set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true & npm run dev"
 
 :: Attendre que le backend demarre
 timeout /t 4 /nobreak >nul
@@ -135,7 +135,7 @@ timeout /t 4 /nobreak >nul
 :: 7. Demarrer le frontend dans une nouvelle fenetre
 :: ─────────────────────────────────────────────
 echo  [START] Demarrage du frontend...
-start "Botora Frontend" cmd /k "title Botora Frontend && cd /d "%BOTORA_ROOT%frontend" && npm run dev"
+start "Botora Frontend" /d "%BOTORA_FRONT%" cmd /k "title Botora Frontend & npm run dev"
 
 :: ─────────────────────────────────────────────
 :: 8. Ouvrir le navigateur apres 5 secondes
