@@ -16,8 +16,11 @@ model Account {
   created_at         DateTime  @default(now())
   reset_token        String?
   reset_token_expiry DateTime?
+  credit_balance     Float     @default(0)
+  is_blocked         Boolean   @default(false)
 
-  whatsappProfiles WhatsAppProfile[]
+  whatsappProfiles   WhatsAppProfile[]
+  creditTransactions CreditTransaction[]
 }
 
 model WhatsAppProfile {
@@ -210,4 +213,21 @@ model SensitiveFlag {
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
   contact Contact         @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+}
+
+model PlatformConfig {
+  key   String @id
+  value String
+}
+
+model CreditTransaction {
+  id          Int      @id @default(autoincrement())
+  account_id  Int
+  amount      Float
+  type        String
+  description String?
+  tokens_used Int?
+  created_at  DateTime @default(now())
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
 }
