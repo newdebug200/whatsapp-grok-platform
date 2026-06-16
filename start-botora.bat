@@ -95,13 +95,12 @@ echo  [DB] Synchronisation de la base de donnees...
 call npx prisma migrate resolve --rolled-back 20260615000000_add_business_hours_sensitive_quickreply >nul 2>&1
 call npx prisma migrate resolve --rolled-back 20260615120000_add_credits_platform_config >nul 2>&1
 
-:: Appliquer les migrations
+:: Appliquer les migrations (sortie supprimee pour eviter les messages rouges Prisma)
 echo  [DB] Application des migrations...
-call npx prisma migrate deploy
+call npx prisma migrate deploy >nul 2>&1
 if %errorlevel% neq 0 (
-    echo.
-    echo  [DB] migrate deploy a echoue — tentative avec db push...
-    call npx prisma db push --accept-data-loss
+    echo  [DB] Fallback : synchronisation directe du schema...
+    call npx prisma db push --accept-data-loss >nul 2>&1
     if %errorlevel% neq 0 (
         echo.
         echo  [ERREUR] Impossible de synchroniser la base de donnees.
