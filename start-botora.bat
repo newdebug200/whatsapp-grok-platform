@@ -119,25 +119,28 @@ cd ..
 echo  [OK] Dependances frontend installees
 echo.
 
+:: Stocker le chemin racine avant tout changement de repertoire
+set "BOTORA_ROOT=%~dp0"
+
 :: ─────────────────────────────────────────────
 :: 6. Demarrer le backend dans une nouvelle fenetre
 :: ─────────────────────────────────────────────
-echo  [START] Demarrage du backend sur http://localhost:3001
-start "Botora — Backend" cmd /k "title Botora Backend && cd /d "%~dp0backend" && set PUPPETEER_SKIP_DOWNLOAD=true && set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && npm run dev"
+echo  [START] Demarrage du backend...
+start "Botora Backend" cmd /k "title Botora Backend && cd /d "%BOTORA_ROOT%backend" && set PUPPETEER_SKIP_DOWNLOAD=true && set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && npm run dev"
 
 :: Attendre que le backend demarre
-timeout /t 3 /nobreak >nul
+timeout /t 4 /nobreak >nul
 
 :: ─────────────────────────────────────────────
 :: 7. Demarrer le frontend dans une nouvelle fenetre
 :: ─────────────────────────────────────────────
-echo  [START] Demarrage du frontend sur http://localhost:5173
-start "Botora — Frontend" cmd /k "title Botora Frontend && cd /d "%~dp0frontend" && npm run dev"
+echo  [START] Demarrage du frontend...
+start "Botora Frontend" cmd /k "title Botora Frontend && cd /d "%BOTORA_ROOT%frontend" && npm run dev"
 
 :: ─────────────────────────────────────────────
-:: 8. Ouvrir le navigateur apres 4 secondes
+:: 8. Ouvrir le navigateur apres 5 secondes
 :: ─────────────────────────────────────────────
-timeout /t 4 /nobreak >nul
+timeout /t 5 /nobreak >nul
 start "" http://localhost:5173
 
 :: ─────────────────────────────────────────────
@@ -150,8 +153,10 @@ echo.
 echo   Frontend : http://localhost:5173
 echo   Backend  : http://localhost:3001
 echo.
-echo   Deux fenetres sont ouvertes.
+echo   Deux fenetres sont ouvertes :
+echo     - Botora Backend
+echo     - Botora Frontend
 echo   Fermez-les pour arreter les serveurs.
 echo  ============================================
 echo.
-timeout /t 6 /nobreak >nul
+pause
