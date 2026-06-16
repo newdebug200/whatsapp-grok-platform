@@ -27,10 +27,14 @@ async function profileMiddleware(req, res, next) {
 
   try {
     const profile = await prisma.whatsAppProfile.findFirst({
-      where: { id: profileId, account_id: req.accountId }
+      where: { id: profileId, account_id: req.accountId },
+      include: { account: { select: { is_blocked: true } } }
     });
     if (!profile) {
       return res.status(403).json({ error: 'Profil introuvable ou non autorisé' });
+    }
+    if (profile.account?.is_blocked) {
+      return res.status(403).json({ error: 'Compte bloqué. Contactez l\'administrateur.' });
     }
     req.profileId = profileId;
     next();
