@@ -144,6 +144,26 @@ cron.schedule('* * * * *', async () => {
   }
 });
 
+// ── Validation de la clé API Groq au démarrage ──────────────────────────────
+const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+const GROQ_PLACEHOLDERS = ['your_groq_api_key_here', 'your-groq-api-key', 'gsk_xxxx', 'votre_clé_groq', ''];
+const isPlaceholder = !GROQ_KEY || GROQ_PLACEHOLDERS.some(p => GROQ_KEY.toLowerCase().includes(p.toLowerCase()) || GROQ_KEY === p);
+if (isPlaceholder) {
+  console.error('');
+  console.error('╔══════════════════════════════════════════════════════════════════╗');
+  console.error('║  ⚠️  ATTENTION : Clé API Groq non configurée                    ║');
+  console.error('║                                                                  ║');
+  console.error('║  Le bot IA ne pourra PAS répondre aux messages WhatsApp.         ║');
+  console.error('║                                                                  ║');
+  console.error('║  Solution :                                                      ║');
+  console.error('║  1. Obtenez une clé gratuite sur https://console.groq.com/keys  ║');
+  console.error('║  2. Ouvrez backend\\.env                                          ║');
+  console.error('║  3. Remplacez GROK_API_KEY=... par votre vraie clé              ║');
+  console.error('║  4. Redémarrez le backend                                        ║');
+  console.error('╚══════════════════════════════════════════════════════════════════╝');
+  console.error('');
+}
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, async () => {
   console.log(`Botora Backend démarré sur port ${PORT}`);
