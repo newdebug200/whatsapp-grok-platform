@@ -6,6 +6,10 @@ const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 router.use(authMiddleware);
 router.use(adminMiddleware);
 
+// ─────────────────────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────────────────────
+
 // GET /api/admin/users — list all accounts with usage quotas
 router.get('/users', async (req, res) => {
   try {
@@ -17,6 +21,8 @@ router.get('/users', async (req, res) => {
         name: true,
         role: true,
         created_at: true,
+        credit_balance: true,
+        is_blocked: true,
         whatsappProfiles: {
           select: {
             id: true,
@@ -61,6 +67,8 @@ router.get('/users', async (req, res) => {
         name: a.name,
         role: a.role,
         created_at: a.created_at,
+        credit_balance: a.credit_balance,
+        is_blocked: a.is_blocked,
         profileCount: a.whatsappProfiles.length,
         connectedProfiles: a.whatsappProfiles.filter(p => p.is_connected).length,
         contactCount,
@@ -107,6 +115,35 @@ router.patch('/users/:id/role', async (req, res) => {
   }
 });
 
+// PATCH /api/admin/users/:id/block — block or unblock a user
+router.patch('/users/:id/block', async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const { is_blocked } = req.body;
+
+    if (typeof is_blocked !== 'boolean') {
+      return res.status(400).json({ error: 'is_blocked doit être un booléen' });
+    }
+    if (targetId === req.accountId) {
+      return res.status(400).json({ error: 'Vous ne pouvez pas bloquer votre propre compte' });
+    }
+
+    const target = await prisma.account.findUnique({ where: { id: targetId } });
+    if (!target) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+    const updated = await prisma.account.update({
+      where: { id: targetId },
+      data: { is_blocked },
+      select: { id: true, email: true, name: true, is_blocked: true }
+    });
+
+    res.json({ success: true, account: updated });
+  } catch (error) {
+    console.error('Erreur PATCH admin/users/:id/block:', error);
+    res.status(500).json({ error: 'Erreur lors du blocage/déblocage' });
+  }
+});
+
 // DELETE /api/admin/users/:id — delete a user account and all data
 router.delete('/users/:id', async (req, res) => {
   try {
@@ -141,6 +178,7 @@ router.delete('/users/:id', async (req, res) => {
       await prisma.whatsAppProfile.deleteMany({ where: { account_id: targetId } });
     }
 
+    await prisma.creditTransaction.deleteMany({ where: { account_id: targetId } });
     await prisma.account.delete({ where: { id: targetId } });
 
     res.json({ success: true, message: `Compte de ${target.name} supprimé` });
@@ -149,6 +187,122 @@ router.delete('/users/:id', async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
+
+// ─────────────────────────────────────────────────────────────
+// CREDITS
+// ─────────────────────────────────────────────────────────────
+
+// GET /api/admin/users/:id/credits — get credit transactions for a user
+router.get('/users/:id/credits', async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const account = await prisma.account.findUnique({
+      where: { id: targetId },
+      select: { id: true, name: true, email: true, credit_balance: true }
+    });
+    if (!account) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+    const transactions = await prisma.creditTransaction.findMany({
+      where: { account_id: targetId },
+      orderBy: { created_at: 'desc' },
+      take: 50
+    });
+
+    res.json({ account, transactions });
+  } catch (error) {
+    console.error('Erreur GET admin/users/:id/credits:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des crédits' });
+  }
+});
+
+// POST /api/admin/users/:id/credits — add or remove credits manually
+router.post('/users/:id/credits', async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const { amount, description } = req.body;
+
+    if (!amount || isNaN(parseFloat(amount))) {
+      return res.status(400).json({ error: 'Montant invalide' });
+    }
+
+    const parsedAmount = parseFloat(amount);
+    const target = await prisma.account.findUnique({ where: { id: targetId } });
+    if (!target) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+    const newBalance = Math.max(0, target.credit_balance + parsedAmount);
+
+    const [updated] = await prisma.$transaction([
+      prisma.account.update({
+        where: { id: targetId },
+        data: { credit_balance: newBalance },
+        select: { id: true, name: true, email: true, credit_balance: true }
+      }),
+      prisma.creditTransaction.create({
+        data: {
+          account_id: targetId,
+          amount: parsedAmount,
+          type: parsedAmount >= 0 ? 'credit' : 'debit',
+          description: description?.trim() || (parsedAmount >= 0 ? 'Rechargement admin' : 'Déduction admin')
+        }
+      })
+    ]);
+
+    res.json({ success: true, account: updated });
+  } catch (error) {
+    console.error('Erreur POST admin/users/:id/credits:', error);
+    res.status(500).json({ error: 'Erreur lors de la modification des crédits' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// PLATFORM CONFIG (feature flags)
+// ─────────────────────────────────────────────────────────────
+
+// GET /api/admin/platform-config — get all feature flags
+router.get('/platform-config', async (req, res) => {
+  try {
+    const rows = await prisma.platformConfig.findMany();
+    const config = {};
+    for (const row of rows) config[row.key] = row.value;
+    res.json(config);
+  } catch (error) {
+    console.error('Erreur GET admin/platform-config:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement de la configuration' });
+  }
+});
+
+// PUT /api/admin/platform-config — update one or more feature flags
+router.put('/platform-config', async (req, res) => {
+  try {
+    const updates = req.body;
+    if (!updates || typeof updates !== 'object') {
+      return res.status(400).json({ error: 'Corps invalide' });
+    }
+
+    const ops = Object.entries(updates).map(([key, value]) =>
+      prisma.platformConfig.upsert({
+        where: { key },
+        update: { value: String(value) },
+        create: { key, value: String(value) }
+      })
+    );
+
+    await prisma.$transaction(ops);
+
+    const rows = await prisma.platformConfig.findMany();
+    const config = {};
+    for (const row of rows) config[row.key] = row.value;
+
+    res.json({ success: true, config });
+  } catch (error) {
+    console.error('Erreur PUT admin/platform-config:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour de la configuration' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// PROFILES & VERIFICATION TRIGGERS
+// ─────────────────────────────────────────────────────────────
 
 // GET /api/admin/profiles — admin's own WhatsApp profiles
 router.get('/profiles', async (req, res) => {
