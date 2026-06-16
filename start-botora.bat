@@ -59,39 +59,49 @@ if not exist "backend\.env" (
 
 :: ─────────────────────────────────────────────
 :: 3. Installer les dependances backend
+::    — On desactive le telechargement Chromium de Puppeteer
+::      (whatsapp-web.js utilise Chrome deja installe sur le PC)
 :: ─────────────────────────────────────────────
 echo  [INSTALL] Mise a jour des dependances backend...
+echo  (premiere fois : peut prendre 1-3 minutes, soyez patient)
+echo.
+
+set PUPPETEER_SKIP_DOWNLOAD=true
+set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
 cd backend
-call npm install --silent
+call npm install --no-audit --no-fund
 if %errorlevel% neq 0 (
     echo.
     echo  [ERREUR] npm install backend a echoue.
+    echo  Verifiez votre connexion internet et relancez.
+    cd ..
     pause
     exit /b 1
 )
-echo  [OK] Dependances backend a jour
+echo.
+echo  [OK] Dependances backend installees
 echo.
 
 :: ─────────────────────────────────────────────
 :: 4. Migration base de donnees Prisma
-::    — Gestion automatique des migrations bloquees
+::    — On pre-resout toutes les migrations connues comme bloquees
+::    — Puis on applique les migrations manquantes
 :: ─────────────────────────────────────────────
 echo  [DB] Synchronisation de la base de donnees...
 
-:: Etape 4a : marquer toutes les migrations echouees connues comme "rolled back"
-::            (evite l'erreur P3009 qui bloque migrate deploy)
-echo  [DB] Verification des migrations en echec...
+:: Pre-resoudre toutes les migrations potentiellement bloquees
+:: (silencieux — ces commandes echouent sans consequence si deja ok)
 call npx prisma migrate resolve --rolled-back 20260615000000_add_business_hours_sensitive_quickreply >nul 2>&1
+call npx prisma migrate resolve --rolled-back 20260615120000_add_credits_platform_config >nul 2>&1
 
-:: Etape 4b : regénérer le client Prisma depuis le schema
-call npx prisma generate >nul 2>&1
-
-:: Etape 4c : appliquer les nouvelles migrations
+:: Appliquer les migrations
 echo  [DB] Application des migrations...
-call npx prisma migrate deploy >nul 2>&1
+call npx prisma migrate deploy
 if %errorlevel% neq 0 (
-    echo  [DB] migrate deploy a echoue — utilisation de db push en secours...
-    call npx prisma db push >nul 2>&1
+    echo.
+    echo  [DB] migrate deploy a echoue — tentative avec db push...
+    call npx prisma db push --accept-data-loss
     if %errorlevel% neq 0 (
         echo.
         echo  [ERREUR] Impossible de synchroniser la base de donnees.
@@ -113,22 +123,23 @@ echo.
 :: ─────────────────────────────────────────────
 echo  [INSTALL] Mise a jour des dependances frontend...
 cd frontend
-call npm install --silent
+call npm install --no-audit --no-fund
 if %errorlevel% neq 0 (
     echo.
     echo  [ERREUR] npm install frontend a echoue.
+    cd ..
     pause
     exit /b 1
 )
 cd ..
-echo  [OK] Dependances frontend a jour
+echo  [OK] Dependances frontend installees
 echo.
 
 :: ─────────────────────────────────────────────
 :: 6. Demarrer le backend dans une nouvelle fenetre
 :: ─────────────────────────────────────────────
 echo  [START] Demarrage du backend sur http://localhost:3001
-start "Botora — Backend" cmd /k "title Botora Backend && cd /d "%~dp0backend" && npm run dev"
+start "Botora — Backend" cmd /k "title Botora Backend && cd /d "%~dp0backend" && set PUPPETEER_SKIP_DOWNLOAD=true && set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && npm run dev"
 
 :: Attendre que le backend demarre
 timeout /t 3 /nobreak >nul
