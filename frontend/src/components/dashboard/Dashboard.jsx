@@ -46,6 +46,8 @@ export default function Dashboard() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('botora-notif-sound') !== 'off');
   const [botError, setBotError] = useState(null);
+  const [platformConfig, setPlatformConfig] = useState({});
+  const [creditBalance, setCreditBalance] = useState(null);
 
   const activePanelRef = useRef(activePanel);
   const selectedContactRef = useRef(selectedContact);
@@ -63,6 +65,32 @@ export default function Dashboard() {
     window.addEventListener('botora-sound-change', handler);
     return () => window.removeEventListener('botora-sound-change', handler);
   }, []);
+
+  // Load platform config + credit balance
+  useEffect(() => {
+    if (!token) return;
+    axios.get(`${API_URL}/platform-config`)
+      .then(r => setPlatformConfig(r.data))
+      .catch(() => {});
+  }, [token]);
+
+  // Refresh credit balance when account changes
+  useEffect(() => {
+    if (account?.credit_balance !== undefined) {
+      setCreditBalance(account.credit_balance);
+    }
+  }, [account]);
+
+  // Refresh credit balance periodically if credits are enabled
+  useEffect(() => {
+    if (platformConfig.credits_enabled !== 'true') return;
+    const interval = setInterval(() => {
+      axios.get(`${API_URL}/auth/me`)
+        .then(r => setCreditBalance(r.data.credit_balance))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [platformConfig.credits_enabled]);
 
   const loadContactsForProfile = useCallback((profileId, sock) => {
     const s = sock || socketRef.current;
@@ -218,15 +246,19 @@ export default function Dashboard() {
     setEditingProfileId(null);
   };
 
+  const campaignsEnabled = platformConfig.campaigns_enabled !== 'false';
+  const creditsEnabled = platformConfig.credits_enabled === 'true';
+  const iaGlobalEnabled = platformConfig.ia_enabled_global !== 'false';
+
   const navItems = [
     {
       key: 'chat', label: 'Discussions',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
     },
-    {
+    ...(campaignsEnabled ? [{
       key: 'broadcast', label: 'Campagnes',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
-    },
+    }] : []),
     {
       key: 'tags', label: 'Tags',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
@@ -289,11 +321,22 @@ export default function Dashboard() {
                       <div>
                         <div className="dropdown-name">{account?.name}</div>
                         <div className="dropdown-email">{account?.email}</div>
+                        {creditsEnabled && creditBalance !== null && (
+                          <div className={`dropdown-credits ${creditBalance <= 0 ? 'empty' : creditBalance < 10 ? 'low' : ''}`}>
+                            💳 {creditBalance.toFixed(2)} crédits
+                          </div>
+                        )}
                       </div>
                     </div>
+                    {!iaGlobalEnabled && (
+                      <div className="dropdown-flag-warn">⚠️ Bot IA désactivé par l'admin</div>
+                    )}
+                    {creditsEnabled && creditBalance !== null && creditBalance <= 0 && (
+                      <div className="dropdown-flag-warn">⚠️ Solde de crédits épuisé</div>
+                    )}
                     <div className="dropdown-divider" />
                     <button className="dropdown-item" onClick={() => { handleNavClick('chat'); setShowMenu(false); }}>Discussions</button>
-                    <button className="dropdown-item" onClick={() => { handleNavClick('broadcast'); setShowMenu(false); }}>Campagnes</button>
+                    {campaignsEnabled && <button className="dropdown-item" onClick={() => { handleNavClick('broadcast'); setShowMenu(false); }}>Campagnes</button>}
                     <button className="dropdown-item" onClick={() => { handleNavClick('stats'); setShowMenu(false); }}>Statistiques</button>
                     <button className="dropdown-item" onClick={() => goToSettings('config')}>Bot Config</button>
                     <button className="dropdown-item" onClick={() => goToSettings('faq')}>FAQ</button>
@@ -397,6 +440,15 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+
+          {creditsEnabled && creditBalance !== null && (
+            <div className={`sidebar-credits-bar ${creditBalance <= 0 ? 'empty' : creditBalance < 10 ? 'low' : ''}`}>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
+              </svg>
+              <span>{creditBalance.toFixed(2)} crédits</span>
+            </div>
+          )}
         </div>
 
         <div className="sidebar-content">
@@ -428,7 +480,7 @@ export default function Dashboard() {
           {activePanel === 'stats' && (
             noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
           )}
-          {activePanel === 'broadcast' && (
+          {activePanel === 'broadcast' && campaignsEnabled && (
             noProfile
               ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
               : <Broadcast socket={socket} activeProfile={activeProfile} />
