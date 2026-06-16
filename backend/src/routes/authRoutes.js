@@ -74,7 +74,7 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const account = await prisma.account.findUnique({
       where: { id: req.accountId },
-      select: { id: true, email: true, name: true, role: true, created_at: true }
+      select: { id: true, email: true, name: true, role: true, created_at: true, credit_balance: true, is_blocked: true }
     });
     if (!account) return res.status(404).json({ error: 'Compte introuvable' });
     res.json(account);
