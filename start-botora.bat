@@ -120,22 +120,18 @@ echo  [OK] Dependances frontend installees
 echo.
 
 :: ─────────────────────────────────────────────
-:: 6. Demarrer le backend dans une nouvelle fenetre
-::    /d definit le repertoire de travail sans guillemets imbriques
+:: 6. Demarrer le backend (via _run.bat helper)
 :: ─────────────────────────────────────────────
 echo  [START] Demarrage du backend...
-set BOTORA_BACK=%~dp0backend
-set BOTORA_FRONT=%~dp0frontend
-start "Botora Backend" /d "%BOTORA_BACK%" cmd /k "title Botora Backend & set PUPPETEER_SKIP_DOWNLOAD=true & set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true & npm run dev"
+start "Botora Backend" "%~dp0backend\_run.bat"
 
-:: Attendre que le backend demarre
 timeout /t 4 /nobreak >nul
 
 :: ─────────────────────────────────────────────
-:: 7. Demarrer le frontend dans une nouvelle fenetre
+:: 7. Demarrer le frontend (via _run.bat helper)
 :: ─────────────────────────────────────────────
 echo  [START] Demarrage du frontend...
-start "Botora Frontend" /d "%BOTORA_FRONT%" cmd /k "title Botora Frontend & npm run dev"
+start "Botora Frontend" "%~dp0frontend\_run.bat"
 
 :: ─────────────────────────────────────────────
 :: 8. Ouvrir le navigateur apres 5 secondes
@@ -143,20 +139,12 @@ start "Botora Frontend" /d "%BOTORA_FRONT%" cmd /k "title Botora Frontend & npm 
 timeout /t 5 /nobreak >nul
 start "" http://localhost:5173
 
-:: ─────────────────────────────────────────────
-:: 9. Message final
-:: ─────────────────────────────────────────────
 echo.
 echo  ============================================
 echo   Botora est lance !
-echo.
 echo   Frontend : http://localhost:5173
 echo   Backend  : http://localhost:3001
-echo.
-echo   Deux fenetres sont ouvertes :
-echo     - Botora Backend
-echo     - Botora Frontend
-echo   Fermez-les pour arreter les serveurs.
+echo   Fermez les deux fenetres pour arreter.
 echo  ============================================
 echo.
 pause
