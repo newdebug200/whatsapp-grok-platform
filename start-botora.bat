@@ -84,28 +84,20 @@ echo  [OK] Dependances backend installees
 echo.
 
 :: ─────────────────────────────────────────────
-:: 4. Synchronisation base de donnees Prisma
-::    — On utilise le binaire local directement (evite npx + reseau)
-::    — La premiere fois peut prendre 1-2 min si telechargement necessaire
+:: 4. Synchronisation base de donnees (script Node.js natif)
+::    — Cree les tables SQLite directement, sans Prisma CLI
+::    — Fonctionne 100% hors-ligne, pas de telechargement
 :: ─────────────────────────────────────────────
 echo  [DB] Synchronisation de la base de donnees...
-echo  (premiere fois : peut prendre 1-2 minutes, patientez)
-
-node_modules\.bin\prisma db push --accept-data-loss --skip-generate
+call node setup-db.js
 if %errorlevel% neq 0 (
     echo.
-    echo  [DB] Tentative alternative...
-    node -e "const {execSync}=require('child_process');execSync('node node_modules/prisma/build/index.js db push --accept-data-loss --skip-generate',{stdio:'inherit',cwd:process.cwd()})"
-    if %errorlevel% neq 0 (
-        echo.
-        echo  [ERREUR] Impossible de synchroniser la base de donnees.
-        echo  Verifiez votre fichier backend\.env (DATABASE_URL).
-        cd ..
-        pause
-        exit /b 1
-    )
+    echo  [ERREUR] Impossible de synchroniser la base de donnees.
+    echo  Verifiez votre fichier backend\.env (DATABASE_URL).
+    cd ..
+    pause
+    exit /b 1
 )
-echo  [OK] Base de donnees synchronisee
 
 cd ..
 echo.
