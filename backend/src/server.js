@@ -21,6 +21,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const broadcastRoutes = require('./routes/broadcastRoutes');
 const tagRoutes = require('./routes/tagRoutes');
 const quickReplyRoutes = require('./routes/quickReplyRoutes');
+const platformConfigRoutes = require('./routes/platformConfigRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +44,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/broadcast', broadcastRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/quick-replies', quickReplyRoutes);
+app.use('/api/platform-config', platformConfigRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
