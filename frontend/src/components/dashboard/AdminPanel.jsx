@@ -15,6 +15,317 @@ function formatDateTime(d) {
   return new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Platform Config Section
+// ─────────────────────────────────────────────────────────────
+function PlatformConfigSection() {
+  const [config, setConfig] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const showMsg = (text, error = false) => {
+    setMsg({ text, error });
+    setTimeout(() => setMsg(null), 3500);
+  };
+
+  const loadConfig = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API_URL}/admin/platform-config`);
+      setConfig(r.data);
+    } catch {
+      setConfig({});
+    }
+  }, []);
+
+  useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  const handleToggle = async (key) => {
+    const newVal = config[key] === 'true' ? 'false' : 'true';
+    const optimistic = { ...config, [key]: newVal };
+    setConfig(optimistic);
+    try {
+      await axios.put(`${API_URL}/admin/platform-config`, { [key]: newVal });
+    } catch {
+      setConfig(config);
+      showMsg('Erreur lors de la mise à jour', true);
+    }
+  };
+
+  const handleCreditRateChange = async (e) => {
+    const val = e.target.value;
+    setConfig(prev => ({ ...prev, credit_per_1000_tokens: val }));
+  };
+
+  const handleCreditRateSave = async () => {
+    const val = parseFloat(config.credit_per_1000_tokens);
+    if (isNaN(val) || val < 0) return showMsg('Taux invalide', true);
+    setSaving(true);
+    try {
+      await axios.put(`${API_URL}/admin/platform-config`, { credit_per_1000_tokens: String(val) });
+      showMsg('Configuration sauvegardée');
+    } catch {
+      showMsg('Erreur lors de la sauvegarde', true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleFreeCreditsChange = async (e) => {
+    const val = e.target.value;
+    setConfig(prev => ({ ...prev, new_user_free_credits: val }));
+  };
+
+  const handleFreeCreditsBlur = async () => {
+    const val = parseFloat(config.new_user_free_credits);
+    if (isNaN(val) || val < 0) return;
+    try {
+      await axios.put(`${API_URL}/admin/platform-config`, { new_user_free_credits: String(val) });
+    } catch {}
+  };
+
+  if (!config) return <div className="admin-cfg-loading">Chargement…</div>;
+
+  const flags = [
+    { key: 'ia_enabled_global', label: 'Bot IA global', desc: "Active/désactive le bot IA pour toute la plateforme" },
+    { key: 'campaigns_enabled', label: 'Campagnes (broadcasts)', desc: "Active/désactive les campagnes marketing pour tous les utilisateurs" },
+    { key: 'sensitive_keywords_enabled', label: 'Mots-clés sensibles', desc: "Active/désactive la détection de mots-clés sensibles" },
+    { key: 'verification_triggers_enabled', label: 'Triggers de vérification', desc: "Active/désactive la vérification WhatsApp via triggers" },
+    { key: 'credits_enabled', label: 'Système de crédits', desc: "Active la facturation à la consommation (tokens → crédits)" },
+  ];
+
+  return (
+    <div className="admin-cfg-section">
+      <div className="admin-cfg-header">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" className="admin-cfg-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+        </svg>
+        <div>
+          <h3 className="admin-cfg-title">Fonctionnalités de la plateforme</h3>
+          <p className="admin-cfg-desc">Activez ou désactivez les modules de Botora pour tous les utilisateurs.</p>
+        </div>
+      </div>
+
+      {msg && <div className={`admin-cfg-msg ${msg.error ? 'error' : 'success'}`}>{msg.text}</div>}
+
+      <div className="admin-cfg-flags">
+        {flags.map(f => (
+          <div key={f.key} className="admin-cfg-flag-row">
+            <div className="admin-cfg-flag-info">
+              <div className="admin-cfg-flag-label">{f.label}</div>
+              <div className="admin-cfg-flag-desc">{f.desc}</div>
+            </div>
+            <label className="admin-cfg-toggle">
+              <input
+                type="checkbox"
+                checked={config[f.key] === 'true'}
+                onChange={() => handleToggle(f.key)}
+              />
+              <span className="admin-cfg-toggle-track">
+                <span className="admin-cfg-toggle-thumb" />
+              </span>
+              <span className="admin-cfg-toggle-state">{config[f.key] === 'true' ? 'Actif' : 'Inactif'}</span>
+            </label>
+          </div>
+        ))}
+      </div>
+
+      {config.credits_enabled === 'true' && (
+        <div className="admin-cfg-credit-settings">
+          <div className="admin-cfg-credit-row">
+            <label className="admin-cfg-credit-label">Crédits par 1 000 tokens</label>
+            <div className="admin-cfg-credit-input-row">
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                className="admin-cfg-credit-input"
+                value={config.credit_per_1000_tokens ?? '1'}
+                onChange={handleCreditRateChange}
+              />
+              <button
+                className="admin-cfg-credit-save-btn"
+                onClick={handleCreditRateSave}
+                disabled={saving}
+              >
+                {saving ? '…' : 'Sauvegarder'}
+              </button>
+            </div>
+          </div>
+          <div className="admin-cfg-credit-row">
+            <label className="admin-cfg-credit-label">Crédits offerts à l'inscription</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              className="admin-cfg-credit-input"
+              value={config.new_user_free_credits ?? '0'}
+              onChange={handleFreeCreditsChange}
+              onBlur={handleFreeCreditsBlur}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Credits Management Section
+// ─────────────────────────────────────────────────────────────
+function CreditsSection({ users }) {
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [creditData, setCreditData] = useState(null);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+  const [addAmount, setAddAmount] = useState('');
+  const [addDesc, setAddDesc] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const showMsg = (text, error = false) => {
+    setMsg({ text, error });
+    setTimeout(() => setMsg(null), 3500);
+  };
+
+  const loadCredits = useCallback(async (userId) => {
+    if (!userId) return;
+    setLoadingCredits(true);
+    try {
+      const r = await axios.get(`${API_URL}/admin/users/${userId}/credits`);
+      setCreditData(r.data);
+    } catch {
+      setCreditData(null);
+    } finally {
+      setLoadingCredits(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedUserId) loadCredits(selectedUserId);
+  }, [selectedUserId, loadCredits]);
+
+  useEffect(() => {
+    if (users.length > 0 && !selectedUserId) {
+      setSelectedUserId(String(users[0].id));
+    }
+  }, [users, selectedUserId]);
+
+  const handleAddCredits = async () => {
+    const amount = parseFloat(addAmount);
+    if (isNaN(amount) || amount === 0) return showMsg('Montant invalide', true);
+    setAdding(true);
+    try {
+      const r = await axios.post(`${API_URL}/admin/users/${selectedUserId}/credits`, {
+        amount,
+        description: addDesc.trim() || undefined
+      });
+      setCreditData(prev => ({
+        account: r.data.account,
+        transactions: prev?.transactions || []
+      }));
+      await loadCredits(selectedUserId);
+      setAddAmount('');
+      setAddDesc('');
+      showMsg(`${amount > 0 ? '+' : ''}${amount} crédits appliqués`);
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Erreur', true);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div className="admin-credits-section">
+      <div className="admin-credits-header">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" className="admin-credits-icon">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
+        </svg>
+        <div>
+          <h3 className="admin-credits-title">Gestion des crédits</h3>
+          <p className="admin-credits-desc">Rechargez ou ajustez le solde de crédits de chaque utilisateur.</p>
+        </div>
+      </div>
+
+      {msg && <div className={`admin-credits-msg ${msg.error ? 'error' : 'success'}`}>{msg.text}</div>}
+
+      <div className="admin-credits-select-row">
+        <label className="admin-credits-label">Utilisateur</label>
+        <select
+          className="admin-credits-select"
+          value={selectedUserId}
+          onChange={e => setSelectedUserId(e.target.value)}
+        >
+          {users.map(u => (
+            <option key={u.id} value={String(u.id)}>
+              {u.name} ({u.email}) — {u.credit_balance?.toFixed(2) ?? '0.00'} crédits
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loadingCredits ? (
+        <div className="admin-credits-loading">Chargement…</div>
+      ) : creditData ? (
+        <>
+          <div className="admin-credits-balance-card">
+            <div className="admin-credits-balance-label">Solde actuel</div>
+            <div className="admin-credits-balance-value">{creditData.account.credit_balance?.toFixed(2)} crédits</div>
+          </div>
+
+          <div className="admin-credits-add-form">
+            <div className="admin-credits-add-row">
+              <input
+                type="number"
+                step="1"
+                className="admin-credits-amount-input"
+                placeholder="Montant (ex: 100 ou -50)"
+                value={addAmount}
+                onChange={e => setAddAmount(e.target.value)}
+              />
+              <input
+                type="text"
+                className="admin-credits-desc-input"
+                placeholder="Description (optionnel)"
+                value={addDesc}
+                onChange={e => setAddDesc(e.target.value)}
+                maxLength={100}
+              />
+              <button
+                className="admin-credits-add-btn"
+                onClick={handleAddCredits}
+                disabled={adding || !addAmount}
+              >
+                {adding ? '…' : 'Appliquer'}
+              </button>
+            </div>
+            <div className="admin-credits-hint">Valeur positive = rechargement, valeur négative = déduction</div>
+          </div>
+
+          {creditData.transactions.length > 0 && (
+            <div className="admin-credits-history">
+              <div className="admin-credits-history-title">Historique (50 dernières opérations)</div>
+              <div className="admin-credits-history-list">
+                {creditData.transactions.map(t => (
+                  <div key={t.id} className={`admin-credits-tx ${t.amount >= 0 ? 'credit' : 'debit'}`}>
+                    <div className="admin-credits-tx-left">
+                      <span className="admin-credits-tx-amount">{t.amount >= 0 ? '+' : ''}{t.amount.toFixed(4)}</span>
+                      <span className="admin-credits-tx-desc">{t.description || '—'}</span>
+                      {t.tokens_used && <span className="admin-credits-tx-tokens">{t.tokens_used} tokens</span>}
+                    </div>
+                    <span className="admin-credits-tx-date">{formatDateTime(t.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Verification Section
+// ─────────────────────────────────────────────────────────────
 function VerificationSection() {
   const [profiles, setProfiles] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -190,6 +501,9 @@ function VerificationSection() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Main AdminPanel
+// ─────────────────────────────────────────────────────────────
 export default function AdminPanel() {
   const { account: currentAccount } = useAuth();
   const [users, setUsers] = useState([]);
@@ -197,6 +511,7 @@ export default function AdminPanel() {
   const [error, setError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [roleLoadingId, setRoleLoadingId] = useState(null);
+  const [blockLoadingId, setBlockLoadingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
 
@@ -248,6 +563,20 @@ export default function AdminPanel() {
     }
   };
 
+  const handleBlockToggle = async (user) => {
+    const newBlocked = !user.is_blocked;
+    setBlockLoadingId(user.id);
+    try {
+      await axios.patch(`${API_URL}/admin/users/${user.id}/block`, { is_blocked: newBlocked });
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_blocked: newBlocked } : u));
+      showMsg(`${user.name} — compte ${newBlocked ? 'bloqué' : 'débloqué'}`);
+    } catch (err) {
+      showMsg(err.response?.data?.error || 'Erreur lors du blocage', true);
+    } finally {
+      setBlockLoadingId(null);
+    }
+  };
+
   const totalMessages = users.reduce((s, u) => s + u.msgSent + u.msgReceived, 0);
   const totalProfiles = users.reduce((s, u) => s + u.profileCount, 0);
   const totalContacts = users.reduce((s, u) => s + u.contactCount, 0);
@@ -263,7 +592,9 @@ export default function AdminPanel() {
         </button>
       </div>
 
+      <PlatformConfigSection />
       <VerificationSection />
+      <CreditsSection users={users} />
 
       <div className="admin-stats-row">
         <div className="admin-stat-card">
@@ -301,6 +632,8 @@ export default function AdminPanel() {
               <tr>
                 <th>Utilisateur</th>
                 <th>Rôle</th>
+                <th>Statut</th>
+                <th>Crédits</th>
                 <th>Profils</th>
                 <th>Contacts</th>
                 <th>Msg reçus</th>
@@ -313,7 +646,7 @@ export default function AdminPanel() {
             </thead>
             <tbody>
               {users.map(user => (
-                <tr key={user.id} className={user.id === currentAccount?.id ? 'admin-row-self' : ''}>
+                <tr key={user.id} className={`${user.id === currentAccount?.id ? 'admin-row-self' : ''} ${user.is_blocked ? 'admin-row-blocked' : ''}`}>
                   <td className="admin-cell-user">
                     <div className="admin-user-avatar">{user.name.charAt(0).toUpperCase()}</div>
                     <div>
@@ -327,6 +660,16 @@ export default function AdminPanel() {
                   <td>
                     <span className={`admin-role-badge ${user.role}`}>
                       {user.role === 'admin' ? 'Admin' : 'User'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`admin-status-badge ${user.is_blocked ? 'blocked' : 'active'}`}>
+                      {user.is_blocked ? '🔒 Bloqué' : '✓ Actif'}
+                    </span>
+                  </td>
+                  <td className="admin-cell-num">
+                    <span className={`admin-credits-badge ${user.credit_balance <= 0 ? 'empty' : ''}`}>
+                      {(user.credit_balance ?? 0).toFixed(2)}
                     </span>
                   </td>
                   <td className="admin-cell-num">{user.profileCount} {user.connectedProfiles > 0 && <span className="admin-connected-dot">●</span>}</td>
@@ -346,6 +689,14 @@ export default function AdminPanel() {
                           title={user.role === 'admin' ? 'Rétrograder en utilisateur' : 'Promouvoir en admin'}
                         >
                           {roleLoadingId === user.id ? '…' : user.role === 'admin' ? '↓ User' : '↑ Admin'}
+                        </button>
+                        <button
+                          className={`admin-btn-block ${user.is_blocked ? 'unblock' : 'block'}`}
+                          onClick={() => handleBlockToggle(user)}
+                          disabled={blockLoadingId === user.id}
+                          title={user.is_blocked ? 'Débloquer' : 'Bloquer'}
+                        >
+                          {blockLoadingId === user.id ? '…' : user.is_blocked ? '🔓' : '🔒'}
                         </button>
                         <button
                           className="admin-btn-delete"
