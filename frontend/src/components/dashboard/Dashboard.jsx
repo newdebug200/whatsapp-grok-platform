@@ -246,9 +246,10 @@ export default function Dashboard() {
     setEditingProfileId(null);
   };
 
-  const campaignsEnabled = platformConfig.campaigns_enabled !== 'false';
+  const isAdmin = account?.role === 'admin';
+  const campaignsEnabled = isAdmin || platformConfig.campaigns_enabled !== 'false';
   const creditsEnabled = platformConfig.credits_enabled === 'true';
-  const iaGlobalEnabled = platformConfig.ia_enabled_global !== 'false';
+  const iaGlobalEnabled = isAdmin || platformConfig.ia_enabled_global !== 'false';
 
   const navItems = [
     {
@@ -328,10 +329,10 @@ export default function Dashboard() {
                         )}
                       </div>
                     </div>
-                    {!iaGlobalEnabled && (
+                    {!iaGlobalEnabled && !isAdmin && (
                       <div className="dropdown-flag-warn">⚠️ Bot IA désactivé par l'admin</div>
                     )}
-                    {creditBalance !== null && creditBalance <= 0 && (
+                    {!isAdmin && creditBalance !== null && creditBalance <= 0 && (
                       <div className="dropdown-flag-warn">⚠️ Solde de crédits épuisé</div>
                     )}
                     <div className="dropdown-divider" />
