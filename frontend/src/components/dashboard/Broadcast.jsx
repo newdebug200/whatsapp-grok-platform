@@ -103,7 +103,7 @@ export default function Broadcast({ socket, activeProfile }) {
     setContactsLoading(true);
     setContactsError('');
     try {
-      const res = await axios.get(`${API_URL}/messages/conversations`);
+      const res = await axios.get(`${API_URL}/messages/contacts`);
       setContacts(res.data);
       if (res.data.length === 0) {
         setContactsError('Aucun contact trouvé. WhatsApp doit être connecté ou importez un fichier CSV / VCF.');
