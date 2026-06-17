@@ -124,10 +124,18 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             </div>
           )}
           <div className="contact-row">
-            <span className="contact-preview">
-              {lastMsg
-                ? (lastMsg.direction === 'sent' ? '✓ ' : '') + lastMsg.content.substring(0, 45) + (lastMsg.content.length > 45 ? '…' : '')
-                : 'Aucun message'}
+            <span className="contact-preview" style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
+              {lastMsg && lastMsg.direction === 'sent' && (
+                <svg viewBox="0 0 16 11" fill="#8e9baa" width="14" height="10" style={{ flexShrink: 0 }}>
+                  <path d="M11.071.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.4 2.4 4.947-7.2a.75.75 0 0 1 1.04-.294z"/>
+                  <path d="M14.571.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.04.206.75.75 0 0 1-.114-.32l.108-.157 5.3-7.71a.75.75 0 0 1 1.04-.06z"/>
+                </svg>
+              )}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {lastMsg
+                  ? lastMsg.content.substring(0, 45) + (lastMsg.content.length > 45 ? '…' : '')
+                  : 'Aucun message'}
+              </span>
             </span>
           </div>
         </div>
