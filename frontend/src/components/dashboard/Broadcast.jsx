@@ -358,8 +358,16 @@ export default function Broadcast({ socket, activeProfile }) {
           <div className="bc-field">
             <label className="bc-label">
               Variantes de message
-              <span className="bc-hint"> — chaque contact reçoit <strong>un seul message</strong>, tiré au hasard. Utilisez <code>{'{{name}}'}</code> pour le prénom.</span>
+              <span className="bc-hint"> — chaque contact reçoit <strong>un seul message</strong>, tiré au hasard.</span>
             </label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {[['{{prenom}}', 'Prénom'], ['{{nom}}', 'Nom complet'], ['{{telephone}}', 'Téléphone']].map(([v, label]) => (
+                <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--bg-secondary, #1e2a35)', border: '1px solid var(--border, #2d3f50)', borderRadius: 5, padding: '2px 8px', fontSize: '0.78rem', color: 'var(--text-secondary, #8e9baa)', cursor: 'default' }}>
+                  <code style={{ color: '#25d366', fontSize: '0.78rem' }}>{v}</code>
+                  <span>= {label}</span>
+                </span>
+              ))}
+            </div>
             {form.messages.map((msg, i) => (
               <div key={i} className="bc-msg-row">
                 <div className="bc-msg-index">{i + 1}</div>
@@ -567,9 +575,36 @@ export default function Broadcast({ socket, activeProfile }) {
             </div>
           )}
 
+          {/* ── Rapport synthèse ── */}
+          {(() => {
+            const targets = detail.targets || [];
+            const rSent = liveProgress ? liveProgress.done : targets.filter(t => t.status === 'sent').length;
+            const rFailed = targets.filter(t => t.status === 'failed').length;
+            const rPending = liveProgress
+              ? (total - liveProgress.done - rFailed)
+              : targets.filter(t => t.status === 'pending').length;
+            const rTotal = total || 1;
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+                {[
+                  { label: 'Envoyés', count: rSent, pct: Math.round((rSent / rTotal) * 100), color: '#25d366', icon: '✅' },
+                  { label: 'Échecs', count: rFailed, pct: Math.round((rFailed / rTotal) * 100), color: '#e74c3c', icon: '❌' },
+                  { label: 'En attente', count: rPending, pct: Math.round((rPending / rTotal) * 100), color: '#8e9baa', icon: '⏳' },
+                ].map(s => (
+                  <div key={s.label} style={{ background: 'var(--bg-secondary, #1e2a35)', borderRadius: 10, padding: '12px 14px', textAlign: 'center', border: `1px solid ${s.color}33` }}>
+                    <div style={{ fontSize: '1.4rem', marginBottom: 2 }}>{s.icon}</div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 700, color: s.color }}>{s.count}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary, #8e9baa)', marginTop: 1 }}>{s.label}</div>
+                    <div style={{ fontSize: '0.68rem', color: s.color, opacity: 0.8 }}>{s.pct}%</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           <div className="bc-progress-section">
             <div className="bc-progress-track"><div className="bc-progress-fill" style={{ width: `${displayPct}%` }} /></div>
-            <div className="bc-progress-label">{displayDone} / {total} envoyés ({displayPct}%)</div>
+            <div className="bc-progress-label">{displayDone} / {total} traités ({displayPct}%)</div>
           </div>
 
           {detail.delay_min_seconds != null && (
