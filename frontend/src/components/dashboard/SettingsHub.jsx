@@ -5,6 +5,7 @@ import Settings from './Settings';
 import AdminPanel from './AdminPanel';
 import FlagJournal from './FlagJournal';
 import QuickReplyManager from './QuickReplyManager';
+import TagManager from './TagManager';
 import './SettingsHub.css';
 
 const TABS = [
@@ -19,6 +20,10 @@ const TABS = [
   {
     key: 'templates', label: 'Templates',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 002 12a10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2z"/></svg>
+  },
+  {
+    key: 'tags', label: 'Tags',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
   },
   {
     key: 'journal', label: 'Journal',
@@ -69,6 +74,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
         )}
         {tab === 'faq' && <FAQManager />}
         {tab === 'templates' && <QuickReplyManager />}
+        {tab === 'tags' && <TagManager activeProfile={activeProfile} />}
         {tab === 'journal' && <FlagJournal />}
         {tab === 'account' && <Settings />}
         {tab === 'admin' && account?.role === 'admin' && <AdminPanel />}
