@@ -228,11 +228,13 @@ export default function Dashboard() {
   const handleNavClick = (key) => {
     setActivePanel(key);
     if (key === 'chat') setUnreadCount(0);
+    if (key === 'bot') setSettingsInitialTab('config');
+    if (key === 'settings') setSettingsInitialTab('account');
   };
 
   const goToSettings = (tab = 'config') => {
     setSettingsInitialTab(tab);
-    setActivePanel('settings');
+    setActivePanel(tab === 'config' ? 'bot' : 'settings');
     setShowMenu(false);
   };
 
@@ -261,12 +263,12 @@ export default function Dashboard() {
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     }] : []),
     {
-      key: 'tags', label: 'Tags',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
-    },
-    {
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
+    },
+    {
+      key: 'bot', label: 'Bot & WhatsApp',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.33C18.33 14.33 19 13.66 19 12.83C19 12 18.33 11.33 17.5 11.33C16.67 11.33 16 12 16 12.83C16 13.66 16.67 14.33 17.5 14.33M13 2.05V4.06C16.39 4.54 19 7.45 19 11C19 12.44 18.53 13.77 17.75 14.86L16.29 13.4C16.74 12.76 17 12 17 11.17C17 8.61 14.87 6.5 12.28 6.5H12V8.5L9 5.5L12 2.5V4.5H12.28C15.97 4.5 19 7.47 19 11.17C19 12.95 18.26 14.57 17.07 15.74L18.5 17.17C20.04 15.65 21 13.54 21 11.17C21 6.5 17.5 2.63 13 2.05M10 12.5C10 12.5 10 12.5 10 12.5C8.9 12.5 8 13.4 8 14.5C8 15.6 8.9 16.5 10 16.5C11.1 16.5 12 15.6 12 14.5C12 13.4 11.1 12.5 10 12.5M6.5 14.33C6.5 13.5 7.17 12.83 8 12.83C8.83 12.83 9.5 13.5 9.5 14.33C9.5 15.16 8.83 15.83 8 15.83C7.17 15.83 6.5 15.16 6.5 14.33M12 20C9.24 20 6.86 18.34 5.68 15.96L4.08 17.08C5.61 20.09 8.59 22 12 22C15.41 22 18.39 20.09 19.92 17.08L18.32 15.96C17.14 18.34 14.76 20 12 20Z"/></svg>
     },
     {
       key: 'settings', label: 'Paramètres',
@@ -336,17 +338,12 @@ export default function Dashboard() {
                       <div className="dropdown-flag-warn">⚠️ Solde de crédits épuisé</div>
                     )}
                     <div className="dropdown-divider" />
-                    <button className="dropdown-item" onClick={() => { handleNavClick('chat'); setShowMenu(false); }}>Discussions</button>
-                    {campaignsEnabled && <button className="dropdown-item" onClick={() => { handleNavClick('broadcast'); setShowMenu(false); }}>Campagnes</button>}
-                    <button className="dropdown-item" onClick={() => { handleNavClick('stats'); setShowMenu(false); }}>Statistiques</button>
-                    <button className="dropdown-item" onClick={() => goToSettings('config')}>Bot Config</button>
-                    <button className="dropdown-item" onClick={() => goToSettings('faq')}>FAQ</button>
-                    <button className="dropdown-item" onClick={() => goToSettings('account')}>Paramètres du compte</button>
+                    <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
                     {account?.role === 'admin' && (
                       <button className="dropdown-item" onClick={() => goToSettings('admin')}>Administration</button>
                     )}
                     <div className="dropdown-divider" />
-                    <button className="dropdown-item danger" onClick={logout}>Déconnexion du compte</button>
+                    <button className="dropdown-item danger" onClick={logout}>Déconnexion</button>
                   </div>
                 )}
               </div>
@@ -473,11 +470,6 @@ export default function Dashboard() {
               />
             )
           )}
-          {activePanel === 'tags' && (
-            noProfile
-              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
-              : <TagManager activeProfile={activeProfile} />
-          )}
           {activePanel === 'stats' && (
             noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
           )}
@@ -486,7 +478,7 @@ export default function Dashboard() {
               ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
               : <Broadcast socket={socket} activeProfile={activeProfile} />
           )}
-          {activePanel === 'settings' && (
+          {(activePanel === 'bot' || activePanel === 'settings') && (
             <SettingsHub
               waStatus={waStatus}
               onConnectWhatsApp={handleConnectWhatsApp}
