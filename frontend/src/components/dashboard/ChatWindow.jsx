@@ -205,6 +205,31 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const isSameDay = (a, b) =>
     format(new Date(a), 'yyyy-MM-dd') === format(new Date(b), 'yyyy-MM-dd');
 
+  const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+\.[^\s]+)/gi;
+
+  const renderText = (text) => {
+    const parts = text.split(URL_REGEX);
+    return parts.map((part, idx) => {
+      if (URL_REGEX.test(part)) {
+        URL_REGEX.lastIndex = 0;
+        const href = part.startsWith('http') ? part : 'https://' + part;
+        return (
+          <a
+            key={idx}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#53bdeb', textDecoration: 'underline', wordBreak: 'break-all' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
   if (!contact) {
     return (
       <div className="chat-empty">
@@ -286,7 +311,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
                         </span>
                         {msg.content.replace(/[\[\]]/g, '')}
                       </span>
-                    ) : msg.content}
+                    ) : renderText(msg.content)}
                   </span>
                   <span className="message-time">
                     {formatMsgTime(msg.created_at)}
