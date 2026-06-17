@@ -28,6 +28,20 @@ router.post('/logout', async (req, res) => {
   }
 });
 
+// GET /api/messages/contacts — ALL contacts in DB for this profile (for campaign picker)
+router.get('/contacts', profileMiddleware, async (req, res) => {
+  try {
+    const contacts = await prisma.contact.findMany({
+      where: { profile_id: req.profileId },
+      include: { tags: { include: { tag: true } } },
+      orderBy: [{ name: 'asc' }, { created_at: 'desc' }]
+    });
+    res.json(contacts);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du chargement des contacts' });
+  }
+});
+
 router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
     const contacts = await prisma.contact.findMany({
