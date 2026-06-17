@@ -292,7 +292,7 @@ export default function Dashboard() {
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <div className="sidebar-logo">
-              <span className="logo-icon">B</span>
+              <img src="/icons/icon-192.png" alt="Botora" className="logo-icon" />
               <span className="logo-text">Botora</span>
             </div>
             <div className="sidebar-actions">
