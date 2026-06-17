@@ -241,7 +241,7 @@ router.get('/campaigns', async (req, res) => {
 // POST /api/broadcast/campaigns
 router.post('/campaigns', async (req, res) => {
   try {
-    const { name, messages, contact_ids, tag_id, delay_min_seconds, delay_max_seconds, scheduled_at } = req.body;
+    const { name, messages, contact_ids, tag_id, select_all, delay_min_seconds, delay_max_seconds, scheduled_at } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Nom de campagne requis' });
     if (!Array.isArray(messages) || messages.length === 0)
       return res.status(400).json({ error: 'Au moins un message requis' });
@@ -274,6 +274,15 @@ router.post('/campaigns', async (req, res) => {
       resolvedContactIds = tagContacts.map(t => t.contact_id);
       if (resolvedContactIds.length === 0)
         return res.status(400).json({ error: 'Aucun contact associé à ce tag' });
+    } else if (select_all) {
+      // Select ALL contacts for this profile — avoids sending thousands of IDs over HTTP
+      const allContacts = await prisma.contact.findMany({
+        where: { profile_id: req.profileId },
+        select: { id: true }
+      });
+      resolvedContactIds = allContacts.map(c => c.id);
+      if (resolvedContactIds.length === 0)
+        return res.status(400).json({ error: 'Aucun contact trouvé pour ce profil' });
     } else {
       if (!Array.isArray(contact_ids) || contact_ids.length === 0)
         return res.status(400).json({ error: 'Sélectionnez au moins un contact ou un tag' });
