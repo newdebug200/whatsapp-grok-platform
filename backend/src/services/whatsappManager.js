@@ -639,7 +639,13 @@ class WhatsAppManager {
               }).catch(() => {});
               continue;
             }
-            waId = numId._serialized;
+            // If getNumberId returns a @lid (new WA format), prefer @c.us for sending
+            if (numId._serialized && numId._serialized.includes('@lid')) {
+              waId = rawPhone + '@c.us';
+              console.log(`[Campaign ${campaignId}] @lid détecté — utilisation de ${waId}`);
+            } else {
+              waId = numId._serialized;
+            }
           } catch (_) {
             // Fallback if getNumberId throws
             waId = (contact.wa_id && !contact.wa_id.includes('@lid'))
