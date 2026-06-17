@@ -201,8 +201,14 @@ export default function Broadcast({ socket, activeProfile }) {
         delay_max_seconds: form.delayMax,
         ...(form.scheduled && form.scheduledAt && { scheduled_at: new Date(form.scheduledAt).toISOString() })
       };
-      if (targetMode === 'tag') payload.tag_id = form.tagId;
-      else payload.contact_ids = form.contactIds;
+      if (targetMode === 'tag') {
+        payload.tag_id = form.tagId;
+      } else if (selectAll) {
+        // Send a flag instead of thousands of IDs to avoid PayloadTooLarge errors
+        payload.select_all = true;
+      } else {
+        payload.contact_ids = form.contactIds;
+      }
 
       const res = await axios.post(`${API_URL}/broadcast/campaigns`, payload);
       const total = targetMode === 'tag'
