@@ -657,7 +657,13 @@ class WhatsAppManager {
             // Pick one random variant — each contact gets exactly one message
             const variantIdx = Math.floor(Math.random() * campaign.messages.length);
             const msg = campaign.messages[variantIdx];
-            const content = msg.content.replace(/\{\{name\}\}/gi, contact.name || 'cher(e) client(e)');
+            const contactFirstName = contact.name ? contact.name.split(/\s+/)[0] : '';
+            const content = msg.content
+              .replace(/\{\{prenom\}\}/gi, contactFirstName || contact.name || 'cher(e) client(e)')
+              .replace(/\{\{name\}\}/gi, contact.name || 'cher(e) client(e)')
+              .replace(/\{\{nom\}\}/gi, contact.name || 'cher(e) client(e)')
+              .replace(/\{\{telephone\}\}/gi, contact.phone_number || '')
+              .replace(/\{\{tel\}\}/gi, contact.phone_number || '');
 
             console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
             this.campaignSendingWaIds.add(waId);
