@@ -86,25 +86,29 @@ class MessageHandler {
 
       waManager.addToCache(profileId, dbContact.id, 'received', mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || ''));
 
-      // ── Check global IA feature flag ──
-      const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
-      if (iaGlobalCfg && iaGlobalCfg.value === 'false') {
-        console.log(`[PlatformConfig] IA globalement désactivée — aucune réponse envoyée.`);
-        return;
-      }
-
-      // ── Check account is not blocked ──
+      // ── Fetch account role + blocked status ──
       const profile = await prisma.whatsAppProfile.findUnique({
         where: { id: profileId },
         select: { account_id: true }
       });
+      let isAdminAccount = false;
       if (profile) {
         const account = await prisma.account.findUnique({
           where: { id: profile.account_id },
-          select: { is_blocked: true }
+          select: { is_blocked: true, role: true }
         });
-        if (account?.is_blocked) {
+        isAdminAccount = account?.role === 'admin';
+        if (!isAdminAccount && account?.is_blocked) {
           console.log(`[Block] Compte ${profile.account_id} bloqué — traitement du message annulé.`);
+          return;
+        }
+      }
+
+      // ── Check global IA feature flag (admin exempt) ──
+      if (!isAdminAccount) {
+        const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
+        if (iaGlobalCfg && iaGlobalCfg.value === 'false') {
+          console.log(`[PlatformConfig] IA globalement désactivée — aucune réponse envoyée.`);
           return;
         }
       }
@@ -297,7 +301,7 @@ class MessageHandler {
       return;
     }
 
-    // ── Credit check ──
+    // ── Credit check (admin exempt) ──
     let accountId = null;
     let currentBalance = null;
     let creditsEnabled = false;
@@ -306,7 +310,7 @@ class MessageHandler {
       const creditsEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'credits_enabled' } });
       creditsEnabled = creditsEnabledCfg?.value === 'true';
 
-      if (creditsEnabled) {
+      if (creditsEnabled && !isAdminAccount) {
         const profileRow = await prisma.whatsAppProfile.findUnique({
           where: { id: profileId },
           select: { account_id: true }
@@ -330,6 +334,13 @@ class MessageHandler {
             return;
           }
         }
+      } else if (creditsEnabled && isAdminAccount) {
+        // Admin: fetch account_id for credit deduction tracking only (no balance check)
+        const profileRow = await prisma.whatsAppProfile.findUnique({
+          where: { id: profileId },
+          select: { account_id: true }
+        });
+        accountId = profileRow?.account_id;
       }
     } catch (creditCheckErr) {
       console.error('[Credits] Erreur vérification solde:', creditCheckErr.message);
