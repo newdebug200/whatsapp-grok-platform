@@ -146,10 +146,23 @@ class WhatsAppManager {
       );
       console.log(`[WA] Import de ${myContacts.length} contact(s) depuis le répertoire — profil ${profileId}`);
       let imported = 0;
+      let skippedInvalid = 0;
       for (const wContact of myContacts) {
         try {
-          const phoneNumber = '+' + wContact.id.user;
-          const waId = wContact.id._serialized || (wContact.id.user + '@c.us');
+          // Use wContact.number if available (real E.164 phone), else fall back to id.user
+          const rawUser = (wContact.number && String(wContact.number).length >= 7)
+            ? String(wContact.number)
+            : wContact.id.user;
+
+          // E.164 validation: must be 7–15 digits (ITU standard max = 15)
+          const digits = rawUser.replace(/\D/g, '');
+          if (digits.length < 7 || digits.length > 15) {
+            skippedInvalid++;
+            continue;
+          }
+
+          const phoneNumber = rawUser.startsWith('+') ? rawUser : '+' + rawUser;
+          const waId = wContact.id._serialized || (digits + '@c.us');
           const name = wContact.name || wContact.pushname || null;
           await this.prisma.contact.upsert({
             where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } },
@@ -159,7 +172,7 @@ class WhatsAppManager {
           imported++;
         } catch (_) {}
       }
-      console.log(`[WA] ${imported} contact(s) importés — profil ${profileId}`);
+      console.log(`[WA] ${imported} contact(s) importés — profil ${profileId}${skippedInvalid > 0 ? ` (${skippedInvalid} ignorés car format invalide)` : ''}`);
     } catch (err) {
       console.warn('[WA] Import contacts impossible:', err.message);
     }
@@ -639,10 +652,22 @@ class WhatsAppManager {
               }).catch(() => {});
               continue;
             }
-            // If getNumberId returns a @lid (new WA format), prefer @c.us for sending
+            // If getNumberId returns a @lid (new WA format), resolve the real phone number
             if (numId._serialized && numId._serialized.includes('@lid')) {
-              waId = rawPhone + '@c.us';
-              console.log(`[Campaign ${campaignId}] @lid détecté — utilisation de ${waId}`);
+              let resolvedPhone = rawPhone;
+              try {
+                // Try to get the actual phone number from the @lid contact object
+                const realContact = await waClient.getContactById(numId._serialized);
+                if (realContact?.number && String(realContact.number).length >= 7) {
+                  resolvedPhone = String(realContact.number);
+                  console.log(`[Campaign ${campaignId}] @lid résolu → +${resolvedPhone}`);
+                } else {
+                  console.log(`[Campaign ${campaignId}] @lid → fallback numéro stocké ${rawPhone}`);
+                }
+              } catch (_) {
+                console.log(`[Campaign ${campaignId}] @lid → fallback numéro stocké ${rawPhone}`);
+              }
+              waId = resolvedPhone + '@c.us';
             } else {
               waId = numId._serialized;
             }
