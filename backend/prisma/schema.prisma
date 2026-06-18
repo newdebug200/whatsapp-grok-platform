@@ -63,6 +63,10 @@ model BotConfig {
   away_message           String  @default("")
   away_once_per_session  Boolean @default(true)
 
+  personality            String  @default("professional")
+  system_prompt_override String?
+  sentiment_alert        Boolean @default(true)
+
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
 
@@ -76,14 +80,27 @@ model Contact {
   ia_paused         Boolean   @default(false)
   sensitive_flagged Boolean   @default(false)
   archived          Boolean   @default(false)
+  notes             String?
+  funnel_stage      String    @default("prospect")
+  unread_count      Int       @default(0)
 
   messages          Message[]
   profile           WhatsAppProfile  @relation(fields: [profile_id], references: [id])
   campaignTargets   CampaignTarget[]
   sensitiveFlagLogs SensitiveFlag[]
   tags              ContactTag[]
+  memory            ContactMemory?
 
   @@unique([profile_id, phone_number])
+}
+
+model ContactMemory {
+  id         Int      @id @default(autoincrement())
+  contact_id Int      @unique
+  summary    String
+  updated_at DateTime @updatedAt
+
+  contact Contact @relation(fields: [contact_id], references: [id], onDelete: Cascade)
 }
 
 model Tag {
@@ -117,6 +134,8 @@ model Message {
   direction  String
   type       String
   created_at DateTime @default(now())
+  unread     Boolean  @default(true)
+  sentiment  String?
 
   contact Contact @relation(fields: [contact_id], references: [id])
 }
@@ -169,6 +188,8 @@ model CampaignMessage {
   content             String
   order_index         Int    @default(0)
   delay_after_seconds Int    @default(0)
+  media_url           String?
+  media_type          String?
 
   campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
 }
