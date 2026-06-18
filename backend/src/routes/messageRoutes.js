@@ -134,6 +134,37 @@ router.get('/search', profileMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/messages/conversation/:contactId — messages for a contact (paginated)
+router.get('/conversation/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const skip = (page - 1) * limit;
+
+    const [messages, total] = await Promise.all([
+      prisma.message.findMany({
+        where: { contact_id: contact.id },
+        orderBy: { created_at: 'asc' },
+        skip,
+        take: limit
+      }),
+      prisma.message.count({ where: { contact_id: contact.id } })
+    ]);
+
+    res.json({
+      messages,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du chargement des messages' });
+  }
+});
+
 // GET /api/messages/:contactId — messages for a contact
 router.get('/:contactId', profileMiddleware, async (req, res) => {
   try {
@@ -155,8 +186,9 @@ router.get('/:contactId', profileMiddleware, async (req, res) => {
 // POST /api/messages/send
 router.post('/send', profileMiddleware, async (req, res) => {
   try {
-    const { contactId, message } = req.body;
-    if (!contactId || !message) return res.status(400).json({ error: 'contactId et message requis' });
+    const { contactId, content, message } = req.body;
+    const text = content || message;
+    if (!contactId || !text) return res.status(400).json({ error: 'contactId et message requis' });
 
     const contact = await prisma.contact.findFirst({
       where: { id: parseInt(contactId), profile_id: req.profileId }

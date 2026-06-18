@@ -221,7 +221,15 @@ export default function Dashboard() {
     }
   };
 
-  const handleSelectContact = (contact) => { setSelectedContact(contact); setMobileView('chat'); };
+  const handleSelectContact = (contact) => {
+    setSelectedContact(contact);
+    setMobileView('chat');
+    if (contact.unread_count > 0) {
+      axios.post(`${API_URL}/messages/conversations/read/${contact.id}`).catch(() => {});
+      setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, unread_count: 0 } : c));
+      setUnreadCount(prev => Math.max(0, prev - (contact.unread_count || 0)));
+    }
+  };
   const handleBack = () => { setSelectedContact(null); setMobileView('list'); };
   const handleContactsUpdate = (updated) => setContacts(updated);
 
