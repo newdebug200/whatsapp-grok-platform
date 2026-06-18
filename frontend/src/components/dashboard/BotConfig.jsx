@@ -49,8 +49,17 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     close_time: '18:00',
     timezone: BROWSER_TZ,
     away_message: '',
-    away_once_per_session: true
+    away_once_per_session: true,
+    personality: 'professional',
+    sentiment_alert: true
   });
+
+  const PERSONALITIES = [
+    { value: 'professional', label: '💼 Professionnel', desc: 'Ton formel, clair et structuré' },
+    { value: 'friendly',     label: '😊 Amical',        desc: 'Chaleureux, proche, naturel' },
+    { value: 'commercial',   label: '🚀 Commercial agressif', desc: 'Orienté conversion et vente' },
+    { value: 'support',      label: '🛠️ Support technique', desc: 'Patient, précis, étape par étape' },
+  ];
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -274,12 +283,50 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             placeholder={`Décrivez comment le bot doit se comporter.\n\nExemple :\n- Répondre en français uniquement\n- Être chaleureux et professionnel`} rows={6} />
         </div>
 
+        <div className="field-group" style={{ marginBottom: 16 }}>
+          <label>Personnalité du bot</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+            {PERSONALITIES.map(p => (
+              <label key={p.value} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                border: `1.5px solid ${config.personality === p.value ? 'var(--accent, #25d366)' : 'var(--border, rgba(255,255,255,0.1))'}`,
+                background: config.personality === p.value ? 'rgba(37,211,102,0.08)' : 'var(--bg-secondary, rgba(255,255,255,0.03))',
+                transition: 'all 0.15s'
+              }}>
+                <input
+                  type="radio"
+                  name="personality"
+                  value={p.value}
+                  checked={config.personality === p.value}
+                  onChange={() => setConfig(c => ({ ...c, personality: p.value }))}
+                  style={{ accentColor: '#25d366', width: 16, height: 16, flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary, #e8eaed)' }}>{p.label}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #8e9baa)' }}>{p.desc}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="toggle-row">
           <div>
             <div className="toggle-label">Intelligence Artificielle</div>
             <div className="toggle-desc">Le bot répond automatiquement grâce à l'IA</div>
           </div>
           <button className={`toggle-btn ${config.ia_enabled ? 'on' : 'off'}`} onClick={() => setConfig({ ...config, ia_enabled: !config.ia_enabled })}>
+            <span className="toggle-knob" />
+          </button>
+        </div>
+
+        <div className="toggle-row" style={{ marginTop: 12 }}>
+          <div>
+            <div className="toggle-label">🔔 Alertes de sentiment</div>
+            <div className="toggle-desc">Notifie quand un client semble en colère ou insatisfait</div>
+          </div>
+          <button className={`toggle-btn ${config.sentiment_alert ? 'on' : 'off'}`} onClick={() => setConfig(c => ({ ...c, sentiment_alert: !c.sentiment_alert }))}>
             <span className="toggle-knob" />
           </button>
         </div>
