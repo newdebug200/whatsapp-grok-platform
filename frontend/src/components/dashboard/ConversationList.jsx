@@ -10,12 +10,17 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const [tags, setTags] = useState([]);
   const [activeTagId, setActiveTagId] = useState(null);
   const [showOlderConversations, setShowOlderConversations] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
-  const [archivedContacts, setArchivedContacts] = useState([]);
-  const [loadingArchived, setLoadingArchived] = useState(false);
   const [hoveredContact, setHoveredContact] = useState(null);
-  const [contextMenu, setContextMenu] = useState(null); // { contactId, x, y }
+  const [contextMenu, setContextMenu] = useState(null);
   const contextMenuRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('all');
+  const activeTabRef = useRef('all');
+  const [unreadBadge, setUnreadBadge] = useState(0);
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeout = useRef(null);
+
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   const loadTags = useCallback(async () => {
     try {
@@ -25,6 +30,29 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   }, []);
 
   useEffect(() => { loadTags(); }, [loadTags]);
+
+  const loadConversations = useCallback(async (tabOverride) => {
+    const tab = tabOverride ?? activeTabRef.current;
+    try {
+      const params = tab !== 'all' ? { filter: tab } : {};
+      const res = await axios.get(`${API_URL}/messages/conversations`, { params });
+      const sorted = res.data.sort((a, b) => {
+        const da = a.messages[0]?.created_at || a.created_at;
+        const db = b.messages[0]?.created_at || b.created_at;
+        return new Date(db) - new Date(da);
+      });
+      onContactsUpdate(sorted);
+      if (tab === 'all') {
+        setUnreadBadge(sorted.filter(c => c.unread_count > 0).length);
+      }
+    } catch (err) {
+      console.error('Erreur chargement conversations:', err);
+    }
+  }, [onContactsUpdate]);
+
+  useEffect(() => {
+    loadConversations(activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     if (socket) {
@@ -36,7 +64,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         socket.off('sync-complete', refresh);
       };
     }
-  }, [socket]);
+  }, [socket, loadConversations]);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -48,46 +76,14 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     return () => document.removeEventListener('mousedown', handleClick);
   }, [contextMenu]);
 
-  const loadConversations = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/messages/conversations`);
-      const sorted = res.data.sort((a, b) => {
-        const da = a.messages[0]?.created_at || a.created_at;
-        const db = b.messages[0]?.created_at || b.created_at;
-        return new Date(db) - new Date(da);
-      });
-      onContactsUpdate(sorted);
-    } catch (err) {
-      console.error('Erreur chargement conversations:', err);
-    }
-  };
-
-  const loadArchivedConversations = async () => {
-    setLoadingArchived(true);
-    try {
-      const res = await axios.get(`${API_URL}/messages/conversations?archived=true`);
-      setArchivedContacts(res.data);
-    } catch (err) {
-      console.error('Erreur chargement archives:', err);
-    } finally {
-      setLoadingArchived(false);
-    }
-  };
-
-  const handleToggleArchived = () => {
-    const next = !showArchived;
-    setShowArchived(next);
-    if (next) loadArchivedConversations();
-  };
-
   const handleArchive = async (contact, e) => {
     e?.stopPropagation();
     setContextMenu(null);
     try {
       await axios.post(`${API_URL}/messages/conversations/archive/${contact.id}`);
       onContactsUpdate(contacts.filter(c => c.id !== contact.id));
-      if (showArchived) setArchivedContacts(prev => [{ ...contact, archived: true }, ...prev]);
       if (selectedContact?.id === contact.id) onSelectContact(null);
+      loadConversations();
     } catch (err) {
       console.error('Erreur archivage:', err);
     }
@@ -98,10 +94,21 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     setContextMenu(null);
     try {
       await axios.post(`${API_URL}/messages/conversations/unarchive/${contact.id}`);
-      setArchivedContacts(prev => prev.filter(c => c.id !== contact.id));
-      await loadConversations();
+      loadConversations();
     } catch (err) {
       console.error('Erreur désarchivage:', err);
+    }
+  };
+
+  const handleFavoriteToggle = async (contact, e) => {
+    e?.stopPropagation();
+    setContextMenu(null);
+    try {
+      await axios.post(`${API_URL}/messages/favorites/${contact.id}`);
+      loadConversations();
+      setUnreadBadge(prev => prev);
+    } catch (err) {
+      console.error('Erreur favori:', err);
     }
   };
 
@@ -109,10 +116,6 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     e.preventDefault();
     setContextMenu({ contactId: contact.id, contact, x: e.clientX, y: e.clientY });
   };
-
-  const [searchResults, setSearchResults] = useState(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchTimeout = useRef(null);
 
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -163,7 +166,9 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[id % avatarColors.length];
 
-  const renderContact = (contact, isArchived = false) => {
+  const isArchivedTab = activeTab === 'archived';
+
+  const renderContact = (contact) => {
     const lastMsg = contact.messages[0];
     const isSelected = selectedContact?.id === contact.id;
     const isPaused = contact.ia_paused;
@@ -184,9 +189,18 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         </div>
         <div className="contact-info">
           <div className="contact-row">
-            <span className="contact-name">{getDisplayName(contact)}</span>
+            <span className="contact-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {contact.is_favorite && (
+                <svg viewBox="0 0 24 24" fill="#f6c90e" width="11" height="11" style={{ flexShrink: 0 }}>
+                  <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                </svg>
+              )}
+              {getDisplayName(contact)}
+            </span>
             <div className="contact-row-right">
-              {!isArchived && (
+              {isArchivedTab ? (
+                <span className="contact-mode-badge" title="Archivé" style={{ opacity: 0.6, fontSize: '0.9em' }}>📁</span>
+              ) : (
                 isPaused && contact.sensitive_flagged ? (
                   <span className="contact-mode-badge flagged" title="En attente humain — sujet sensible détecté">🚨</span>
                 ) : (
@@ -195,11 +209,8 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                   </span>
                 )
               )}
-              {isArchived && (
-                <span className="contact-mode-badge" title="Archivé" style={{ opacity: 0.6, fontSize: '0.9em' }}>📁</span>
-              )}
               {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
-              {!isArchived && contact.unread_count > 0 && (
+              {!isArchivedTab && contact.unread_count > 0 && (
                 <span style={{
                   minWidth: 18, height: 18, borderRadius: 9, background: '#25d366',
                   color: '#fff', fontSize: '0.72rem', fontWeight: 700,
@@ -246,8 +257,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
           </div>
         </div>
 
-        {/* Quick archive button on hover */}
-        {isHovered && !isArchived && (
+        {isHovered && !isArchivedTab && (
           <button
             className="contact-archive-btn"
             onClick={(e) => handleArchive(contact, e)}
@@ -258,7 +268,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             </svg>
           </button>
         )}
-        {isHovered && isArchived && (
+        {isHovered && isArchivedTab && (
           <button
             className="contact-archive-btn"
             onClick={(e) => handleUnarchive(contact, e)}
@@ -274,7 +284,21 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     );
   };
 
-  const hasNoResults = filtered.length === 0 && !showArchived;
+  const TABS = [
+    { id: 'all', label: 'Toutes' },
+    { id: 'unread', label: 'Non lues', badge: unreadBadge },
+    { id: 'favorites', label: 'Favoris' },
+    { id: 'groups', label: 'Groupes' },
+    { id: 'archived', label: 'Archivées' },
+  ];
+
+  const hasNoResults = filtered.length === 0;
+
+  const emptyLabel = activeTab === 'unread' ? 'Aucun message non lu'
+    : activeTab === 'favorites' ? 'Aucun favori — clic droit sur une discussion pour en ajouter'
+    : activeTab === 'groups' ? 'Aucun groupe'
+    : activeTab === 'archived' ? 'Aucune discussion archivée'
+    : search || activeTagId ? 'Aucun résultat' : 'Aucune conversation';
 
   return (
     <div className="conversation-list">
@@ -302,6 +326,52 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         </div>
       </div>
 
+      {/* Tab bar — style WhatsApp Web */}
+      <div style={{
+        display: 'flex',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--bg-primary, #111b21)',
+        overflowX: 'auto',
+        scrollbarWidth: 'none',
+        flexShrink: 0,
+      }}>
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: '1 1 0',
+              minWidth: 52,
+              padding: '9px 4px',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === tab.id ? '2px solid #25d366' : '2px solid transparent',
+              color: activeTab === tab.id ? '#25d366' : 'var(--text-secondary, #8e9baa)',
+              fontSize: '0.73rem',
+              fontWeight: activeTab === tab.id ? 600 : 400,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 3,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {tab.label}
+            {tab.badge > 0 && (
+              <span style={{
+                background: '#25d366', color: '#fff',
+                borderRadius: 999, fontSize: '0.65rem', fontWeight: 700,
+                padding: '0 4px', minWidth: 14, textAlign: 'center', lineHeight: '1.5',
+              }}>
+                {tab.badge > 99 ? '99+' : tab.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {tags.length > 0 && (
         <div className="tag-filter-bar">
           <button
@@ -327,51 +397,9 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         </div>
       )}
 
-      {/* Archive chevron — juste sous la recherche */}
-      <button
-        onClick={handleToggleArchived}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          width: '100%', padding: '6px 14px',
-          background: 'none', border: 'none',
-          borderBottom: showArchived ? 'none' : '1px solid var(--border, rgba(255,255,255,0.06))',
-          color: showArchived ? 'var(--accent, #25d366)' : 'var(--text-secondary, #8e9baa)',
-          fontSize: '0.78rem', fontWeight: 500, cursor: 'pointer',
-          textAlign: 'left', transition: 'color 0.15s',
-        }}
-      >
-        <svg
-          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-          width="13" height="13"
-          style={{ transition: 'transform 0.2s', transform: showArchived ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }}
-        >
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-        Archivées {showArchived && archivedContacts.length > 0 ? `(${archivedContacts.length})` : ''}
-      </button>
-
-      {/* Contacts archivés — directement sous le chevron, hors du scroll principal */}
-      {showArchived && (
-        <div style={{
-          borderBottom: '1px solid var(--border, rgba(255,255,255,0.06))',
-          maxHeight: 240, overflowY: 'auto',
-          background: 'var(--bg-secondary, rgba(0,0,0,0.15))',
-        }}>
-          {loadingArchived ? (
-            <div className="empty-list" style={{ fontSize: '0.82rem', padding: '12px 14px' }}>Chargement…</div>
-          ) : archivedContacts.length === 0 ? (
-            <div className="empty-list" style={{ fontSize: '0.82rem', padding: '12px 14px' }}>Aucune discussion archivée</div>
-          ) : (
-            archivedContacts.map(contact => renderContact(contact, true))
-          )}
-        </div>
-      )}
-
       <div className="contacts-scroll">
         {hasNoResults ? (
-          <div className="empty-list">
-            {search || activeTagId ? 'Aucun résultat' : 'Aucune conversation'}
-          </div>
+          <div className="empty-list">{emptyLabel}</div>
         ) : (
           <>
             {recentFiltered.length === 0 && !showOlderConversations && olderFiltered.length > 0 && (
@@ -404,16 +432,21 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             )}
           </>
         )}
-
       </div>
 
-      {/* Context menu (right-click) */}
+      {/* Context menu (clic droit) */}
       {contextMenu && (
         <div
           ref={contextMenuRef}
           className="conv-context-menu"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
+          <button onClick={(e) => handleFavoriteToggle(contextMenu.contact, e)}>
+            <svg viewBox="0 0 24 24" fill={contextMenu.contact.is_favorite ? '#f6c90e' : 'currentColor'} width="14" height="14">
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+            </svg>
+            {contextMenu.contact.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          </button>
           {!contextMenu.contact.archived ? (
             <button onClick={(e) => handleArchive(contextMenu.contact, e)}>
               <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
