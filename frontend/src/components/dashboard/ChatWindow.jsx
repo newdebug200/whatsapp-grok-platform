@@ -33,6 +33,11 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [hoveredMsg, setHoveredMsg] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
   const [deletingMsg, setDeletingMsg] = useState(null);
+  const [showNotes, setShowNotes] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [notesDraft, setNotesDraft] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
 
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
@@ -45,10 +50,34 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     if (contact) {
       loadMessages(contact.id);
       setIaPaused(contact.ia_paused || false);
+      loadNotes(contact.id);
+      setShowNotes(false);
     } else {
       setMessages([]);
+      setNotes('');
+      setNotesDraft('');
     }
   }, [contact]);
+
+  const loadNotes = async (contactId) => {
+    try {
+      const res = await axios.get(`${API_URL}/messages/notes/${contactId}`);
+      setNotes(res.data.notes || '');
+      setNotesDraft(res.data.notes || '');
+    } catch {}
+  };
+
+  const handleSaveNotes = async () => {
+    if (!contact) return;
+    setSavingNotes(true);
+    try {
+      await axios.put(`${API_URL}/messages/notes/${contact.id}`, { notes: notesDraft });
+      setNotes(notesDraft);
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
+    } catch {}
+    finally { setSavingNotes(false); }
+  };
 
   useEffect(() => {
     if (socket && contact) {
@@ -300,12 +329,60 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
           )}
         </button>
 
+        <button
+          className={`ia-mode-btn ${showNotes ? 'human' : ''}`}
+          onClick={() => setShowNotes(v => !v)}
+          title="Notes internes (jamais envoyées au client)"
+          style={{ fontSize: '0.8rem', gap: 4 }}
+        >
+          <span style={{ fontSize: '1rem' }}>📝</span>
+          <span className="ia-mode-label" style={{ fontSize: '0.78rem' }}>
+            Notes{notes ? ' ●' : ''}
+          </span>
+        </button>
+
         <button className="close-chat-btn" onClick={onBack} title="Fermer (Échap)">
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
           </svg>
         </button>
       </div>
+
+      {showNotes && (
+        <div style={{
+          background: '#1a2a1e', borderBottom: '1px solid #2d4a35',
+          padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8
+        }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#f6c90e', display: 'flex', alignItems: 'center', gap: 6 }}>
+            📝 Notes internes — <span style={{ fontWeight: 400, color: '#8e9baa' }}>jamais envoyées au client</span>
+          </div>
+          <textarea
+            value={notesDraft}
+            onChange={e => setNotesDraft(e.target.value)}
+            placeholder="Ex : VIP, Rappeler le 15 juin, Cliente difficile…"
+            rows={3}
+            style={{
+              width: '100%', background: '#111b21', border: '1px solid #2d4a35',
+              borderRadius: 8, color: '#e8eaed', fontSize: '0.85rem',
+              padding: '8px 10px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box'
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={handleSaveNotes}
+              disabled={savingNotes || notesDraft === notes}
+              style={{
+                padding: '5px 16px', borderRadius: 8, border: 'none',
+                background: notesDraft !== notes ? '#25d366' : '#2d4a35',
+                color: '#fff', fontWeight: 600, fontSize: '0.82rem',
+                cursor: notesDraft !== notes ? 'pointer' : 'default', opacity: savingNotes ? 0.6 : 1
+              }}
+            >
+              {savingNotes ? 'Sauvegarde…' : notesSaved ? '✓ Sauvegardé' : 'Sauvegarder'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="chat-messages" ref={containerRef} onScroll={handleScroll}>
         {loading ? (
