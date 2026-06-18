@@ -16,8 +16,28 @@ echo.
 
 REM ── Sauvegarde du répertoire racine ──
 set "ROOT_DIR=%~dp0"
-REM Supprimer le slash final
 if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
+
+REM ══════════════════════════════════════════════════════════════════════════
+REM  MISE À JOUR AUTOMATIQUE DU CODE
+REM ══════════════════════════════════════════════════════════════════════════
+
+where git >nul 2>&1
+if %errorlevel% equ 0 (
+    echo  Verification des mises a jour...
+    cd /d "%ROOT_DIR%"
+    git pull origin work --no-edit >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo  [OK] Code a jour ^(branche work^).
+    ) else (
+        echo  [INFO] Pas de mise a jour ou pas de connexion - on continue.
+    )
+    echo.
+)
+
+REM ══════════════════════════════════════════════════════════════════════════
+REM  VÉRIFICATIONS PRÉALABLES
+REM ══════════════════════════════════════════════════════════════════════════
 
 REM ── Vérification Node.js ──
 where node >nul 2>&1
@@ -54,7 +74,7 @@ if not exist "%ROOT_DIR%\backend\package.json" (
 echo  [OK] Dossier du projet detecte.
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  CREATION DES FICHIERS .env SI ABSENTS
+REM  CRÉATION DES FICHIERS .env SI ABSENTS
 REM ══════════════════════════════════════════════════════════════════════════
 
 if not exist "%ROOT_DIR%\backend\.env" (
@@ -73,7 +93,6 @@ if not exist "%ROOT_DIR%\backend\.env" (
         echo  │  Editez backend\.env puis relancez ce script.          │
         echo  └─────────────────────────────────────────────────────────┘
         echo.
-        REM Ouvrir le fichier .env dans le bloc-notes
         start notepad "%ROOT_DIR%\backend\.env"
         echo  Le fichier backend\.env a ete ouvert dans le Bloc-notes.
         echo  Remplissez GROK_API_KEY et JWT_SECRET, sauvegardez, puis...
@@ -102,13 +121,13 @@ echo  [OK] Fichiers .env prets.
 echo.
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  INSTALLATION DES DEPENDANCES
+REM  INSTALLATION DES DÉPENDANCES BACKEND
 REM ══════════════════════════════════════════════════════════════════════════
 
 echo  [1/4] Installation des dependances backend...
 echo        (peut prendre quelques minutes la premiere fois)
 cd /d "%ROOT_DIR%\backend"
-call npm install
+call npm install --prefer-offline
 if %errorlevel% neq 0 (
     echo.
     echo  [ERREUR] npm install backend a echoue.
@@ -120,24 +139,48 @@ if %errorlevel% neq 0 (
 echo  [OK] Dependances backend OK.
 echo.
 
-REM ── Prisma : générer le client ──
+REM ══════════════════════════════════════════════════════════════════════════
+REM  BASE DE DONNÉES — MIGRATION ET INITIALISATION
+REM ══════════════════════════════════════════════════════════════════════════
+
 echo  [2/4] Configuration de la base de donnees...
+
+REM ── Génération du client Prisma ──
 call npx prisma generate
-echo.
-
-REM ── Appliquer les migrations ──
-call npx prisma migrate deploy >nul 2>&1
 if %errorlevel% neq 0 (
-    REM Fallback : db push si pas de dossier migrations
-    call npx prisma db push --accept-data-loss >nul 2>&1
+    echo  [ERREUR] prisma generate a echoue.
+    pause
+    exit /b 1
 )
-echo  [OK] Base de donnees configuree ^(SQLite dev.db^).
+
+REM ── Si la base de données n'existe pas encore : créer avec prisma db push ──
+if not exist "%ROOT_DIR%\backend\prisma\dev.db" (
+    echo  Premiere installation : creation de la base de donnees...
+    call npx prisma db push --accept-data-loss
+    echo  [OK] Base de donnees creee.
+) else (
+    REM ── Base existante : migration safe pour ajouter les nouvelles colonnes ──
+    echo  Mise a jour du schema de la base de donnees...
+    node "%ROOT_DIR%\backend\migrate-safe.js"
+    echo  [OK] Schema mis a jour.
+)
+
+REM ── Créer le dossier uploads pour les médias (images, audio, vidéo) ──
+if not exist "%ROOT_DIR%\backend\uploads" (
+    mkdir "%ROOT_DIR%\backend\uploads"
+    echo  [OK] Dossier media cree ^(backend\uploads\^).
+)
+
+echo  [OK] Base de donnees et stockage media prets.
 echo.
 
-REM ── Dépendances frontend ──
+REM ══════════════════════════════════════════════════════════════════════════
+REM  INSTALLATION DES DÉPENDANCES FRONTEND
+REM ══════════════════════════════════════════════════════════════════════════
+
 echo  [3/4] Installation des dependances frontend...
 cd /d "%ROOT_DIR%\frontend"
-call npm install
+call npm install --prefer-offline
 if %errorlevel% neq 0 (
     echo.
     echo  [ERREUR] npm install frontend a echoue.
