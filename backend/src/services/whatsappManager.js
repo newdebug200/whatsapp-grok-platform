@@ -207,8 +207,8 @@ class WhatsAppManager {
 
           const dbContact = await this.prisma.contact.upsert({
             where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } },
-            create: { profile_id: profileId, phone_number: phoneNumber, wa_id: waId, name: contactName },
-            update: { wa_id: waId, ...(contactName ? { name: contactName } : {}) }
+            create: { profile_id: profileId, phone_number: phoneNumber, wa_id: waId, name: contactName, archived: chat.isArchived || false },
+            update: { wa_id: waId, ...(contactName ? { name: contactName } : {}), ...(chat.isArchived ? { archived: true } : {}) }
           });
 
           const messages = await chat.fetchMessages({ limit: 50 });
@@ -550,6 +550,14 @@ class WhatsAppManager {
       profileId: entry.profileId, phoneNumber: entry.phoneNumber,
       status: entry.status, isConnected: entry.status === 'connected'
     }));
+  }
+
+  // ─── Get raw client ───────────────────────────────────────────────────────
+
+  getClient(profileId) {
+    const found = this._getEntryByProfileId(profileId);
+    if (!found || found.entry.status !== 'connected') return null;
+    return found.entry.client;
   }
 
   // ─── Send message ─────────────────────────────────────────────────────────
