@@ -1,4 +1,6 @@
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const PERSONALITY_PROMPTS = {
   professional: "Tu communiques de manière professionnelle, formelle et courtoise. Tu utilises un langage soutenu.",
@@ -140,6 +142,24 @@ class MessageHandler {
 
       const messageContent = mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || '');
 
+      // ── Download media if present ──
+      let mediaPath = null;
+      if (message.hasMedia) {
+        try {
+          const media = await message.downloadMedia();
+          if (media?.data) {
+            const mimeType = media.mimetype || 'application/octet-stream';
+            const extRaw = mimeType.split('/')[1]?.split(';')[0] || 'bin';
+            const safeExt = extRaw.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) || 'bin';
+            const filename = `${profileId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${safeExt}`;
+            const uploadsDir = path.join(__dirname, '../../uploads');
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(media.data, 'base64'));
+            mediaPath = filename;
+          }
+        } catch (_) {}
+      }
+
       // ── Sentiment analysis (async, non-blocking) ──
       const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
       let sentimentResult = null;
@@ -156,7 +176,8 @@ class MessageHandler {
           type: message.type || 'text',
           created_at: new Date(),
           unread: true,
-          sentiment: sentimentResult
+          sentiment: sentimentResult,
+          media_path: mediaPath
         }
       }).catch(() => {});
 
