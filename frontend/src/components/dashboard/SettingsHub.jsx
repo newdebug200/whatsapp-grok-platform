@@ -6,6 +6,7 @@ import AdminPanel from './AdminPanel';
 import FlagJournal from './FlagJournal';
 import QuickReplyManager from './QuickReplyManager';
 import TagManager from './TagManager';
+import Funnel from './Funnel';
 import './SettingsHub.css';
 
 const TABS = [
@@ -30,6 +31,10 @@ const TABS = [
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h8v1H8v-1zm0 3h8v1H8v-1zm0-6h5v1H8v-1z"/></svg>
   },
   {
+    key: 'funnel', label: 'Entonnoir',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+  },
+  {
     key: 'account', label: 'Compte',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.95s-.03-.66-.07-1l2.16-1.65c.19-.15.24-.42.12-.64l-2.05-3.55c-.12-.22-.39-.3-.61-.22l-2.55 1.03c-.52-.4-1.08-.73-1.7-.98l-.38-2.71C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.71c-.62.25-1.18.58-1.7.98L4.88 5.08c-.22-.08-.49 0-.61.22L2.22 8.85c-.13.22-.07.49.12.64l2.16 1.65c-.04.34-.07.67-.07 1s.03.65.07.97l-2.16 1.66c-.19.15-.24.42-.12.64l2.05 3.55c.12.22.39.3.61.22l2.55-1.02c.52.4 1.08.73 1.7.98l.38 2.71c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.71c.62-.25 1.18-.58 1.7-.98l2.55 1.02c.22.08.49 0 .61-.22l2.05-3.55c.12-.22.07-.49-.12-.64l-2.16-1.66z"/></svg>
   },
@@ -40,7 +45,7 @@ const ADMIN_TAB = {
   icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4c1.4 0 2.8 1.1 2.8 2.5v.5h.7c.4 0 .5.1.5.5v4c0 .4-.1.5-.5.5H8.5c-.4 0-.5-.1-.5-.5v-4c0-.4.1-.5.5-.5h.7v-.5C9.2 6.1 10.6 5 12 5zm0 1.2c-.8 0-1.3.6-1.3 1.3v.5h2.6v-.5c0-.7-.5-1.3-1.3-1.3zm0 4.1c-.6 0-1 .4-1 1s.4 1 1 1 1-.4 1-1-.4-1-1-1z"/></svg>
 };
 
-export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab }) {
+export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, onSelectContact }) {
   const [tab, setTab] = useState(initialTab || 'config');
 
   useEffect(() => {
@@ -76,6 +81,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
         {tab === 'templates' && <QuickReplyManager />}
         {tab === 'tags' && <TagManager activeProfile={activeProfile} />}
         {tab === 'journal' && <FlagJournal />}
+        {tab === 'funnel' && <Funnel onSelectContact={onSelectContact} />}
         {tab === 'account' && <Settings />}
         {tab === 'admin' && account?.role === 'admin' && <AdminPanel />}
       </div>

@@ -6,7 +6,6 @@ import ConversationList from './ConversationList';
 import ChatWindow from './ChatWindow';
 import Stats from './Stats';
 import Broadcast from './Broadcast';
-import Funnel from './Funnel';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import './Dashboard.css';
@@ -264,10 +263,6 @@ export default function Dashboard() {
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     }] : []),
     {
-      key: 'funnel', label: 'Entonnoir',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
-    },
-    {
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
     },
@@ -279,10 +274,6 @@ export default function Dashboard() {
       key: 'settings', label: 'Paramètres',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.95s-.03-.66-.07-1l2.16-1.65c.19-.15.24-.42.12-.64l-2.05-3.55c-.12-.22-.39-.3-.61-.22l-2.55 1.03c-.52-.4-1.08-.73-1.7-.98l-.38-2.71C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.71c-.62.25-1.18.58-1.7.98L4.88 5.08c-.22-.08-.49 0-.61.22L2.22 8.85c-.13.22-.07.49.12.64l2.16 1.65c-.04.34-.07.67-.07 1s.03.65.07.97l-2.16 1.66c-.19.15-.24.42-.12.64l2.05 3.55c.12.22.39.3.61.22l2.55-1.02c.52.4 1.08.73 1.7.98l.38 2.71c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.71c.62-.25 1.18-.58 1.7-.98l2.55 1.02c.22.08.49 0 .61-.22l2.05-3.55c.12-.22.07-.49-.12-.64l-2.16-1.66z"/></svg>
     },
-    ...(isAdmin ? [{
-      key: 'admin', label: 'Admin',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4l5 2.18V11c0 3.5-2.33 6.79-5 7.93-2.67-1.14-5-4.43-5-7.93V7.18L12 5z"/></svg>
-    }] : []),
   ];
 
   const toggleSound = () => {
@@ -479,11 +470,6 @@ export default function Dashboard() {
               />
             )
           )}
-          {activePanel === 'funnel' && (
-            noProfile
-              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
-              : <Funnel onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />
-          )}
           {activePanel === 'stats' && (
             noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
           )}
@@ -500,9 +486,9 @@ export default function Dashboard() {
               activeProfile={activeProfile}
               account={account}
               initialTab={settingsInitialTab}
+              onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
             />
           )}
-          {activePanel === 'admin' && isAdmin && <AdminPanel />}
         </div>
       </div>
 
