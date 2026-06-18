@@ -59,7 +59,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const [form, setForm] = useState({
     name: '',
-    messages: [{ content: '' }],
+    messages: [{ content: '', media_url: '', media_type: '' }],
     contactIds: [],
     tagId: null,
     delayMin: 30,
@@ -76,7 +76,7 @@ export default function Broadcast({ socket, activeProfile }) {
   const fileInputRef = useRef(null);
 
   const resetForm = () => {
-    setForm({ name: '', messages: [{ content: '' }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90, scheduled: false, scheduledAt: '' });
+    setForm({ name: '', messages: [{ content: '', media_url: '', media_type: '' }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90, scheduled: false, scheduledAt: '' });
     setContactSearch('');
     setContactTagFilter(null);
     setSelectAll(false);
