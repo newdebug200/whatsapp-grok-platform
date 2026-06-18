@@ -19,28 +19,49 @@ title Botora — Demarrage
 echo.
 echo === %DATE% %TIME% ===
 echo.
-echo  ============================================
-echo     BOTORA — Plateforme WhatsApp AI
-echo  ============================================
+echo  ╔══════════════════════════════════════════════════════════╗
+echo  ║          BOTORA — Plateforme WhatsApp IA                ║
+echo  ║          Demarrage automatique Windows                  ║
+echo  ╚══════════════════════════════════════════════════════════╝
 echo.
 
 :: ─────────────────────────────────────────────
-:: 1. Verifier Node.js
+:: 1. Verifier Node.js et npm
 :: ─────────────────────────────────────────────
-echo  [1] Verification Node.js...
-node --version
+echo  [1/7] Verification Node.js et npm...
+node --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  [ERREUR] Node.js introuvable. https://nodejs.org
+    echo  [ERREUR] Node.js introuvable. Installez-le depuis https://nodejs.org
     pause
     exit /b 1
 )
-echo  [OK] Node.js detecte
+for /f "tokens=*" %%v in ('node --version') do echo  [OK] Node.js %%v detecte.
+npm --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  [ERREUR] npm introuvable.
+    pause
+    exit /b 1
+)
+echo  [OK] npm detecte.
 echo.
 
 :: ─────────────────────────────────────────────
-:: 2. Verifier le fichier .env backend
+:: 2. Tuer les processus Node existants (libere les fichiers verrouilles)
 :: ─────────────────────────────────────────────
-echo  [2] Verification .env...
+echo  [2/7] Arret des processus Node existants...
+taskkill /F /IM node.exe /T >nul 2>&1
+if %errorlevel% equ 0 (
+    echo  [OK] Processus Node arretes — attente liberation fichiers...
+    timeout /t 3 /nobreak >nul
+) else (
+    echo  [OK] Aucun processus Node en cours.
+)
+echo.
+
+:: ─────────────────────────────────────────────
+:: 3. Verifier le fichier .env backend
+:: ─────────────────────────────────────────────
+echo  [3/7] Verification .env backend...
 if not exist "backend\.env" (
     if exist "backend\.env.example" (
         echo  [CONFIG] .env manquant — copie depuis .env.example...
@@ -55,39 +76,50 @@ if not exist "backend\.env" (
     )
 ) else (
     echo  [OK] backend\.env present
-    echo.
-)
-
-:: ─────────────────────────────────────────────
-:: 3. Installer dependances backend
-:: ─────────────────────────────────────────────
-set PUPPETEER_SKIP_DOWNLOAD=true
-set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-
-echo  [3] Dependances backend...
-if not exist "backend\node_modules" (
-    echo  [INSTALL] Installation en cours...
-    cd backend
-    call npm install --no-audit --no-fund
-    echo  [EXIT npm install backend] %errorlevel%
-    if %errorlevel% neq 0 (
-        cd ..
-        echo  [ERREUR] npm install backend a echoue
-        pause
-        exit /b 1
-    )
-    cd ..
-    echo  [OK] Backend installe
-) else (
-    echo  [OK] node_modules backend present
 )
 echo.
 
 :: ─────────────────────────────────────────────
-:: 4. Base de donnees (node:sqlite natif — jamais bloquant)
+:: 4. Installer dependances backend + Prisma client
 :: ─────────────────────────────────────────────
-echo  [4] Synchronisation base de donnees...
-echo  [CMD] node backend/setup-db.js
+set PUPPETEER_SKIP_DOWNLOAD=true
+set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+echo  [4/7] Dependances backend...
+if not exist "backend\node_modules" (
+    echo  [INSTALL] Installation en cours — peut prendre quelques minutes...
+    cd backend
+    call npm install --no-audit --no-fund --ignore-scripts
+    echo  [EXIT npm install backend] %errorlevel%
+    if %errorlevel% neq 0 (
+        cd ..
+        echo  [ERREUR] npm install backend a echoue. Verifiez votre connexion.
+        pause
+        exit /b 1
+    )
+    cd ..
+    echo  [OK] Dependances backend installees.
+) else (
+    echo  [OK] node_modules backend present.
+)
+
+:: Toujours regenerer le client Prisma (evite les erreurs apres mise a jour)
+echo  [4b] Generation du client Prisma...
+cd backend
+call npx prisma generate --no-hints >nul 2>&1
+echo  [EXIT prisma generate] %errorlevel%
+if %errorlevel% neq 0 (
+    echo  [ATTENTION] prisma generate a echoue — le backend pourrait ne pas demarrer.
+) else (
+    echo  [OK] Client Prisma genere.
+)
+cd ..
+echo.
+
+:: ─────────────────────────────────────────────
+:: 5. Base de donnees
+:: ─────────────────────────────────────────────
+echo  [5/7] Synchronisation base de donnees...
 cd backend
 call node setup-db.js
 echo  [EXIT setup-db.js] %errorlevel%
@@ -98,13 +130,13 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 cd ..
-echo  [OK] Base de donnees synchronisee
+echo  [OK] Base de donnees synchronisee.
 echo.
 
 :: ─────────────────────────────────────────────
-:: 5. Installer dependances frontend
+:: 6. Installer dependances frontend
 :: ─────────────────────────────────────────────
-echo  [5] Dependances frontend...
+echo  [6/7] Dependances frontend...
 if not exist "frontend\node_modules" (
     echo  [INSTALL] Installation en cours...
     cd frontend
@@ -112,40 +144,31 @@ if not exist "frontend\node_modules" (
     echo  [EXIT npm install frontend] %errorlevel%
     if %errorlevel% neq 0 (
         cd ..
-        echo  [ERREUR] npm install frontend a echoue
+        echo  [ERREUR] npm install frontend a echoue.
         pause
         exit /b 1
     )
     cd ..
-    echo  [OK] Frontend installe
+    echo  [OK] Frontend installe.
 ) else (
-    echo  [OK] node_modules frontend present
+    echo  [OK] node_modules frontend present.
 )
 echo.
 
 :: ─────────────────────────────────────────────
-:: 6. Demarrer backend
+:: 7. Lancer backend + frontend + navigateur
 :: ─────────────────────────────────────────────
-echo  [6] Demarrage backend sur http://localhost:3001
+echo  [7/7] Demarrage des serveurs...
+
 start "Botora Backend" cmd /k "title Botora Backend && cd /d "%~dp0backend" && set PUPPETEER_SKIP_DOWNLOAD=true && set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && npm run dev"
 timeout /t 3 /nobreak >nul
 
-:: ─────────────────────────────────────────────
-:: 7. Demarrer frontend
-:: ─────────────────────────────────────────────
-echo  [7] Demarrage frontend sur http://localhost:5173
 start "Botora Frontend" cmd /k "title Botora Frontend && cd /d "%~dp0frontend" && npm run dev"
 timeout /t 5 /nobreak >nul
 
-:: ─────────────────────────────────────────────
-:: 8. Ouvrir navigateur
-:: ─────────────────────────────────────────────
-echo  [8] Ouverture navigateur...
+echo  [OK] Ouverture du navigateur...
 start "" http://localhost:5173
 
-:: ─────────────────────────────────────────────
-:: 9. Fin
-:: ─────────────────────────────────────────────
 echo.
 echo  ============================================
 echo   Botora est lance !
