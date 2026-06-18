@@ -1,5 +1,12 @@
 const axios = require('axios');
 
+const PERSONALITY_PROMPTS = {
+  professional: "Tu communiques de manière professionnelle, formelle et courtoise. Tu utilises un langage soutenu.",
+  friendly: "Tu communiques de manière amicale, chaleureuse et décontractée. Tu tutois le client et utilises des emojis avec modération.",
+  commercial: "Tu es orienté vente et conversion. Tu mets en avant les bénéfices, crées de l'urgence et incites à l'action. Tu es enthousiaste et persuasif.",
+  support: "Tu es un expert technique patient et méthodique. Tu poses des questions précises pour diagnostiquer les problèmes et fournis des solutions claires étape par étape."
+};
+
 class MessageHandler {
   constructor() {
     this.pendingMessages = new Map();
@@ -8,7 +15,6 @@ class MessageHandler {
 
   _isWithinBusinessHours(botConfig) {
     if (!botConfig.business_hours_enabled) return true;
-
     const tz = botConfig.timezone || 'UTC';
     let tzDate;
     try {
@@ -16,18 +22,74 @@ class MessageHandler {
     } catch (_) {
       tzDate = new Date();
     }
-
     const dayOfWeek = tzDate.getDay();
     const openDays = (botConfig.open_days || '1,2,3,4,5').split(',').map(Number);
     if (!openDays.includes(dayOfWeek)) return false;
-
     const currentMinutes = tzDate.getHours() * 60 + tzDate.getMinutes();
     const [openH, openM] = (botConfig.open_time || '09:00').split(':').map(Number);
     const [closeH, closeM] = (botConfig.close_time || '18:00').split(':').map(Number);
-    const openMinutes = openH * 60 + openM;
-    const closeMinutes = closeH * 60 + closeM;
+    return currentMinutes >= openH * 60 + openM && currentMinutes < closeH * 60 + closeM;
+  }
 
-    return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+  async _analyzeSentiment(text, apiKey) {
+    if (!text || !apiKey) return null;
+    try {
+      const resp = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: 'Tu es un analyseur de sentiment. Réponds UNIQUEMENT par un seul mot parmi: positif, neutre, negatif, colere. Pas d\'explication.'
+            },
+            { role: 'user', content: `Quel est le sentiment de ce message WhatsApp ? "${text.slice(0, 300)}"` }
+          ],
+          temperature: 0,
+          max_tokens: 10
+        },
+        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 8000 }
+      );
+      const raw = resp.data.choices[0].message.content.trim().toLowerCase();
+      if (['positif', 'neutre', 'negatif', 'colere'].includes(raw)) return raw;
+      if (raw.includes('col')) return 'colere';
+      if (raw.includes('neg') || raw.includes('neg')) return 'negatif';
+      if (raw.includes('pos')) return 'positif';
+      return 'neutre';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async _updateMemory(contact, prisma, apiKey, newMessageText) {
+    if (!apiKey) return;
+    try {
+      const existing = await prisma.contactMemory.findUnique({ where: { contact_id: contact.id } });
+      const oldSummary = existing?.summary || '';
+      const prompt = oldSummary
+        ? `Résumé existant: "${oldSummary}"\nNouveau message du client: "${newMessageText.slice(0, 400)}"\nMets à jour le résumé en 2-3 phrases maximum. Inclus: intérêts, problèmes, demandes, ton général.`
+        : `Premier message du client: "${newMessageText.slice(0, 400)}"\nFais un résumé en 1-2 phrases de ce qu'on sait sur ce client.`;
+
+      const resp = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: 'Tu es un assistant qui résume les interactions client de manière concise.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.2,
+          max_tokens: 150
+        },
+        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 10000 }
+      );
+      const summary = resp.data.choices[0].message.content.trim();
+      await prisma.contactMemory.upsert({
+        where: { contact_id: contact.id },
+        create: { contact_id: contact.id, summary },
+        update: { summary }
+      });
+    } catch (_) {}
   }
 
   async handleIncomingMessage(message, client, prisma, profileId, waManager, options = {}) {
@@ -38,10 +100,7 @@ class MessageHandler {
       if (message.from.includes('@g.us')) return;
 
       const messageAgeMs = Date.now() - message.timestamp * 1000;
-      if (messageAgeMs > 60000) {
-        console.log(`Message ignoré (trop ancien: ${Math.round(messageAgeMs / 1000)}s) de ${message.from}`);
-        return;
-      }
+      if (messageAgeMs > 60000) return;
 
       const contact = await message.getContact();
       const phoneNumber = '+' + (contact.number || contact.id.user);
@@ -66,25 +125,56 @@ class MessageHandler {
       }
 
       const mediaTypeLabel = message.hasMedia
-        ? (message.type === 'image' ? 'Image'
-          : message.type === 'video' ? 'Vidéo'
+        ? (message.type === 'image' ? 'Image' : message.type === 'video' ? 'Vidéo'
           : message.type === 'audio' || message.type === 'ptt' ? 'Audio'
-          : message.type === 'document' ? 'Document'
-          : message.type === 'sticker' ? 'Sticker'
-          : 'Fichier')
+          : message.type === 'document' ? 'Document' : message.type === 'sticker' ? 'Sticker' : 'Fichier')
         : null;
 
+      const messageContent = mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || '');
+
+      // ── Sentiment analysis (async, non-blocking) ──
+      const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+      let sentimentResult = null;
+      if (!message.hasMedia && message.body && apiKey) {
+        sentimentResult = await this._analyzeSentiment(message.body, apiKey).catch(() => null);
+      }
+
+      // ── Save message with unread=true and sentiment ──
       prisma.message.create({
         data: {
           contact_id: dbContact.id,
-          content: mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || ''),
+          content: messageContent,
           direction: 'received',
           type: message.type || 'text',
-          created_at: new Date()
+          created_at: new Date(),
+          unread: true,
+          sentiment: sentimentResult
         }
       }).catch(() => {});
 
-      waManager.addToCache(profileId, dbContact.id, 'received', mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || ''));
+      // ── Increment unread count ──
+      prisma.contact.update({
+        where: { id: dbContact.id },
+        data: { unread_count: { increment: 1 } }
+      }).catch(() => {});
+
+      waManager.addToCache(profileId, dbContact.id, 'received', messageContent);
+
+      // ── Sentiment alert ──
+      if (sentimentResult === 'colere' || sentimentResult === 'negatif') {
+        const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } }).catch(() => null);
+        if (botConfig?.sentiment_alert !== false) {
+          waManager.emitToProfileAccount(profileId, 'sentiment-alert', {
+            profileId,
+            contactId: dbContact.id,
+            contactPhone: phoneNumber,
+            contactName: dbContact.name || phoneNumber,
+            sentiment: sentimentResult,
+            message: messageContent.slice(0, 200)
+          });
+          console.log(`[Sentiment] Alerte ${sentimentResult} pour ${phoneNumber}`);
+        }
+      }
 
       // ── Fetch account role + blocked status ──
       const profile = await prisma.whatsAppProfile.findUnique({
@@ -98,32 +188,22 @@ class MessageHandler {
           select: { is_blocked: true, role: true }
         });
         isAdminAccount = account?.role === 'admin';
-        if (!isAdminAccount && account?.is_blocked) {
-          console.log(`[Block] Compte ${profile.account_id} bloqué — traitement du message annulé.`);
-          return;
-        }
+        if (!isAdminAccount && account?.is_blocked) return;
       }
 
-      // ── Check global IA feature flag (admin exempt) ──
       if (!isAdminAccount) {
         const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
-        if (iaGlobalCfg && iaGlobalCfg.value === 'false') {
-          console.log(`[PlatformConfig] IA globalement désactivée — aucune réponse envoyée.`);
-          return;
-        }
+        if (iaGlobalCfg && iaGlobalCfg.value === 'false') return;
       }
 
       // ── Verification trigger check ──
       const verificationTriggerEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'verification_triggers_enabled' } });
       if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
         if (!message.hasMedia && message.body) {
-          const triggers = await prisma.verificationTrigger.findMany({
-            where: { profile_id: profileId, is_active: true }
-          });
+          const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
           const bodyTrimmed = message.body.trim().toLowerCase();
           const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
           if (matchedTrigger) {
-            console.log(`[Verification] Déclencheur matché: "${matchedTrigger.text}" pour ${phoneNumber}`);
             await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
             return;
           }
@@ -134,23 +214,13 @@ class MessageHandler {
       const sensitiveEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'sensitive_keywords_enabled' } });
       if (!sensitiveEnabledCfg || sensitiveEnabledCfg.value !== 'false') {
         if (!message.hasMedia && message.body) {
-          const keywords = await prisma.sensitiveKeyword.findMany({
-            where: { profile_id: profileId, is_active: true }
-          });
+          const keywords = await prisma.sensitiveKeyword.findMany({ where: { profile_id: profileId, is_active: true } });
           const bodyLower = message.body.toLowerCase();
           const matched = keywords.find(k => bodyLower.includes(k.keyword.toLowerCase()));
           if (matched) {
-            await prisma.contact.update({
-              where: { id: dbContact.id },
-              data: { ia_paused: true, sensitive_flagged: true }
-            });
+            await prisma.contact.update({ where: { id: dbContact.id }, data: { ia_paused: true, sensitive_flagged: true } });
             prisma.sensitiveFlag.create({
-              data: {
-                profile_id: profileId,
-                contact_id: dbContact.id,
-                keyword_matched: matched.keyword,
-                message_content: message.body.slice(0, 500)
-              }
+              data: { profile_id: profileId, contact_id: dbContact.id, keyword_matched: matched.keyword, message_content: message.body.slice(0, 500) }
             }).catch(() => {});
             console.log(`[Keyword] Contact ${phoneNumber} flaggé — mot-clé: "${matched.keyword}"`);
             return;
@@ -158,10 +228,7 @@ class MessageHandler {
         }
       }
 
-      if (skipAI) {
-        console.log(`Contact ${phoneNumber}: campagne active pour ce profil, réponse IA suspendue`);
-        return;
-      }
+      if (skipAI) return;
 
       if (message.hasMedia) {
         const label = mediaTypeLabel?.toLowerCase() || 'fichier';
@@ -169,9 +236,14 @@ class MessageHandler {
         await client.sendMessage(waId, response);
         waManager.addToCache(profileId, dbContact.id, 'sent', response);
         prisma.message.create({
-          data: { contact_id: dbContact.id, content: response, direction: 'sent', type: 'text', created_at: new Date() }
+          data: { contact_id: dbContact.id, content: response, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
         }).catch(() => {});
         return;
+      }
+
+      // ── Update AI memory (async, non-blocking) ──
+      if (message.body && apiKey) {
+        this._updateMemory(dbContact, prisma, apiKey, message.body).catch(() => {});
       }
 
       const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
@@ -185,19 +257,14 @@ class MessageHandler {
   async _handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager) {
     try {
       const verifyUrl = process.env.VERIFY_API_URL;
-      if (!verifyUrl) {
-        console.log('[Verification] VERIFY_API_URL non défini');
-        return;
-      }
+      if (!verifyUrl) return;
       const verifyResp = await axios.get(`${verifyUrl}?phone=${encodeURIComponent(phoneNumber)}`, { timeout: 10000 });
       const result = verifyResp.data;
-      const replyText = result?.verified
-        ? `✅ Numéro vérifié : ${phoneNumber}`
-        : `❌ Numéro non vérifié : ${phoneNumber}`;
+      const replyText = result?.verified ? `✅ Numéro vérifié : ${phoneNumber}` : `❌ Numéro non vérifié : ${phoneNumber}`;
       await client.sendMessage(waId, replyText);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
       prisma.message.create({
-        data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date() }
+        data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
       }).catch(() => {});
     } catch (err) {
       console.error('[Verification] Erreur:', err.message);
@@ -206,44 +273,29 @@ class MessageHandler {
 
   _queueMessage(body, from, contact, client, prisma, profileId, waManager, delayMs, botConfig) {
     const key = `${profileId}_${contact.id}`;
-
     if (this.pendingMessages.has(key)) {
       const pending = this.pendingMessages.get(key);
       clearTimeout(pending.timer);
       pending.messages.push(body);
-      console.log(`Message ajouté à la file pour ${from} (${pending.messages.length} messages en attente) — timer remis à zéro`);
     } else {
       this.pendingMessages.set(key, { messages: [body], timer: null, contact, client, prisma, profileId, from, waManager, delayMs, botConfig });
-      console.log(`Nouveau message en file pour ${from} — réponse dans ${delayMs / 1000}s si pas de nouveau message`);
     }
-
     const pending = this.pendingMessages.get(key);
     pending.timer = setTimeout(async () => {
       this.pendingMessages.delete(key);
       const concatenated = pending.messages.join('\n');
-      console.log(`Traitement de ${pending.messages.length} message(s) pour ${pending.from}`);
-      await this._processTextMessage(
-        concatenated, pending.contact, pending.client, pending.prisma,
-        pending.profileId, pending.from, pending.waManager, pending.botConfig
-      );
+      await this._processTextMessage(concatenated, pending.contact, pending.client, pending.prisma, pending.profileId, pending.from, pending.waManager, pending.botConfig);
     }, delayMs);
   }
 
   async _processTextMessage(messageText, contact, client, prisma, profileId, from, waManager, cachedBotConfig) {
     try {
       const freshContact = await prisma.contact.findUnique({ where: { id: contact.id } });
-      if (freshContact?.ia_paused) {
-        console.log(`Contact ${from}: prise en main humaine active au moment de l'envoi, réponse IA annulée`);
-        return;
-      }
+      if (freshContact?.ia_paused) return;
 
       const botConfig = cachedBotConfig || await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
-      if (!botConfig || !botConfig.ia_enabled) {
-        console.log(`Profil ${profileId}: bot IA désactivé dans la configuration — aucune réponse envoyée.`);
-        return;
-      }
+      if (!botConfig || !botConfig.ia_enabled) return;
 
-      // ── Business hours check ──
       if (botConfig.business_hours_enabled && !this._isWithinBusinessHours(botConfig)) {
         const awayMsg = botConfig.away_message?.trim();
         if (awayMsg) {
@@ -257,21 +309,19 @@ class MessageHandler {
               await client.sendMessage(from, awayMsg);
               waManager.addToCache(profileId, contact.id, 'sent', awayMsg);
               prisma.message.create({
-                data: { contact_id: contact.id, content: awayMsg, direction: 'sent', type: 'text', created_at: new Date() }
+                data: { contact_id: contact.id, content: awayMsg, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
               }).catch(() => {});
-              console.log(`[Heures bureau] Message hors-horaires envoyé à ${from}`);
-            } catch (err) {
-              console.error('[Heures bureau] Erreur envoi message hors-horaires:', err.message);
-            }
+            } catch (err) { console.error('[Heures bureau] Erreur:', err.message); }
           }
         }
-        console.log(`Profil ${profileId}: hors des heures d'ouverture — réponse IA annulée.`);
         return;
       }
 
       const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
 
-      // ── Full conversation history ──
+      // ── Load AI memory for this contact ──
+      const memory = await prisma.contactMemory.findUnique({ where: { contact_id: contact.id } }).catch(() => null);
+
       let recentMessages = waManager.getFromCache(profileId, contact.id);
       if (recentMessages.length === 0) {
         const dbMessages = await prisma.message.findMany({
@@ -282,99 +332,68 @@ class MessageHandler {
         for (const m of recentMessages) waManager.addToCache(profileId, contact.id, m.direction, m.content);
       }
 
-      await this._callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager);
+      await this._callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memory?.summary || null);
     } catch (error) {
       console.error('Erreur processTextMessage:', error);
     }
   }
 
-  async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager) {
+  async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memorySummary) {
     const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
-
     if (!apiKey) {
-      console.error(`[Groq] Clé API manquante — définissez GROQ_API_KEY dans votre fichier .env`);
       waManager.emitToProfileAccount(profileId, 'bot-error', {
-        profileId,
-        contactPhone: contact.phone_number || from,
+        profileId, contactPhone: contact.phone_number || from,
         error: "Clé API Groq manquante. Ajoutez GROQ_API_KEY dans votre fichier .env et redémarrez le serveur."
       });
       return;
     }
 
-    // ── Credit check (admin exempt) ──
     let accountId = null;
-    let currentBalance = null;
     let creditsEnabled = false;
+    let isAdminAccount = false;
 
     try {
       const creditsEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'credits_enabled' } });
       creditsEnabled = creditsEnabledCfg?.value === 'true';
 
-      if (creditsEnabled && !isAdminAccount) {
-        const profileRow = await prisma.whatsAppProfile.findUnique({
-          where: { id: profileId },
-          select: { account_id: true }
-        });
-        accountId = profileRow?.account_id;
+      const profileRow = await prisma.whatsAppProfile.findUnique({ where: { id: profileId }, select: { account_id: true } });
+      accountId = profileRow?.account_id;
 
-        if (accountId) {
-          const accountRow = await prisma.account.findUnique({
-            where: { id: accountId },
-            select: { credit_balance: true }
-          });
-          currentBalance = accountRow?.credit_balance ?? 0;
-
+      if (accountId) {
+        const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { credit_balance: true, role: true } });
+        isAdminAccount = accountRow?.role === 'admin';
+        if (creditsEnabled && !isAdminAccount) {
+          const currentBalance = accountRow?.credit_balance ?? 0;
           if (currentBalance <= 0) {
-            console.log(`[Credits] Compte ${accountId} — solde épuisé (${currentBalance}), réponse IA annulée`);
             waManager.emitToProfileAccount(profileId, 'bot-error', {
-              profileId,
-              contactPhone: contact.phone_number || from,
+              profileId, contactPhone: contact.phone_number || from,
               error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger."
             });
             return;
           }
         }
-      } else if (creditsEnabled && isAdminAccount) {
-        // Admin: fetch account_id for credit deduction tracking only (no balance check)
-        const profileRow = await prisma.whatsAppProfile.findUnique({
-          where: { id: profileId },
-          select: { account_id: true }
-        });
-        accountId = profileRow?.account_id;
       }
     } catch (creditCheckErr) {
       console.error('[Credits] Erreur vérification solde:', creditCheckErr.message);
     }
 
     try {
-      const systemPrompt = this._buildSystemPrompt(botConfig.bot_name, botConfig.bot_info, botConfig.bot_behavior, faqs);
+      const systemPrompt = this._buildSystemPrompt(botConfig, faqs, memorySummary);
 
       const historyMessages = recentMessages
         .filter(m => m.content && !/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(m.content))
-        .map(m => ({
-          role: m.direction === 'received' ? 'user' : 'assistant',
-          content: m.content
-        }));
+        .slice(-20)
+        .map(m => ({ role: m.direction === 'received' ? 'user' : 'assistant', content: m.content }));
 
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
           model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...historyMessages,
-            { role: 'user', content: messageText }
-          ],
+          messages: [{ role: 'system', content: systemPrompt }, ...historyMessages, { role: 'user', content: messageText }],
           temperature: 0.2,
           max_tokens: 400
         },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000
-        }
+        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
       );
 
       const aiResponse = response.data.choices[0].message.content;
@@ -383,33 +402,20 @@ class MessageHandler {
       await client.sendMessage(from, aiResponse);
       waManager.addToCache(profileId, contact.id, 'sent', aiResponse);
       prisma.message.create({
-        data: { contact_id: contact.id, content: aiResponse, direction: 'sent', type: 'text', created_at: new Date() }
+        data: { contact_id: contact.id, content: aiResponse, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
       }).catch(() => {});
-      console.log(`Réponse IA envoyée à ${from} pour le profil ${profileId}`);
 
-      // ── Deduct credits ──
       if (creditsEnabled && accountId && totalTokens > 0) {
         try {
           const creditRateCfg = await prisma.platformConfig.findUnique({ where: { key: 'credit_per_1000_tokens' } });
           const creditRate = parseFloat(creditRateCfg?.value || '1');
           const creditsToDeduct = parseFloat(((totalTokens / 1000) * creditRate).toFixed(4));
-
           await prisma.$transaction([
-            prisma.account.update({
-              where: { id: accountId },
-              data: { credit_balance: { decrement: creditsToDeduct } }
-            }),
+            prisma.account.update({ where: { id: accountId }, data: { credit_balance: { decrement: creditsToDeduct } } }),
             prisma.creditTransaction.create({
-              data: {
-                account_id: accountId,
-                amount: -creditsToDeduct,
-                type: 'debit',
-                description: `Réponse IA — ${totalTokens} tokens`,
-                tokens_used: totalTokens
-              }
+              data: { account_id: accountId, amount: -creditsToDeduct, type: 'debit', description: `Réponse IA — ${totalTokens} tokens`, tokens_used: totalTokens }
             })
           ]);
-          console.log(`[Credits] Compte ${accountId} — ${creditsToDeduct} crédits déduits (${totalTokens} tokens)`);
         } catch (deductErr) {
           console.error('[Credits] Erreur déduction:', deductErr.message);
         }
@@ -417,42 +423,47 @@ class MessageHandler {
     } catch (error) {
       const status = error.response?.status;
       let errorMsg = "Le bot IA n'a pas pu répondre.";
-      if (status === 401) {
-        errorMsg = "Clé API Groq invalide ou expirée. Vérifiez GROQ_API_KEY dans votre .env.";
-        console.error(`[Groq] Clé API invalide (401) — vérifiez GROQ_API_KEY dans le .env`);
-      } else if (status === 429) {
-        errorMsg = "Limite de quota Groq atteinte. Réessayez dans quelques instants.";
-        console.error(`[Groq] Quota dépassé (429)`);
-      } else if (status === 503 || status === 502) {
-        errorMsg = "API Groq temporairement indisponible. Réessayez dans un moment.";
-        console.error(`[Groq] Service indisponible (${status})`);
-      } else {
-        console.error('Erreur API Groq:', error.message);
-      }
-      waManager.emitToProfileAccount(profileId, 'bot-error', {
-        profileId,
-        contactPhone: contact.phone_number || from,
-        error: errorMsg
-      });
+      if (status === 401) errorMsg = "Clé API Groq invalide ou expirée. Vérifiez GROQ_API_KEY dans votre .env.";
+      else if (status === 429) errorMsg = "Limite de quota Groq atteinte. Réessayez dans quelques instants.";
+      else if (status === 503 || status === 502) errorMsg = "API Groq temporairement indisponible. Réessayez dans un moment.";
+      else console.error('Erreur API Groq:', error.message);
+      waManager.emitToProfileAccount(profileId, 'bot-error', { profileId, contactPhone: contact.phone_number || from, error: errorMsg });
     }
   }
 
-  _buildSystemPrompt(botName, botInfo, botBehavior, faqs = []) {
-    let prompt = `Tu es ${botName || 'Botora'}, un assistant intelligent sur WhatsApp.\n\n`;
-    if (botInfo?.trim()) prompt += `📋 INFORMATIONS SUR TON DOMAINE :\n${botInfo}\n\n`;
+  _buildSystemPrompt(botConfig, faqs = [], memorySummary = null) {
+    const botName = botConfig.bot_name || 'Botora';
+    const personality = botConfig.personality || 'professional';
+    const personalityInstruction = PERSONALITY_PROMPTS[personality] || PERSONALITY_PROMPTS.professional;
+
+    // If admin has set a full system prompt override, use it directly
+    if (botConfig.system_prompt_override?.trim()) {
+      let prompt = botConfig.system_prompt_override;
+      if (memorySummary) prompt += `\n\n🧠 MÉMOIRE CLIENT : ${memorySummary}`;
+      return prompt;
+    }
+
+    let prompt = `Tu es ${botName}, un assistant intelligent sur WhatsApp.\n\n`;
+    prompt += `🎭 PERSONNALITÉ : ${personalityInstruction}\n\n`;
+
+    if (memorySummary) {
+      prompt += `🧠 MÉMOIRE CLIENT (résumé des échanges passés) :\n${memorySummary}\n\n`;
+    }
+
+    if (botConfig.bot_info?.trim()) prompt += `📋 INFORMATIONS SUR TON DOMAINE :\n${botConfig.bot_info}\n\n`;
     if (faqs.length > 0) {
       prompt += `📚 FAQ :\n`;
       faqs.forEach(faq => { prompt += `Q: ${faq.question}\nR: ${faq.answer}\n`; });
       prompt += '\n';
     }
-    if (botBehavior?.trim()) prompt += `🎯 RÈGLES DE COMPORTEMENT :\n${botBehavior}\n\n`;
+    if (botConfig.bot_behavior?.trim()) prompt += `🎯 RÈGLES DE COMPORTEMENT :\n${botConfig.bot_behavior}\n\n`;
     prompt += `⚙️ RÈGLES STRICTES :
 1. Tu réponds UNIQUEMENT selon les informations fournies ci-dessus.
 2. Si une question dépasse tes informations, réponds : "Je n'ai pas l'information pour répondre à cela, mais je peux vous orienter vers un conseiller."
 3. Tu n'inventes JAMAIS d'informations.
 4. Réponses en texte brut uniquement (pas de HTML, pas de markdown complexe).
 5. Maximum 200 mots par réponse.
-6. Sois précis, utile et courtois.`;
+6. Sois précis, utile et cohérent avec ta personnalité.`;
     return prompt;
   }
 }
