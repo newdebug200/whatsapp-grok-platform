@@ -16,8 +16,6 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const [hoveredContact, setHoveredContact] = useState(null);
   const [contextMenu, setContextMenu] = useState(null); // { contactId, x, y }
   const contextMenuRef = useRef(null);
-  const [filterUnread, setFilterUnread] = useState(false);
-  const [unreadMap, setUnreadMap] = useState({});
 
   const loadTags = useCallback(async () => {
     try {
@@ -35,26 +33,6 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
       return () => socket.off('new-message', refresh);
     }
   }, [socket]);
-
-  useEffect(() => {
-    if (socket) {
-      const handleUnreadUpdate = ({ contactId, unread_count }) => {
-        setUnreadMap(prev => ({ ...prev, [contactId]: unread_count }));
-      };
-      socket.on('unread-update', handleUnreadUpdate);
-      return () => socket.off('unread-update', handleUnreadUpdate);
-    }
-  }, [socket]);
-
-  const handleSelectContact = async (contact) => {
-    setContextMenu(null);
-    onSelectContact(contact);
-    const currentUnread = unreadMap[contact.id] ?? contact.unread_count ?? 0;
-    if (currentUnread > 0) {
-      setUnreadMap(prev => ({ ...prev, [contact.id]: 0 }));
-      try { await axios.post(`${API_URL}/messages/conversations/mark-read/${contact.id}`); } catch (_) {}
-    }
-  };
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -132,9 +110,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     const q = search.toLowerCase();
     const matchSearch = !q || c.phone_number?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q);
     const matchTag = !activeTagId || c.tags?.some(ct => ct.tag_id === activeTagId);
-    const unread = unreadMap[c.id] ?? c.unread_count ?? 0;
-    const matchUnread = !filterUnread || unread > 0;
-    return matchSearch && matchTag && matchUnread;
+    return matchSearch && matchTag;
   });
 
   const getLastMessageTime = (contact) => {
@@ -169,12 +145,11 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     const isPaused = contact.ia_paused;
     const isHovered = hoveredContact === contact.id;
     const contactTags = contact.tags?.map(ct => ct.tag).filter(Boolean) || [];
-    const unreadCount = unreadMap[contact.id] ?? contact.unread_count ?? 0;
     return (
       <div
         key={contact.id}
         className={`contact-item ${isSelected ? 'selected' : ''}`}
-        onClick={() => handleSelectContact(contact)}
+        onClick={() => { setContextMenu(null); onSelectContact(contact); }}
         onMouseEnter={() => setHoveredContact(contact.id)}
         onMouseLeave={() => setHoveredContact(null)}
         onContextMenu={(e) => handleContextMenu(e, contact)}
@@ -198,9 +173,6 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
               )}
               {isArchived && (
                 <span className="contact-mode-badge" title="Archivé" style={{ opacity: 0.6, fontSize: '0.9em' }}>📁</span>
-              )}
-              {unreadCount > 0 && !isSelected && (
-                <span className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
               )}
               {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
             </div>
@@ -293,18 +265,6 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
           />
           {search && <button className="search-clear" onClick={() => { setSearch(''); setShowOlderConversations(false); }}>✕</button>}
         </div>
-        <button
-          className={`unread-filter-btn ${filterUnread ? 'active' : ''}`}
-          onClick={() => setFilterUnread(v => !v)}
-          title={filterUnread ? 'Afficher toutes les discussions' : 'Afficher seulement les non lus'}
-        >
-          {filterUnread ? '✉️ Non lus' : '✉️'}
-          {!filterUnread && contacts.filter(c => (unreadMap[c.id] ?? c.unread_count ?? 0) > 0).length > 0 && (
-            <span className="unread-filter-count">
-              {contacts.filter(c => (unreadMap[c.id] ?? c.unread_count ?? 0) > 0).length}
-            </span>
-          )}
-        </button>
       </div>
 
       {tags.length > 0 && (
