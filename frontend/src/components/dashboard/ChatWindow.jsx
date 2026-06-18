@@ -258,6 +258,55 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
   const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+\.[^\s]+)/gi;
 
+  const renderMedia = (msg) => {
+    const src = `${API_URL}/messages/media/${msg.media_path}`;
+    const type = msg.type;
+    if (type === 'image' || type === 'sticker') {
+      return (
+        <img
+          src={src}
+          alt={type === 'sticker' ? 'Sticker' : 'Image'}
+          style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block', cursor: 'pointer', objectFit: 'contain' }}
+          onClick={() => window.open(src, '_blank')}
+          onError={e => { e.target.style.display = 'none'; }}
+        />
+      );
+    }
+    if (type === 'ptt' || type === 'audio') {
+      return (
+        <audio controls style={{ maxWidth: 240, height: 36, outline: 'none' }}>
+          <source src={src} />
+        </audio>
+      );
+    }
+    if (type === 'video') {
+      return (
+        <video controls style={{ maxWidth: 260, maxHeight: 200, borderRadius: 8, display: 'block' }}>
+          <source src={src} />
+        </video>
+      );
+    }
+    if (type === 'document') {
+      return (
+        <a
+          href={src}
+          download
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#53bdeb', textDecoration: 'none', fontSize: '0.88rem' }}
+        >
+          <span style={{ fontSize: '1.2em' }}>📄</span>
+          <span>Télécharger le document</span>
+        </a>
+      );
+    }
+    return (
+      <a href={src} download target="_blank" rel="noopener noreferrer" style={{ color: '#53bdeb', fontSize: '0.88rem' }}>
+        📎 Télécharger le fichier
+      </a>
+    );
+  };
+
   const renderText = (text) => {
     const parts = text.split(URL_REGEX);
     return parts.map((part, idx) => {
@@ -441,7 +490,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
                   <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'}`}>
                     <span className="message-text">
-                      {/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
+                      {msg.media_path ? (
+                        renderMedia(msg)
+                      ) : /^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: 0.85, fontStyle: 'italic' }}>
                           <span style={{ fontSize: '1.1em' }}>
                             {msg.content === '[Image]' ? '📷' :
