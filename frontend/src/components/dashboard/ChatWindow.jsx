@@ -57,10 +57,10 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       setSearchMode(false);
       setSearchQuery('');
       setSearchResults([]);
+      setNotes([]);
+      setShowNotes(false);
       // Mark messages as read
       axios.post(`${API_URL}/messages/conversations/mark-read/${contact.id}`).catch(() => {});
-      // Load notes if panel is open
-      if (showNotes) loadNotes(contact.id);
     } else {
       setMessages([]);
       setNotes([]);
