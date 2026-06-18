@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
-
-const prisma = new PrismaClient();
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
@@ -100,7 +98,7 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur GET stats:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Erreur lors du chargement des statistiques' });
   }
 });
 
