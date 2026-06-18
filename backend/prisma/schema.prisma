@@ -74,6 +74,7 @@ model Contact {
   created_at        DateTime  @default(now())
   ia_paused         Boolean   @default(false)
   sensitive_flagged Boolean   @default(false)
+  archived          Boolean   @default(false)
 
   messages          Message[]
   profile           WhatsAppProfile  @relation(fields: [profile_id], references: [id])
