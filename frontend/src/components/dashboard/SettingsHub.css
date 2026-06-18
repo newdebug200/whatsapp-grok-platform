@@ -1,0 +1,66 @@
+.sh-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.sh-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 8px 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sh-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 36px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  border-radius: 8px 8px 0 0;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.sh-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sh-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.sh-tab-icon {
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+}
+
+.sh-tab.active .sh-tab-icon {
+  opacity: 1;
+}
+
+/* Hide labels — icon-only mode */
+.sh-tab-label {
+  display: none;
+}
+
+.sh-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
