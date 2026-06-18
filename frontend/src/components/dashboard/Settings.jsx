@@ -4,11 +4,15 @@ import { useTheme } from '../../App';
 import './Settings.css';
 
 export default function Settings() {
-  const { account, logout } = useAuth();
+  const { account, logout, deleteAccount } = useAuth();
   const { theme, setTheme } = useTheme();
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('botora-notif-sound') !== 'off');
   const [notifEnabled, setNotifEnabled] = useState(Notification.permission === 'granted');
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('botora-notif-sound', soundEnabled ? 'on' : 'off');
@@ -21,7 +25,17 @@ export default function Settings() {
     setNotifEnabled(perm === 'granted');
   };
 
-  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) { setDeleteError('Mot de passe requis'); return; }
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await deleteAccount(deletePassword);
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || 'Erreur lors de la suppression');
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="settings-panel">
@@ -102,9 +116,9 @@ export default function Settings() {
         <div className="settings-row settings-row-info-only">
           <div className="settings-row-info">
             <span className="settings-row-label">Délai de regroupement</span>
-            <span className="settings-row-desc">Le bot attend 5 minutes après le dernier message avant de répondre, pour regrouper les messages fragmentés</span>
+            <span className="settings-row-desc">Configurable dans "Bot Config" — le bot attend avant de répondre pour regrouper les messages fragmentés</span>
           </div>
-          <span className="settings-badge">5 min</span>
+          <span className="settings-badge">Config</span>
         </div>
         <div className="settings-row settings-row-info-only">
           <div className="settings-row-info">
@@ -133,9 +147,73 @@ export default function Settings() {
           <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
           Se déconnecter
         </button>
+        <button
+          className="settings-logout-btn"
+          style={{ marginTop: 8, background: 'rgba(192,57,43,0.08)', color: '#c0392b', borderColor: 'rgba(192,57,43,0.25)' }}
+          onClick={() => { setShowDeleteModal(true); setDeletePassword(''); setDeleteError(''); }}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          Supprimer le compte
+        </button>
       </div>
 
       <div className="settings-version">Botora v1.0 — Plateforme WhatsApp IA</div>
+
+      {showDeleteModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+        }} onClick={() => setShowDeleteModal(false)}>
+          <div style={{
+            background: 'var(--bg-secondary, #1e1e2e)', borderRadius: 14,
+            padding: 28, width: 340, boxShadow: '0 8px 40px rgba(0,0,0,0.4)'
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 8, color: '#c0392b' }}>
+              Supprimer le compte ?
+            </div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #888)', marginBottom: 16, lineHeight: 1.5 }}>
+              Cette action est <strong>irréversible</strong>. Tous vos profils WhatsApp, conversations, FAQs et configurations seront définitivement supprimés.
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 6 }}>
+              Confirmez avec votre mot de passe
+            </div>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={e => setDeletePassword(e.target.value)}
+              placeholder="Votre mot de passe actuel"
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 8,
+                border: '1px solid var(--border, #333)', background: 'var(--bg, #111)',
+                color: 'var(--text, #fff)', fontSize: '0.9rem', boxSizing: 'border-box'
+              }}
+              onKeyDown={e => e.key === 'Enter' && handleDeleteAccount()}
+              autoFocus
+            />
+            {deleteError && (
+              <div style={{ color: '#c0392b', fontSize: '0.82rem', marginTop: 6 }}>{deleteError}</div>
+            )}
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                style={{
+                  flex: 1, padding: '9px', borderRadius: 8, border: '1px solid var(--border, #333)',
+                  background: 'none', color: 'var(--text, #fff)', cursor: 'pointer', fontSize: '0.88rem'
+                }}
+              >Annuler</button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                style={{
+                  flex: 1, padding: '9px', borderRadius: 8, border: 'none',
+                  background: '#c0392b', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.88rem',
+                  opacity: deleting ? 0.7 : 1
+                }}
+              >{deleting ? 'Suppression...' : 'Supprimer définitivement'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
