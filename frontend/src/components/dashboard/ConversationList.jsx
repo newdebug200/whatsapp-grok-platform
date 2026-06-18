@@ -329,7 +329,8 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
           width: '100%', padding: '6px 14px',
-          background: 'none', border: 'none', borderBottom: '1px solid var(--border, rgba(255,255,255,0.06))',
+          background: 'none', border: 'none',
+          borderBottom: showArchived ? 'none' : '1px solid var(--border, rgba(255,255,255,0.06))',
           color: showArchived ? 'var(--accent, #25d366)' : 'var(--text-secondary, #8e9baa)',
           fontSize: '0.78rem', fontWeight: 500, cursor: 'pointer',
           textAlign: 'left', transition: 'color 0.15s',
@@ -344,6 +345,23 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         </svg>
         Archivées {showArchived && archivedContacts.length > 0 ? `(${archivedContacts.length})` : ''}
       </button>
+
+      {/* Contacts archivés — directement sous le chevron, hors du scroll principal */}
+      {showArchived && (
+        <div style={{
+          borderBottom: '1px solid var(--border, rgba(255,255,255,0.06))',
+          maxHeight: 240, overflowY: 'auto',
+          background: 'var(--bg-secondary, rgba(0,0,0,0.15))',
+        }}>
+          {loadingArchived ? (
+            <div className="empty-list" style={{ fontSize: '0.82rem', padding: '12px 14px' }}>Chargement…</div>
+          ) : archivedContacts.length === 0 ? (
+            <div className="empty-list" style={{ fontSize: '0.82rem', padding: '12px 14px' }}>Aucune discussion archivée</div>
+          ) : (
+            archivedContacts.map(contact => renderContact(contact, true))
+          )}
+        </div>
+      )}
 
       <div className="contacts-scroll">
         {hasNoResults ? (
@@ -383,20 +401,6 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
           </>
         )}
 
-        {showArchived && (
-          <>
-            <div className="older-conversations-separator" style={{ marginTop: 4 }}>
-              <span>📁 Archives</span>
-            </div>
-            {loadingArchived ? (
-              <div className="empty-list" style={{ fontSize: '0.82rem' }}>Chargement…</div>
-            ) : archivedContacts.length === 0 ? (
-              <div className="empty-list" style={{ fontSize: '0.82rem' }}>Aucune discussion archivée</div>
-            ) : (
-              archivedContacts.map(contact => renderContact(contact, true))
-            )}
-          </>
-        )}
       </div>
 
       {/* Context menu (right-click) */}
