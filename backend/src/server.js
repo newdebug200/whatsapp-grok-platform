@@ -33,6 +33,7 @@ const tagRoutes = require('./routes/tagRoutes');
 const quickReplyRoutes = require('./routes/quickReplyRoutes');
 const platformConfigRoutes = require('./routes/platformConfigRoutes');
 const statusRoutes = require('./routes/statusRoutes');
+const funnelRoutes = require('./routes/funnelRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -57,6 +58,7 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/quick-replies', quickReplyRoutes);
 app.use('/api/platform-config', platformConfigRoutes);
 app.use('/api/statuses', statusRoutes);
+app.use('/api/funnel', funnelRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
