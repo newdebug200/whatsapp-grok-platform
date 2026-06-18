@@ -33,15 +33,6 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [hoveredMsg, setHoveredMsg] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
   const [deletingMsg, setDeletingMsg] = useState(null);
-  const [showNotes, setShowNotes] = useState(false);
-  const [notes, setNotes] = useState([]);
-  const [notesLoading, setNotesLoading] = useState(false);
-  const [newNote, setNewNote] = useState('');
-  const [addingNote, setAddingNote] = useState(false);
-  const [searchMode, setSearchMode] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
 
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
@@ -54,17 +45,8 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     if (contact) {
       loadMessages(contact.id);
       setIaPaused(contact.ia_paused || false);
-      setSearchMode(false);
-      setSearchQuery('');
-      setSearchResults([]);
-      setNotes([]);
-      setShowNotes(false);
-      // Mark messages as read
-      axios.post(`${API_URL}/messages/conversations/mark-read/${contact.id}`).catch(() => {});
     } else {
       setMessages([]);
-      setNotes([]);
-      setShowNotes(false);
     }
   }, [contact]);
 
@@ -187,51 +169,6 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     } finally {
       setTogglingIA(false);
     }
-  };
-
-  const loadNotes = async (contactId) => {
-    setNotesLoading(true);
-    try {
-      const res = await axios.get(`${API_URL}/messages/contacts/${contactId}/notes`);
-      setNotes(res.data);
-    } catch (_) {}
-    finally { setNotesLoading(false); }
-  };
-
-  const handleAddNote = async () => {
-    if (!newNote.trim() || !contact || addingNote) return;
-    setAddingNote(true);
-    try {
-      const res = await axios.post(`${API_URL}/messages/contacts/${contact.id}/notes`, { content: newNote.trim() });
-      setNotes(prev => [res.data, ...prev]);
-      setNewNote('');
-    } catch (_) {}
-    finally { setAddingNote(false); }
-  };
-
-  const handleDeleteNote = async (noteId) => {
-    try {
-      await axios.delete(`${API_URL}/messages/contacts/${contact.id}/notes/${noteId}`);
-      setNotes(prev => prev.filter(n => n.id !== noteId));
-    } catch (_) {}
-  };
-
-  const handleToggleNotes = () => {
-    const next = !showNotes;
-    setShowNotes(next);
-    if (next && contact) loadNotes(contact.id);
-  };
-
-  const handleSearchMessages = async (q) => {
-    setSearchQuery(q);
-    if (!q.trim() || q.length < 2) { setSearchResults([]); return; }
-    setSearching(true);
-    try {
-      const res = await axios.get(`${API_URL}/messages/search?q=${encodeURIComponent(q)}`);
-      const forContact = res.data.filter(m => m.contact_id === contact.id);
-      setSearchResults(forContact);
-    } catch (_) {}
-    finally { setSearching(false); }
   };
 
   const handleDeleteMessage = async (msgId) => {
@@ -363,105 +300,12 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
           )}
         </button>
 
-        <button
-          className={`ia-mode-btn ${showNotes ? 'active-notes' : ''}`}
-          onClick={handleToggleNotes}
-          title="Notes internes sur ce contact"
-          style={{ background: showNotes ? '#f0a500' : undefined, color: showNotes ? '#fff' : undefined }}
-        >
-          <span className="ia-mode-icon">📝</span>
-          <span className="ia-mode-label">Notes{notes.length > 0 ? ` (${notes.length})` : ''}</span>
-        </button>
-
-        <button
-          className={`ia-mode-btn ${searchMode ? 'active-search' : ''}`}
-          onClick={() => { setSearchMode(v => !v); setSearchQuery(''); setSearchResults([]); }}
-          title="Rechercher dans les messages"
-          style={{ background: searchMode ? '#3498db' : undefined, color: searchMode ? '#fff' : undefined }}
-        >
-          <span className="ia-mode-icon">🔍</span>
-          <span className="ia-mode-label">Chercher</span>
-        </button>
-
         <button className="close-chat-btn" onClick={onBack} title="Fermer (Échap)">
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
           </svg>
         </button>
       </div>
-
-      {/* ── Notes Panel ── */}
-      {showNotes && (
-        <div className="notes-panel">
-          <div className="notes-panel-header">
-            <span>📝 Notes internes — visibles uniquement par vous</span>
-          </div>
-          <div className="notes-add-row">
-            <textarea
-              className="notes-textarea"
-              placeholder='Ex: "VIP", "Rappeler le 15", "Cliente difficile"…'
-              value={newNote}
-              onChange={e => setNewNote(e.target.value)}
-              rows={2}
-              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleAddNote(); }}
-            />
-            <button className="notes-add-btn" onClick={handleAddNote} disabled={addingNote || !newNote.trim()}>
-              {addingNote ? '…' : '+'}
-            </button>
-          </div>
-          <div className="notes-list">
-            {notesLoading ? (
-              <div className="notes-empty">Chargement…</div>
-            ) : notes.length === 0 ? (
-              <div className="notes-empty">Aucune note — ajoutez-en une ci-dessus</div>
-            ) : (
-              notes.map(note => (
-                <div key={note.id} className="note-item">
-                  <span className="note-content">{note.content}</span>
-                  <span className="note-date">{new Date(note.created_at).toLocaleDateString('fr-FR')}</span>
-                  <button className="note-delete-btn" onClick={() => handleDeleteNote(note.id)} title="Supprimer">✕</button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Search Panel ── */}
-      {searchMode && (
-        <div className="search-messages-panel">
-          <div className="search-messages-input-row">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" style={{ flexShrink: 0, opacity: 0.5 }}>
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input
-              type="text"
-              className="search-messages-input"
-              placeholder="Chercher un mot dans cette conversation…"
-              value={searchQuery}
-              onChange={e => handleSearchMessages(e.target.value)}
-              autoFocus
-            />
-            {searching && <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>…</span>}
-            {searchQuery && <button className="search-messages-clear" onClick={() => { setSearchQuery(''); setSearchResults([]); }}>✕</button>}
-          </div>
-          {searchQuery.length >= 2 && (
-            <div className="search-messages-results">
-              {searchResults.length === 0 ? (
-                <div className="search-messages-empty">{searching ? 'Recherche…' : 'Aucun résultat'}</div>
-              ) : (
-                searchResults.map(msg => (
-                  <div key={msg.id} className={`search-result-item ${msg.direction}`}>
-                    <span className="search-result-dir">{msg.direction === 'sent' ? '→' : '←'}</span>
-                    <span className="search-result-text">{msg.content}</span>
-                    <span className="search-result-time">{new Date(msg.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="chat-messages" ref={containerRef} onScroll={handleScroll}>
         {loading ? (
