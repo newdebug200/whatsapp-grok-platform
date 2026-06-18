@@ -173,11 +173,16 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const handleRestoreAll = () => setHiddenContactIds([]);
 
-  const handleAddMessage = () => setForm(prev => ({ ...prev, messages: [...prev.messages, { content: '' }] }));
+  const handleAddMessage = () => setForm(prev => ({ ...prev, messages: [...prev.messages, { content: '', media_url: '', media_type: '' }] }));
   const handleRemoveMessage = (i) => setForm(prev => ({ ...prev, messages: prev.messages.filter((_, j) => j !== i) }));
   const handleMessageChange = (i, value) => {
     const msgs = [...form.messages];
     msgs[i] = { ...msgs[i], content: value };
+    setForm(prev => ({ ...prev, messages: msgs }));
+  };
+  const handleMediaChange = (i, field, value) => {
+    const msgs = [...form.messages];
+    msgs[i] = { ...msgs[i], [field]: value };
     setForm(prev => ({ ...prev, messages: msgs }));
   };
 
@@ -196,7 +201,12 @@ export default function Broadcast({ socket, activeProfile }) {
     try {
       const payload = {
         name: form.name.trim(),
-        messages: form.messages.map((m, i) => ({ content: m.content, order_index: i, delay_after_seconds: 0 })),
+        messages: form.messages.map((m, i) => ({
+          content: m.content,
+          order_index: i,
+          delay_after_seconds: 0,
+          ...(m.media_url?.trim() && { media_url: m.media_url.trim(), media_type: m.media_type || 'image' })
+        })),
         delay_min_seconds: form.delayMin,
         delay_max_seconds: form.delayMax,
         ...(form.scheduled && form.scheduledAt && { scheduled_at: new Date(form.scheduledAt).toISOString() })
@@ -375,16 +385,40 @@ export default function Broadcast({ socket, activeProfile }) {
               ))}
             </div>
             {form.messages.map((msg, i) => (
-              <div key={i} className="bc-msg-row">
-                <div className="bc-msg-index">{i + 1}</div>
-                <textarea className="bc-textarea" value={msg.content}
-                  onChange={e => handleMessageChange(i, e.target.value)}
-                  placeholder={`Variante ${i + 1}…`} rows={3} />
-                {form.messages.length > 1 && (
-                  <button className="bc-remove-msg" onClick={() => handleRemoveMessage(i)} title="Supprimer">
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                  </button>
-                )}
+              <div key={i} className="bc-msg-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                  <div className="bc-msg-index">{i + 1}</div>
+                  <textarea className="bc-textarea" value={msg.content}
+                    onChange={e => handleMessageChange(i, e.target.value)}
+                    placeholder={`Variante ${i + 1}…`} rows={3} style={{ flex: 1 }} />
+                  {form.messages.length > 1 && (
+                    <button className="bc-remove-msg" onClick={() => handleRemoveMessage(i)} title="Supprimer">
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginLeft: 28, alignItems: 'center' }}>
+                  <select
+                    value={msg.media_type || ''}
+                    onChange={e => handleMediaChange(i, 'media_type', e.target.value)}
+                    style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border, #2d3f50)', background: 'var(--bg-secondary, #1e2a35)', color: 'var(--text-secondary, #8e9baa)', fontSize: '0.78rem', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <option value="">📎 Média (optionnel)</option>
+                    <option value="image">🖼️ Image</option>
+                    <option value="document">📄 Document / PDF</option>
+                    <option value="audio">🎵 Audio</option>
+                    <option value="video">🎥 Vidéo</option>
+                  </select>
+                  {msg.media_type && (
+                    <input
+                      type="url"
+                      value={msg.media_url || ''}
+                      onChange={e => handleMediaChange(i, 'media_url', e.target.value)}
+                      placeholder="URL du fichier (https://…)"
+                      style={{ flex: 1, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border, #2d3f50)', background: 'var(--bg-secondary, #1e2a35)', color: 'var(--text-primary, #e8eaed)', fontSize: '0.8rem' }}
+                    />
+                  )}
+                </div>
               </div>
             ))}
             <button className="bc-add-msg" onClick={handleAddMessage}>
