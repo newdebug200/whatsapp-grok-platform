@@ -491,11 +491,15 @@
   padding: 8px 12px;
   background: #fff;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .search-input-wrapper {
   display: flex;
   align-items: center;
+  flex: 1;
   background: #f0f2f5;
   border-radius: 8px;
   padding: 6px 12px;
@@ -2018,6 +2022,4 @@
 }
 [data-theme="dark"] .bc-media-type-select { background: var(--bg-secondary, #202c33); border-color: var(--border, #2a3942); color: var(--text-primary, #e9edef); }
 
-/* ── Search container flex ── */
-.search-container { display: flex; align-items: center; gap: 6px; }
-.search-input-wrapper { flex: 1; }
+/* search-container flex layout is set in the base rule above (~line 493) */
