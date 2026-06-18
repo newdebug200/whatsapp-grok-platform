@@ -42,10 +42,12 @@ router.get('/contacts', profileMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/messages/conversations — contacts with messages (non archivés par défaut)
 router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
+    const showArchived = req.query.archived === 'true';
     const contacts = await prisma.contact.findMany({
-      where: { profile_id: req.profileId, messages: { some: {} } },
+      where: { profile_id: req.profileId, messages: { some: {} }, archived: showArchived },
       include: {
         messages: {
           orderBy: { created_at: 'desc' },
@@ -62,6 +64,40 @@ router.get('/conversations', profileMiddleware, async (req, res) => {
     res.json(sorted);
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du chargement des conversations' });
+  }
+});
+
+// POST /api/messages/conversations/archive/:contactId
+router.post('/conversations/archive/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    await prisma.contact.update({
+      where: { id: contact.id },
+      data: { archived: true }
+    });
+    res.json({ success: true, archived: true });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors de l'archivage" });
+  }
+});
+
+// POST /api/messages/conversations/unarchive/:contactId
+router.post('/conversations/unarchive/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    await prisma.contact.update({
+      where: { id: contact.id },
+      data: { archived: false }
+    });
+    res.json({ success: true, archived: false });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors du désarchivage" });
   }
 });
 
@@ -135,6 +171,28 @@ router.post('/send', profileMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /api/messages/:messageId — supprimer un message Botora (sent uniquement)
+router.delete('/:messageId', profileMiddleware, async (req, res) => {
+  try {
+    const msgId = parseInt(req.params.messageId);
+    const msg = await prisma.message.findFirst({
+      where: { id: msgId },
+      include: { contact: true }
+    });
+    if (!msg) return res.status(404).json({ error: 'Message introuvable' });
+    if (msg.contact.profile_id !== req.profileId)
+      return res.status(403).json({ error: 'Accès refusé' });
+    if (msg.direction !== 'sent')
+      return res.status(400).json({ error: 'Seuls les messages envoyés peuvent être supprimés' });
+
+    await prisma.message.delete({ where: { id: msgId } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur suppression message:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression du message' });
+  }
+});
+
 router.post('/toggle-ia/:contactId', profileMiddleware, async (req, res) => {
   try {
     const contact = await prisma.contact.findFirst({
@@ -146,7 +204,6 @@ router.post('/toggle-ia/:contactId', profileMiddleware, async (req, res) => {
       where: { id: contact.id },
       data: {
         ia_paused: newPaused,
-        // When human releases the contact (unpausing), clear sensitive flag too
         ...(newPaused === false ? { sensitive_flagged: false } : {})
       }
     });
