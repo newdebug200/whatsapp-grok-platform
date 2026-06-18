@@ -30,11 +30,16 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const [quickReplies, setQuickReplies] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [hoveredMsg, setHoveredMsg] = useState(null);
+  const [openMenu, setOpenMenu] = useState(null);
+  const [deletingMsg, setDeletingMsg] = useState(null);
+
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const emojiRef = useRef(null);
   const templatesRef = useRef(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     if (contact) {
@@ -61,9 +66,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (emojiRef.current && !emojiRef.current.contains(e.target)) {
-        setShowEmoji(false);
-      }
+      if (emojiRef.current && !emojiRef.current.contains(e.target)) setShowEmoji(false);
     };
     if (showEmoji) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -71,13 +74,19 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (templatesRef.current && !templatesRef.current.contains(e.target)) {
-        setShowTemplates(false);
-      }
+      if (templatesRef.current && !templatesRef.current.contains(e.target)) setShowTemplates(false);
     };
     if (showTemplates) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showTemplates]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenu(null);
+    };
+    if (openMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenu]);
 
   const loadMessages = async (contactId) => {
     setLoading(true);
@@ -159,6 +168,19 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       console.error('Erreur toggle IA:', err);
     } finally {
       setTogglingIA(false);
+    }
+  };
+
+  const handleDeleteMessage = async (msgId) => {
+    setOpenMenu(null);
+    setDeletingMsg(msgId);
+    try {
+      await axios.delete(`${API_URL}/messages/${msgId}`);
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+    } catch (err) {
+      console.error('Erreur suppression:', err);
+    } finally {
+      setDeletingMsg(null);
     }
   };
 
@@ -293,35 +315,106 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         ) : (
           messages.map((msg, i) => {
             const showDate = i === 0 || !isSameDay(msg.created_at, messages[i - 1].created_at);
+            const isSent = msg.direction === 'sent';
+            const isSystem = msg.direction === 'system';
+            const isHovered = hoveredMsg === msg.id;
+            const menuOpen = openMenu === msg.id;
+            const isDeleting = deletingMsg === msg.id;
+
             return (
               <React.Fragment key={msg.id}>
                 {showDate && (
                   <div className="date-separator"><span>{formatDateSep(msg.created_at)}</span></div>
                 )}
-                <div className={`message-bubble ${msg.direction === 'sent' ? 'sent' : msg.direction === 'system' ? 'system' : 'received'}`}>
-                  <span className="message-text">
-                    {/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: 0.85, fontStyle: 'italic' }}>
-                        <span style={{ fontSize: '1.1em' }}>
-                          {msg.content === '[Image]' ? '📷' :
-                           msg.content === '[Vidéo]' ? '🎥' :
-                           msg.content === '[Audio]' ? '🎵' :
-                           msg.content === '[Document]' ? '📄' :
-                           msg.content === '[Sticker]' ? '🎭' : '📎'}
+
+                {/* Message row: bubble + action button side by side */}
+                <div
+                  className={`message-row ${isSent ? 'sent' : isSystem ? 'system' : 'received'}`}
+                  onMouseEnter={() => setHoveredMsg(msg.id)}
+                  onMouseLeave={() => { setHoveredMsg(null); }}
+                  style={{ opacity: isDeleting ? 0.4 : 1, transition: 'opacity 0.2s' }}
+                >
+                  {/* For sent messages: ⋮ button appears to the LEFT of the bubble */}
+                  {isSent && (isHovered || menuOpen) && (
+                    <div className="msg-action-wrapper left" ref={menuOpen ? menuRef : null}>
+                      <button
+                        className="msg-menu-btn"
+                        onClick={() => setOpenMenu(menuOpen ? null : msg.id)}
+                        title="Actions"
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        </svg>
+                      </button>
+                      {menuOpen && (
+                        <div className="msg-menu-dropdown">
+                          <button
+                            className="msg-menu-item danger"
+                            onClick={() => handleDeleteMessage(msg.id)}
+                          >
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                            Supprimer ce message
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'}`}>
+                    <span className="message-text">
+                      {/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: 0.85, fontStyle: 'italic' }}>
+                          <span style={{ fontSize: '1.1em' }}>
+                            {msg.content === '[Image]' ? '📷' :
+                             msg.content === '[Vidéo]' ? '🎥' :
+                             msg.content === '[Audio]' ? '🎵' :
+                             msg.content === '[Document]' ? '📄' :
+                             msg.content === '[Sticker]' ? '🎭' : '📎'}
+                          </span>
+                          {msg.content.replace(/[\[\]]/g, '')}
                         </span>
-                        {msg.content.replace(/[\[\]]/g, '')}
-                      </span>
-                    ) : renderText(msg.content)}
-                  </span>
-                  <span className="message-time">
-                    {formatMsgTime(msg.created_at)}
-                    {msg.direction === 'sent' && (
-                      <svg className="read-tick" viewBox="0 0 16 11" fill="currentColor">
-                        <path d="M11.071.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.4 2.4 4.947-7.2a.75.75 0 0 1 1.04-.294z"/>
-                        <path d="M14.571.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.04.206.75.75 0 0 1-.114-.32l.108-.157 5.3-7.71a.75.75 0 0 1 1.04-.06z"/>
-                      </svg>
-                    )}
-                  </span>
+                      ) : renderText(msg.content)}
+                    </span>
+                    <span className="message-time">
+                      {formatMsgTime(msg.created_at)}
+                      {isSent && (
+                        <svg className="read-tick" viewBox="0 0 16 11" fill="currentColor" style={{ marginLeft: 4 }}>
+                          <path d="M11.071.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.4 2.4 4.947-7.2a.75.75 0 0 1 1.04-.294z"/>
+                          <path d="M14.571.653a.75.75 0 0 1 .206 1.04l-5.5 8a.75.75 0 0 1-1.04.206.75.75 0 0 1-.114-.32l.108-.157 5.3-7.71a.75.75 0 0 1 1.04-.06z"/>
+                        </svg>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* For received messages: ⋮ button appears to the RIGHT */}
+                  {!isSent && !isSystem && (isHovered || menuOpen) && (
+                    <div className="msg-action-wrapper right" ref={menuOpen ? menuRef : null}>
+                      <button
+                        className="msg-menu-btn"
+                        onClick={() => setOpenMenu(menuOpen ? null : msg.id)}
+                        title="Actions"
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        </svg>
+                      </button>
+                      {menuOpen && (
+                        <div className="msg-menu-dropdown">
+                          <button
+                            className="msg-menu-item"
+                            onClick={() => { navigator.clipboard.writeText(msg.content); setOpenMenu(null); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                            </svg>
+                            Copier le texte
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </React.Fragment>
             );
@@ -336,7 +429,6 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         </button>
       )}
 
-      {/* ── Templates picker ── */}
       {showTemplates && (
         <div className="emoji-picker" ref={templatesRef} style={{ maxHeight: 300, overflowY: 'auto' }}>
           <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border, rgba(255,255,255,0.08))', fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-secondary, #8e9baa)' }}>
