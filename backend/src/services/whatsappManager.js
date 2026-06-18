@@ -1,8 +1,29 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 const messageHandler = require('./messageHandler');
+
+// ─── Lazy-load whatsapp-web.js ────────────────────────────────────────────────
+let Client = null;
+let LocalAuth = null;
+let WWEB_AVAILABLE = false;
+
+let MessageMedia = null;
+
+try {
+  const wweb = require('whatsapp-web.js');
+  Client = wweb.Client;
+  LocalAuth = wweb.LocalAuth;
+  MessageMedia = wweb.MessageMedia;
+  WWEB_AVAILABLE = true;
+} catch (err) {
+  console.error('');
+  console.error('╔══════════════════════════════════════════════════════════════╗');
+  console.error('║  ATTENTION : whatsapp-web.js introuvable dans node_modules  ║');
+  console.error('║  Supprimez node_modules et relancez npm install              ║');
+  console.error('╚══════════════════════════════════════════════════════════════╝');
+  console.error('');
+}
 
 const REINIT_COOLDOWN_MS = 10000;
 const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
@@ -10,10 +31,10 @@ const CONTEXT_MAX = 20;
 
 class WhatsAppManager {
   constructor() {
-    // Key: profileId (number) or temp string "tmp_accountId_timestamp" before phone known
     this.clients = new Map();
-    // In-memory context cache for Groq: key = `${profileId}_${contactId}`
     this.contextCache = new Map();
+    this.runningCampaigns = new Map(); // campaignId → { cancelled: boolean }
+    this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
     this.io = null;
     this.prisma = null;
   }
@@ -21,7 +42,7 @@ class WhatsAppManager {
   setIO(io) { this.io = io; }
   setPrisma(prisma) { this.prisma = prisma; }
 
-  // ─── Context cache helpers ────────────────────────────────────────────────
+  // ─── Context cache ────────────────────────────────────────────────────────
 
   addToCache(profileId, contactId, direction, content) {
     const key = `${profileId}_${contactId}`;
@@ -41,7 +62,15 @@ class WhatsAppManager {
     }
   }
 
-  // ─── Client lookup helpers ────────────────────────────────────────────────
+  emitToProfileAccount(profileId, event, data) {
+    const found = this._getEntryByProfileId(profileId);
+    const accountId = found?.entry?.accountId;
+    if (accountId && this.io) {
+      this.io.to(`account_${accountId}`).emit(event, data);
+    }
+  }
+
+  // ─── Client lookup ────────────────────────────────────────────────────────
 
   _getEntryByProfileId(profileId) {
     for (const [key, entry] of this.clients) {
@@ -58,11 +87,7 @@ class WhatsAppManager {
     return results;
   }
 
-  _tempKey(accountId) {
-    return `tmp_${accountId}_${Date.now()}`;
-  }
-
-  // ─── Chrome helpers ───────────────────────────────────────────────────────
+  _tempKey(accountId) { return `tmp_${accountId}_${Date.now()}`; }
 
   _sessionId(clientKey) {
     return typeof clientKey === 'number' ? `profile_${clientKey}` : clientKey;
@@ -76,19 +101,9 @@ class WhatsAppManager {
     for (const dir of searchDirs) {
       for (const lock of lockNames) {
         const p = path.join(dir, lock);
-        try { if (fs.existsSync(p)) { fs.unlinkSync(p); console.log(`[WA] Verrou supprimé: ${p}`); } } catch (_) {}
+        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {}
       }
     }
-  }
-
-  _killOrphanChrome() {
-    try {
-      if (process.platform === 'win32') {
-        execSync('taskkill /F /IM chrome.exe /T 2>nul', { stdio: 'ignore' });
-      } else {
-        execSync('pkill -f "wwebjs" 2>/dev/null || true', { stdio: 'ignore' });
-      }
-    } catch (_) {}
   }
 
   async _destroyEntry(key) {
@@ -98,20 +113,100 @@ class WhatsAppManager {
     this.clients.delete(key);
   }
 
-  // ─── Main: initialize a WhatsApp client ──────────────────────────────────
+  _findEntryByClient(client) {
+    for (const [key, entry] of this.clients) {
+      if (entry.client === client) return { key, entry };
+    }
+    return null;
+  }
 
-  /**
-   * @param {number} accountId
-   * @param {number|null} profileId  null = new connection (no profile yet)
-   */
+  // ─── Sleep helper (cancellable, with optional keepalive) ─────────────────
+
+  _sleep(ms, handle, waClient = null) {
+    return new Promise((resolve) => {
+      let elapsed = 0;
+      const TICK = 500;
+      const KEEPALIVE_EVERY = 30000; // ping every 30s to prevent Puppeteer timeout
+      const interval = setInterval(async () => {
+        elapsed += TICK;
+        if (handle?.cancelled) { clearInterval(interval); resolve(); return; }
+        if (waClient && elapsed % KEEPALIVE_EVERY === 0) {
+          try { await waClient.getState(); } catch (_) {}
+        }
+      }, TICK);
+      setTimeout(() => { clearInterval(interval); resolve(); }, ms);
+    });
+  }
+
+  // ─── Import WhatsApp contacts from phone book ─────────────────────────────
+
+  async _importContacts(client, profileId) {
+    if (!WWEB_AVAILABLE) return;
+    try {
+      const allContacts = await client.getContacts();
+      const myContacts = allContacts.filter(c =>
+        c.isMyContact && !c.isGroup && c.id?.server === 'c.us'
+      );
+      console.log(`[WA] Import de ${myContacts.length} contact(s) depuis le répertoire — profil ${profileId}`);
+      let imported = 0;
+      let skippedInvalid = 0;
+      for (const wContact of myContacts) {
+        try {
+          // Use wContact.number if available (real E.164 phone), else fall back to id.user
+          const rawUser = (wContact.number && String(wContact.number).length >= 7)
+            ? String(wContact.number)
+            : wContact.id.user;
+
+          // E.164 validation: must be 7–15 digits (ITU standard max = 15)
+          const digits = rawUser.replace(/\D/g, '');
+          if (digits.length < 7 || digits.length > 15) {
+            skippedInvalid++;
+            continue;
+          }
+
+          const phoneNumber = rawUser.startsWith('+') ? rawUser : '+' + rawUser;
+          const waId = wContact.id._serialized || (digits + '@c.us');
+          const name = wContact.name || wContact.pushname || null;
+          await this.prisma.contact.upsert({
+            where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } },
+            create: { profile_id: profileId, phone_number: phoneNumber, wa_id: waId, name },
+            update: { wa_id: waId, ...(name ? { name } : {}) }
+          });
+          imported++;
+        } catch (_) {}
+      }
+      console.log(`[WA] ${imported} contact(s) importés — profil ${profileId}${skippedInvalid > 0 ? ` (${skippedInvalid} ignorés car format invalide)` : ''}`);
+    } catch (err) {
+      console.warn('[WA] Import contacts impossible:', err.message);
+    }
+  }
+
+  // ─── Initialize a WhatsApp client ─────────────────────────────────────────
+
   async initializeClient(accountId, profileId = null) {
-    // If profileId given, check if already running
+    if (!WWEB_AVAILABLE) {
+      this.io?.to(`account_${accountId}`).emit('status', {
+        isConnected: false, qrCode: null, status: 'error', profileId,
+        message: 'Module WhatsApp non installé. Supprimez node_modules et relancez npm install.'
+      });
+      return;
+    }
+
     if (profileId !== null) {
       const existing = this._getEntryByProfileId(profileId);
       if (existing) {
         const { entry } = existing;
         if (['initializing', 'connected', 'qr'].includes(entry.status)) {
-          console.log(`[WA] Déjà en cours (${entry.status}) — profil ${profileId}`);
+          if (entry.status === 'connected') {
+            this.io?.to(`account_${accountId}`).emit('status', {
+              isConnected: true, qrCode: null, status: 'connected',
+              profileId: entry.profileId, phoneNumber: entry.phoneNumber
+            });
+          } else if (entry.qrCode) {
+            this.io?.to(`account_${accountId}`).emit('status', {
+              isConnected: false, qrCode: entry.qrCode, status: 'qr', profileId
+            });
+          }
           return;
         }
         if (entry.lastErrorAt && Date.now() - entry.lastErrorAt < REINIT_COOLDOWN_MS) {
@@ -124,9 +219,27 @@ class WhatsAppManager {
         }
         await this._destroyEntry(existing.key);
       }
+    } else {
+      const existingEntries = this._getEntriesForAccount(accountId);
+      const active = existingEntries.find(e =>
+        ['initializing', 'connected', 'qr'].includes(e.entry.status)
+      );
+      if (active) {
+        if (active.entry.status === 'connected') {
+          this.io?.to(`account_${accountId}`).emit('status', {
+            isConnected: true, qrCode: null, status: 'connected',
+            profileId: active.entry.profileId, phoneNumber: active.entry.phoneNumber
+          });
+        } else if (active.entry.qrCode) {
+          this.io?.to(`account_${accountId}`).emit('status', {
+            isConnected: false, qrCode: active.entry.qrCode, status: 'qr',
+            profileId: active.entry.profileId
+          });
+        }
+        return;
+      }
     }
 
-    // Choose the client map key
     const clientKey = profileId !== null ? profileId : this._tempKey(accountId);
     const sessionId = this._sessionId(clientKey);
     this._cleanChromeLocks(clientKey);
@@ -140,38 +253,31 @@ class WhatsAppManager {
     ];
     if (!isWindows) puppeteerArgs.push('--no-zygote', '--single-process');
 
-    console.log(`[WA] Initialisation — compte ${accountId}, clé ${clientKey} (${process.platform})`);
+    console.log(`[WA] Initialisation — compte ${accountId}, clé ${clientKey}`);
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: `session-${sessionId}`, dataPath: SESSION_BASE }),
-      puppeteer: { headless: true, args: puppeteerArgs }
+      puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 600000 }
     });
 
     this.clients.set(clientKey, {
-      client,
-      status: 'initializing',
-      accountId,
-      profileId: profileId,
-      phoneNumber: null,
-      qrCode: null,
-      lastErrorAt: null
+      client, status: 'initializing', accountId,
+      profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null
     });
 
     // ── QR ──
     client.on('qr', (qr) => {
-      console.log(`[WA] QR Code — clé ${clientKey}`);
       const entry = this.clients.get(clientKey);
       if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
       this.io?.to(`account_${accountId}`).emit('status', {
-        isConnected: false, qrCode: qr, status: 'qr',
-        profileId: profileId
+        isConnected: false, qrCode: qr, status: 'qr', profileId
       });
     });
 
     // ── Ready ──
     client.on('ready', async () => {
       const phoneNumber = '+' + client.info.wid.user;
-      console.log(`[WA] Connecté — ${phoneNumber} (compte ${accountId})`);
+      console.log(`[WA] Connecté — ${phoneNumber}`);
 
       let profile;
       try {
@@ -181,11 +287,11 @@ class WhatsAppManager {
           update: { is_connected: true }
         });
       } catch (err) {
-        console.error('[WA] Erreur création profil:', err.message);
+        console.error('[WA] Erreur upsert profil:', err.message);
         return;
       }
 
-      // Move from temp key to real profileId if needed
+      // Move from temp key to real profileId
       if (clientKey !== profile.id) {
         const entry = this.clients.get(clientKey);
         if (entry) {
@@ -196,6 +302,15 @@ class WhatsAppManager {
           entry.status = 'connected';
           entry.lastErrorAt = null;
           this.clients.set(profile.id, entry);
+        }
+        const oldDir = path.join(SESSION_BASE, `session-${clientKey}`);
+        const newDir = path.join(SESSION_BASE, `session-profile_${profile.id}`);
+        if (fs.existsSync(oldDir) && !fs.existsSync(newDir)) {
+          try { fs.renameSync(oldDir, newDir); } catch (_) {
+            setTimeout(() => {
+              try { if (fs.existsSync(oldDir) && !fs.existsSync(newDir)) fs.renameSync(oldDir, newDir); } catch (_) {}
+            }, 3000);
+          }
         }
       } else {
         const entry = this.clients.get(clientKey);
@@ -209,29 +324,42 @@ class WhatsAppManager {
       }
 
       this.io?.to(`account_${accountId}`).emit('profile-ready', {
-        id: profile.id,
-        phone_number: profile.phone_number,
-        display_name: profile.display_name,
-        is_connected: true
+        id: profile.id, phone_number: profile.phone_number,
+        display_name: profile.display_name, is_connected: true
       });
-
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: true, qrCode: null, status: 'connected',
         profileId: profile.id, phoneNumber: profile.phone_number
       });
+
+      // Mark connection time — used to ignore queued messages replayed on reconnect
+      const readyEntry = this.clients.get(profile.id);
+      if (readyEntry) readyEntry.readyAt = Date.now();
+
+      // Import phone book contacts in background
+      this._importContacts(client, profile.id).catch(() => {});
     });
 
     // ── Incoming message ──
     client.on('message', async (message) => {
       try {
         if (message.fromMe) return;
+        if (this.campaignSendingWaIds.has(message.from)) return;
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
           || this._findEntryByClient(client);
         if (!entry?.entry?.profileId) return;
-
         const currentProfileId = entry.entry.profileId;
-        await messageHandler.handleIncomingMessage(message, client, this.prisma, currentProfileId, this);
 
+        // Ignore messages replayed on reconnect:
+        // skip if message was sent before the session became ready
+        const readyAt = entry.entry.readyAt || 0;
+        if (message.timestamp * 1000 < readyAt) return;
+        // Also skip anything arriving in the first 20s grace period after reconnect
+        if (Date.now() - readyAt < 20000) return;
+
+        // If a campaign is running for this profile, save message but skip AI
+        const campaignActive = [...this.runningCampaigns.values()].some(h => h.profileId === currentProfileId);
+        await messageHandler.handleIncomingMessage(message, client, this.prisma, currentProfileId, this, { skipAI: campaignActive });
         const contact = await message.getContact();
         const phone = '+' + (contact.number || contact.id.user);
         this.io?.to(`account_${accountId}`).emit('new-message', {
@@ -245,27 +373,18 @@ class WhatsAppManager {
 
     // ── Disconnected ──
     client.on('disconnected', async (reason) => {
-      console.log(`[WA] Déconnecté — clé ${clientKey}: ${reason}`);
+      console.log(`[WA] Déconnecté — ${reason}`);
       const found = this._findEntryByClient(client);
       const resolvedProfileId = found?.entry?.profileId;
-
       if (resolvedProfileId) {
         try {
           await this.prisma.whatsAppProfile.update({
             where: { id: resolvedProfileId }, data: { is_connected: false }
           });
-        } catch (err) {
-          console.error('[WA] Erreur DB disconnect:', err.message);
-        }
+        } catch (_) {}
         this.clearCache(resolvedProfileId);
       }
-
-      if (found) {
-        found.entry.status = 'disconnected';
-        found.entry.qrCode = null;
-        this.clients.delete(found.key);
-      }
-
+      if (found) { found.entry.status = 'disconnected'; found.entry.qrCode = null; this.clients.delete(found.key); }
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'disconnected',
         profileId: resolvedProfileId || null
@@ -274,13 +393,12 @@ class WhatsAppManager {
 
     // ── Auth failure ──
     client.on('auth_failure', (msg) => {
-      console.error(`[WA] Auth failure — clé ${clientKey}:`, msg);
+      console.error(`[WA] Auth failure:`, msg);
       const found = this._findEntryByClient(client);
       if (found) { found.entry.status = 'auth_failure'; found.entry.lastErrorAt = Date.now(); }
       this.io?.to(`account_${accountId}`).emit('status', {
-        isConnected: false, qrCode: null, status: 'auth_failure',
-        profileId: profileId,
-        message: 'Authentification refusée. Réessayez en scannant le QR code.'
+        isConnected: false, qrCode: null, status: 'auth_failure', profileId,
+        message: 'Authentification refusée. Scannez de nouveau le QR code.'
       });
       client.destroy().catch(() => {});
       if (found) this.clients.delete(found.key);
@@ -288,57 +406,39 @@ class WhatsAppManager {
 
     // ── Init error ──
     client.initialize().catch(async (err) => {
-      console.error(`[WA] Erreur initialisation clé ${clientKey}:`, err.message);
+      console.error(`[WA] Erreur init:`, err.message);
       try { await client.destroy(); } catch (_) {}
       this._cleanChromeLocks(clientKey);
-
       const found = this._findEntryByClient(client);
       if (found) { found.entry.status = 'error'; found.entry.lastErrorAt = Date.now(); }
-
       const isBrowserLocked = err.message?.includes('already running') || err.message?.includes('userDataDir');
       const isContextDestroyed = err.message?.includes('context was destroyed') || err.message?.includes('Navigating frame');
       let userMessage;
-      if (isBrowserLocked) userMessage = 'Un Chrome précédent bloquait la session — il a été nettoyé. Réessayez.';
-      else if (isContextDestroyed) userMessage = 'Chrome a démarré mais a planté. Vérifiez que Google Chrome est installé.';
+      if (isBrowserLocked) userMessage = 'Un Chrome précédent bloquait — nettoyé. Réessayez.';
+      else if (isContextDestroyed) userMessage = 'Chrome a planté. Vérifiez que Google Chrome est installé.';
       else userMessage = `Erreur WhatsApp: ${err.message}`;
-
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'error', profileId, message: userMessage
       });
-
       setTimeout(() => {
-        if (found) {
-          const e = this.clients.get(found.key);
-          if (e?.status === 'error') this.clients.delete(found.key);
-        }
+        if (found) { const e = this.clients.get(found.key); if (e?.status === 'error') this.clients.delete(found.key); }
       }, REINIT_COOLDOWN_MS);
     });
   }
 
-  _findEntryByClient(client) {
-    for (const [key, entry] of this.clients) {
-      if (entry.client === client) return { key, entry };
-    }
-    return null;
-  }
-
-  // ─── Status ──────────────────────────────────────────────────────────────
+  // ─── Status ───────────────────────────────────────────────────────────────
 
   getStatus(accountId) {
     const entries = this._getEntriesForAccount(accountId);
     if (entries.length === 0) {
       return { isConnected: false, qrCode: null, status: 'not_initialized', profileId: null, phoneNumber: null };
     }
-    // Prefer connected, then qr, then first
     const connected = entries.find(e => e.entry.status === 'connected');
     const qr = entries.find(e => e.entry.status === 'qr');
     const { entry } = connected || qr || entries[0];
     return {
-      isConnected: entry.status === 'connected',
-      qrCode: entry.qrCode,
-      status: entry.status,
-      profileId: entry.profileId || null,
-      phoneNumber: entry.phoneNumber || null
+      isConnected: entry.status === 'connected', qrCode: entry.qrCode, status: entry.status,
+      profileId: entry.profileId || null, phoneNumber: entry.phoneNumber || null
     };
   }
 
@@ -351,22 +451,21 @@ class WhatsAppManager {
 
   getAllStatuses(accountId) {
     return this._getEntriesForAccount(accountId).map(({ entry }) => ({
-      profileId: entry.profileId,
-      phoneNumber: entry.phoneNumber,
-      status: entry.status,
-      isConnected: entry.status === 'connected'
+      profileId: entry.profileId, phoneNumber: entry.phoneNumber,
+      status: entry.status, isConnected: entry.status === 'connected'
     }));
   }
 
   // ─── Send message ─────────────────────────────────────────────────────────
 
   async sendMessage(profileId, to, content) {
+    if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
     const found = this._getEntryByProfileId(profileId);
-    if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté pour ce profil');
+    if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
     await found.entry.client.sendMessage(to, content);
   }
 
-  // ─── Logout ──────────────────────────────────────────────────────────────
+  // ─── Logout ───────────────────────────────────────────────────────────────
 
   async logout(profileId) {
     const found = this._getEntryByProfileId(profileId);
@@ -376,26 +475,29 @@ class WhatsAppManager {
       this.clients.delete(found.key);
       this.clearCache(profileId);
     }
-    try {
-      await this.prisma.whatsAppProfile.update({
-        where: { id: profileId }, data: { is_connected: false }
-      });
-    } catch (_) {}
-
+    try { await this.prisma.whatsAppProfile.update({ where: { id: profileId }, data: { is_connected: false } }); } catch (_) {}
     const sessionDir = path.join(SESSION_BASE, `session-profile_${profileId}`);
     if (fs.existsSync(sessionDir)) {
-      fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`[WA] Session supprimée — profil ${profileId}`);
+      const deleteWithRetry = (retries = 4, delay = 1500) => {
+        try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch (err) {
+          if (retries > 0 && ['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(err.code)) {
+            setTimeout(() => deleteWithRetry(retries - 1, delay * 2), delay);
+          }
+        }
+      };
+      deleteWithRetry();
     }
   }
 
-  // ─── Restore sessions on startup ─────────────────────────────────────────
+  // ─── Restore sessions ─────────────────────────────────────────────────────
 
   async restoreExistingSessions() {
+    if (!WWEB_AVAILABLE) {
+      console.log('[WA] Restauration ignorée : whatsapp-web.js non installé');
+      return;
+    }
     try {
-      const profiles = await this.prisma.whatsAppProfile.findMany({
-        where: { is_connected: true }
-      });
+      const profiles = await this.prisma.whatsAppProfile.findMany({ where: { is_connected: true } });
       console.log(`Restauration de ${profiles.length} session(s) WhatsApp`);
       for (const profile of profiles) {
         this._cleanChromeLocks(profile.id);
@@ -403,8 +505,292 @@ class WhatsAppManager {
         await new Promise(r => setTimeout(r, 3000));
       }
     } catch (err) {
-      console.error('[WA] Erreur restauration sessions:', err.message);
+      console.error('[WA] Erreur restauration:', err.message);
     }
+  }
+
+  // ─── Campaign runner ──────────────────────────────────────────────────────
+
+  // Detect Puppeteer/Chrome errors that make all further sends impossible
+  _isFatalBrowserError(errMsg) {
+    const msg = (errMsg || '').toLowerCase();
+    return (
+      msg.includes('detached frame') ||
+      msg.includes('target closed') ||
+      msg.includes('session closed') ||
+      msg.includes('context was destroyed') ||
+      msg.includes('connection closed') ||
+      msg.includes('browser has disconnected') ||
+      msg.includes('protocol error')
+    );
+  }
+
+  // Random delay between campaign contacts using campaign's min/max settings
+  _campaignContactDelay(minSec, maxSec) {
+    const min = (minSec ?? 20) * 1000;
+    const max = (maxSec ?? 60) * 1000;
+    return min + Math.random() * Math.max(0, max - min);
+  }
+
+  // Typing duration based on message length (30 chars/s, clamped 2–8s)
+  _typingDuration(text) {
+    return Math.min(Math.max((text.length / 30) * 1000, 2000), 8000);
+  }
+
+  // Send one message with "typing…" indicator; retry once on failure
+  async _sendWithTyping(waClient, waId, content, handle) {
+    const isNoLidError = (msg) => typeof msg === 'string' && msg.includes('No LID');
+    const attempt = async () => {
+      try {
+        const chat = await waClient.getChatById(waId);
+        await chat.sendStateTyping();
+        await this._sleep(this._typingDuration(content), handle);
+        if (handle.cancelled) return;
+        await chat.clearState();
+      } catch (_) {
+        // Typing indicator not critical — continue
+      }
+      await waClient.sendMessage(waId, content);
+    };
+    try {
+      await attempt();
+    } catch (err) {
+      // No LID = number not reachable via WA Web; retrying won't help
+      if (isNoLidError(err.message)) throw err;
+      // Retry once after 5s for other transient errors
+      await this._sleep(5000, handle);
+      if (handle.cancelled) return;
+      await attempt();
+    }
+  }
+
+  async startCampaign(campaignId, profileId) {
+    if (this.runningCampaigns.has(campaignId)) return;
+
+    const found = this._getEntryByProfileId(profileId);
+    if (!found || found.entry.status !== 'connected') {
+      const accountId = found?.entry?.accountId;
+      try {
+        await this.prisma.campaign.update({
+          where: { id: campaignId },
+          data: { status: 'draft' }
+        });
+      } catch (_) {}
+      if (accountId) {
+        this.io?.to(`account_${accountId}`).emit('campaign-error', {
+          campaignId, error: 'WhatsApp non connecté pour ce profil. Reconnectez WhatsApp avant de lancer la campagne.'
+        });
+      }
+      return;
+    }
+
+    const waClient = found.entry.client;
+    const accountId = found.entry.accountId;
+    const handle = { cancelled: false, profileId };
+    this.runningCampaigns.set(campaignId, handle);
+
+    try {
+      const campaign = await this.prisma.campaign.findUnique({
+        where: { id: campaignId },
+        include: {
+          messages: { orderBy: { order_index: 'asc' } },
+          targets: {
+            where: { status: 'pending' },
+            include: { contact: true },
+            orderBy: { id: 'asc' }
+          }
+        }
+      });
+
+      if (!campaign || campaign.targets.length === 0) {
+        this.runningCampaigns.delete(campaignId);
+        await this.prisma.campaign.update({
+          where: { id: campaignId }, data: { status: 'completed', completed_at: new Date() }
+        });
+        return;
+      }
+
+      await this.prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'running', started_at: new Date() }
+      });
+
+      const targets = campaign.targets;
+      const totalTargets = await this.prisma.campaignTarget.count({ where: { campaign_id: campaignId } });
+
+      // Async runner — fire and forget
+      (async () => {
+        for (let i = 0; i < targets.length; i++) {
+          if (handle.cancelled) break;
+
+          // Anti-ban: 2–5 min break every 20 contacts
+          if (i > 0 && i % 20 === 0) {
+            const breakMs = (120 + Math.random() * 180) * 1000;
+            console.log(`[Campaign ${campaignId}] Pause anti-ban ${Math.round(breakMs / 1000)}s (lot de 20)…`);
+            await this._sleep(breakMs, handle, waClient);
+            if (handle.cancelled) break;
+          }
+
+          // Human-like delay between contacts (skip before first)
+          if (i > 0) {
+            const delayMs = this._campaignContactDelay(campaign.delay_min_seconds, campaign.delay_max_seconds);
+            console.log(`[Campaign ${campaignId}] Attente ${Math.round(delayMs / 1000)}s — contact ${i + 1}/${targets.length}`);
+            await this._sleep(delayMs, handle, waClient);
+            if (handle.cancelled) break;
+          }
+
+          const target = targets[i];
+          const contact = target.contact;
+
+          // Resolve the real WhatsApp ID to handle @lid accounts
+          let waId;
+          try {
+            const rawPhone = contact.phone_number.replace('+', '');
+            const numId = await waClient.getNumberId(rawPhone);
+            if (!numId) {
+              console.log(`[Campaign ${campaignId}] Numéro non WhatsApp — ${contact.phone_number}`);
+              await this.prisma.campaignTarget.update({
+                where: { id: target.id },
+                data: { status: 'failed', error: 'Numéro non enregistré sur WhatsApp' }
+              }).catch(() => {});
+              continue;
+            }
+            // If getNumberId returns a @lid (new WA format), resolve the real phone number
+            if (numId._serialized && numId._serialized.includes('@lid')) {
+              let resolvedPhone = rawPhone;
+              try {
+                // Try to get the actual phone number from the @lid contact object
+                const realContact = await waClient.getContactById(numId._serialized);
+                if (realContact?.number && String(realContact.number).length >= 7) {
+                  resolvedPhone = String(realContact.number);
+                  console.log(`[Campaign ${campaignId}] @lid résolu → +${resolvedPhone}`);
+                } else {
+                  console.log(`[Campaign ${campaignId}] @lid → fallback numéro stocké ${rawPhone}`);
+                }
+              } catch (_) {
+                console.log(`[Campaign ${campaignId}] @lid → fallback numéro stocké ${rawPhone}`);
+              }
+              waId = resolvedPhone + '@c.us';
+            } else {
+              waId = numId._serialized;
+            }
+          } catch (_) {
+            // Fallback if getNumberId throws
+            waId = (contact.wa_id && !contact.wa_id.includes('@lid'))
+              ? contact.wa_id
+              : (contact.phone_number.replace('+', '') + '@c.us');
+          }
+
+          try {
+            // Pick one random variant — each contact gets exactly one message
+            const variantIdx = Math.floor(Math.random() * campaign.messages.length);
+            const msg = campaign.messages[variantIdx];
+            const contactFirstName = contact.name ? contact.name.split(/\s+/)[0] : '';
+            const content = msg.content
+              .replace(/\{\{prenom\}\}/gi, contactFirstName || contact.name || 'cher(e) client(e)')
+              .replace(/\{\{name\}\}/gi, contact.name || 'cher(e) client(e)')
+              .replace(/\{\{nom\}\}/gi, contact.name || 'cher(e) client(e)')
+              .replace(/\{\{telephone\}\}/gi, contact.phone_number || '')
+              .replace(/\{\{tel\}\}/gi, contact.phone_number || '');
+
+            console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
+            this.campaignSendingWaIds.add(waId);
+            try {
+              if (msg.media_url && MessageMedia) {
+                try {
+                  const mediaResp = await axios.get(msg.media_url, { responseType: 'arraybuffer', timeout: 30000 });
+                  const base64Data = Buffer.from(mediaResp.data).toString('base64');
+                  const mimeType = msg.media_type || mediaResp.headers['content-type'] || 'application/octet-stream';
+                  const media = new MessageMedia(mimeType, base64Data);
+                  await waClient.sendMessage(waId, media, content ? { caption: content } : {});
+                } catch (mediaErr) {
+                  console.error(`[Campaign ${campaignId}] Erreur média → ${contact.phone_number}: ${mediaErr.message}`);
+                  if (content) await this._sendWithTyping(waClient, waId, content, handle);
+                }
+              } else {
+                await this._sendWithTyping(waClient, waId, content, handle);
+              }
+            } finally {
+              setTimeout(() => this.campaignSendingWaIds.delete(waId), 3000);
+            }
+
+            if (!handle.cancelled) {
+              this.prisma.message.create({
+                data: { contact_id: contact.id, content: msg.media_url ? `[Média] ${content}`.trim() : content, direction: 'sent', type: msg.media_url ? 'media' : 'text', created_at: new Date() }
+              }).catch(() => {});
+              await this.prisma.campaignTarget.update({
+                where: { id: target.id },
+                data: { status: 'sent', sent_at: new Date() }
+              });
+            }
+          } catch (err) {
+            console.error(`[Campaign ${campaignId}] Echec envoi → ${contact.phone_number}: ${err.message}`);
+            await this.prisma.campaignTarget.update({
+              where: { id: target.id },
+              data: { status: 'failed', error: err.message.slice(0, 200) }
+            }).catch(() => {});
+
+            // Fatal browser error — Chrome/Puppeteer is broken, stop immediately
+            if (this._isFatalBrowserError(err.message)) {
+              console.error(`[Campaign ${campaignId}] Erreur Puppeteer fatale — pause automatique`);
+              handle.cancelled = true;
+              await this.prisma.campaign.update({
+                where: { id: campaignId }, data: { status: 'paused' }
+              }).catch(() => {});
+              this.io?.to(`account_${accountId}`).emit('campaign-error', {
+                campaignId,
+                error: 'WhatsApp s\'est déconnecté en cours de campagne (navigateur interne planté). Reconnectez WhatsApp depuis Bot Config, puis relancez la campagne.'
+              });
+              break;
+            }
+          }
+
+          // Emit real-time progress
+          const done = await this.prisma.campaignTarget.count({
+            where: { campaign_id: campaignId, status: { not: 'pending' } }
+          });
+          this.io?.to(`account_${accountId}`).emit('campaign-progress', {
+            campaignId, done, total: totalTargets
+          });
+        }
+
+        if (!handle.cancelled) {
+          await this.prisma.campaign.update({
+            where: { id: campaignId },
+            data: { status: 'completed', completed_at: new Date() }
+          });
+          const finalDone = await this.prisma.campaignTarget.count({
+            where: { campaign_id: campaignId, status: { not: 'pending' } }
+          });
+          this.io?.to(`account_${accountId}`).emit('campaign-progress', {
+            campaignId, done: finalDone, total: totalTargets, completed: true
+          });
+          console.log(`[Campaign ${campaignId}] Terminée — ${finalDone}/${totalTargets} envoyés`);
+        }
+
+        this.runningCampaigns.delete(campaignId);
+      })().catch(err => {
+        console.error(`[Campaign ${campaignId}] Erreur runner:`, err.message);
+        this.runningCampaigns.delete(campaignId);
+        this.prisma.campaign.update({ where: { id: campaignId }, data: { status: 'paused' } }).catch(() => {});
+      });
+
+    } catch (err) {
+      console.error(`[Campaign ${campaignId}] Erreur démarrage:`, err.message);
+      this.runningCampaigns.delete(campaignId);
+    }
+  }
+
+  async stopCampaign(campaignId) {
+    const handle = this.runningCampaigns.get(campaignId);
+    if (handle) {
+      handle.cancelled = true;
+      this.runningCampaigns.delete(campaignId);
+    }
+    try {
+      await this.prisma.campaign.update({ where: { id: campaignId }, data: { status: 'paused' } });
+    } catch (_) {}
+    console.log(`[Campaign ${campaignId}] Mis en pause`);
   }
 }
 
