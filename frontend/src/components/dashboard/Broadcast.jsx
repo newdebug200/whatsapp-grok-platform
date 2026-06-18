@@ -59,7 +59,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const [form, setForm] = useState({
     name: '',
-    messages: [{ content: '', media_url: '', media_type: 'image/jpeg' }],
+    messages: [{ content: '' }],
     contactIds: [],
     tagId: null,
     delayMin: 30,
@@ -76,7 +76,7 @@ export default function Broadcast({ socket, activeProfile }) {
   const fileInputRef = useRef(null);
 
   const resetForm = () => {
-    setForm({ name: '', messages: [{ content: '', media_url: '', media_type: 'image/jpeg' }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90, scheduled: false, scheduledAt: '' });
+    setForm({ name: '', messages: [{ content: '' }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90, scheduled: false, scheduledAt: '' });
     setContactSearch('');
     setContactTagFilter(null);
     setSelectAll(false);
@@ -173,9 +173,8 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const handleRestoreAll = () => setHiddenContactIds([]);
 
-  const handleAddMessage = () => setForm(prev => ({ ...prev, messages: [...prev.messages, { content: '', media_url: '', media_type: 'image/jpeg' }] }));
+  const handleAddMessage = () => setForm(prev => ({ ...prev, messages: [...prev.messages, { content: '' }] }));
   const handleRemoveMessage = (i) => setForm(prev => ({ ...prev, messages: prev.messages.filter((_, j) => j !== i) }));
-  const handleMediaChange = (i, field, value) => setForm(prev => ({ ...prev, messages: prev.messages.map((m, idx) => idx === i ? { ...m, [field]: value } : m) }));
   const handleMessageChange = (i, value) => {
     const msgs = [...form.messages];
     msgs[i] = { ...msgs[i], content: value };
@@ -184,7 +183,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const handleCreateCampaign = async () => {
     if (!form.name.trim()) return setError('Donnez un nom à la campagne');
-    if (form.messages.some(m => !m.content.trim() && !m.media_url?.trim())) return setError('Chaque variante doit avoir un contenu ou un lien média');
+    if (form.messages.some(m => !m.content.trim())) return setError('Chaque variante doit avoir un contenu');
     if (targetMode === 'tag' && !form.tagId) return setError('Sélectionnez un tag cible');
     if (targetMode === 'manual' && form.contactIds.length === 0) return setError('Sélectionnez au moins un contact');
     if (form.delayMin < 5) return setError('Le délai minimum ne peut pas être inférieur à 5 secondes');
@@ -197,7 +196,7 @@ export default function Broadcast({ socket, activeProfile }) {
     try {
       const payload = {
         name: form.name.trim(),
-        messages: form.messages.map((m, i) => ({ content: m.content, order_index: i, delay_after_seconds: 0, ...(m.media_url?.trim() && { media_url: m.media_url.trim(), media_type: m.media_type || 'image/jpeg' }) })),
+        messages: form.messages.map((m, i) => ({ content: m.content, order_index: i, delay_after_seconds: 0 })),
         delay_min_seconds: form.delayMin,
         delay_max_seconds: form.delayMax,
         ...(form.scheduled && form.scheduledAt && { scheduled_at: new Date(form.scheduledAt).toISOString() })
@@ -380,31 +379,7 @@ export default function Broadcast({ socket, activeProfile }) {
                 <div className="bc-msg-index">{i + 1}</div>
                 <textarea className="bc-textarea" value={msg.content}
                   onChange={e => handleMessageChange(i, e.target.value)}
-                  placeholder={`Variante ${i + 1}… Utilisez {{prenom}}, {{nom}}, {{telephone}} pour personnaliser.`} rows={3} />
-                <div className="bc-media-row">
-                  <input
-                    type="url"
-                    className="bc-media-url-input"
-                    placeholder="🖼 URL d'un média (image, PDF, audio) — optionnel"
-                    value={msg.media_url || ''}
-                    onChange={e => handleMediaChange(i, 'media_url', e.target.value)}
-                  />
-                  {msg.media_url?.trim() && (
-                    <select
-                      className="bc-media-type-select"
-                      value={msg.media_type || 'image/jpeg'}
-                      onChange={e => handleMediaChange(i, 'media_type', e.target.value)}
-                    >
-                      <option value="image/jpeg">📷 Image JPEG</option>
-                      <option value="image/png">📷 Image PNG</option>
-                      <option value="image/webp">📷 Image WebP</option>
-                      <option value="audio/mpeg">🎵 Audio MP3</option>
-                      <option value="audio/ogg">🎵 Audio OGG</option>
-                      <option value="application/pdf">📄 PDF</option>
-                      <option value="video/mp4">🎥 Vidéo MP4</option>
-                    </select>
-                  )}
-                </div>
+                  placeholder={`Variante ${i + 1}…`} rows={3} />
                 {form.messages.length > 1 && (
                   <button className="bc-remove-msg" onClick={() => handleRemoveMessage(i)} title="Supprimer">
                     <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
@@ -668,14 +643,7 @@ export default function Broadcast({ socket, activeProfile }) {
             {detail.messages?.map((m, i) => (
               <div key={m.id} className="bc-msg-preview">
                 <span className="bc-msg-index">{i + 1}</span>
-                <div style={{ flex: 1 }}>
-                  {m.content && <p className="bc-msg-content" style={{ margin: 0 }}>{m.content}</p>}
-                  {m.media_url && (
-                    <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--text-muted, #999)', wordBreak: 'break-all' }}>
-                      📎 {m.media_type || 'media'} — <a href={m.media_url} target="_blank" rel="noopener noreferrer" style={{ color: '#25d366' }}>{m.media_url.length > 60 ? m.media_url.slice(0, 60) + '…' : m.media_url}</a>
-                    </p>
-                  )}
-                </div>
+                <p className="bc-msg-content">{m.content}</p>
               </div>
             ))}
           </div>
