@@ -4,10 +4,10 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import ConversationList from './ConversationList';
 import ChatWindow from './ChatWindow';
-import BotConfig from './BotConfig';
-import FAQManager from './FAQManager';
 import Stats from './Stats';
-import Settings from './Settings';
+import Broadcast from './Broadcast';
+import TagManager from './TagManager';
+import SettingsHub from './SettingsHub';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -37,11 +37,17 @@ export default function Dashboard() {
   const [selectedContact, setSelectedContact] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [activePanel, setActivePanel] = useState('chat');
+  const [settingsInitialTab, setSettingsInitialTab] = useState('config');
   const [mobileView, setMobileView] = useState('list');
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState(null);
+  const [editName, setEditName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('botora-notif-sound') !== 'off');
+  const [botError, setBotError] = useState(null);
+  const [platformConfig, setPlatformConfig] = useState({});
+  const [creditBalance, setCreditBalance] = useState(null);
 
   const activePanelRef = useRef(activePanel);
   const selectedContactRef = useRef(selectedContact);
@@ -59,6 +65,32 @@ export default function Dashboard() {
     window.addEventListener('botora-sound-change', handler);
     return () => window.removeEventListener('botora-sound-change', handler);
   }, []);
+
+  // Load platform config + credit balance
+  useEffect(() => {
+    if (!token) return;
+    axios.get(`${API_URL}/platform-config`)
+      .then(r => setPlatformConfig(r.data))
+      .catch(() => {});
+  }, [token]);
+
+  // Refresh credit balance when account changes
+  useEffect(() => {
+    if (account?.credit_balance !== undefined) {
+      setCreditBalance(account.credit_balance);
+    }
+  }, [account]);
+
+  // Refresh credit balance periodically
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      axios.get(`${API_URL}/auth/me`)
+        .then(r => setCreditBalance(r.data.credit_balance))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const loadContactsForProfile = useCallback((profileId, sock) => {
     const s = sock || socketRef.current;
@@ -138,6 +170,19 @@ export default function Dashboard() {
       handleNewMessage(msg);
     });
 
+    s.on('bot-error', (data) => {
+      setBotError(data);
+      setTimeout(() => setBotError(null), 8000);
+    });
+
+    s.on('reconnect', () => {
+      console.log('Socket reconnecté — resync statut WA');
+      s.emit('get-status');
+      if (activeProfileRef.current?.id) {
+        loadContactsForProfile(activeProfileRef.current.id, s);
+      }
+    });
+
     setSocket(s);
     return () => { s.disconnect(); socketRef.current = null; };
   }, [token, handleNewMessage, loadContactsForProfile, selectProfile, loadProfiles]);
@@ -158,8 +203,9 @@ export default function Dashboard() {
     loadContactsForProfile(profile.id);
   };
 
-  const handleConnectWhatsApp = () => {
-    socketRef.current?.emit('connect-whatsapp');
+  const handleConnectWhatsApp = (forceNew = false) => {
+    const profileId = !forceNew && activeProfileRef.current?.id ? activeProfileRef.current.id : null;
+    socketRef.current?.emit('connect-whatsapp', profileId ? { profileId } : {});
   };
 
   const handleLogoutWhatsApp = async (profileId) => {
@@ -182,24 +228,47 @@ export default function Dashboard() {
   const handleNavClick = (key) => {
     setActivePanel(key);
     if (key === 'chat') setUnreadCount(0);
+    if (key === 'bot') setSettingsInitialTab('config');
+    if (key === 'settings') setSettingsInitialTab('account');
   };
+
+  const goToSettings = (tab = 'config') => {
+    setSettingsInitialTab(tab);
+    setActivePanel(tab === 'config' ? 'bot' : 'settings');
+    setShowMenu(false);
+  };
+
+  const handleRenameProfile = async (profileId, name) => {
+    try {
+      await axios.put(`${API_URL}/profiles/${profileId}`, { display_name: name.trim() || null });
+      await loadProfiles();
+    } catch (err) {
+      console.error('Erreur renommage:', err.message);
+    }
+    setEditingProfileId(null);
+  };
+
+  const isAdmin = account?.role === 'admin';
+  const campaignsEnabled = isAdmin || platformConfig.campaigns_enabled !== 'false';
+  const creditsEnabled = platformConfig.credits_enabled === 'true';
+  const iaGlobalEnabled = isAdmin || platformConfig.ia_enabled_global !== 'false';
 
   const navItems = [
     {
       key: 'chat', label: 'Discussions',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
     },
+    ...(campaignsEnabled ? [{
+      key: 'broadcast', label: 'Campagnes',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
+    }] : []),
     {
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
     },
     {
-      key: 'faq', label: 'FAQ',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
-    },
-    {
-      key: 'config', label: 'Bot Config',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+      key: 'bot', label: 'Bot & WhatsApp',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.33C18.33 14.33 19 13.66 19 12.83C19 12 18.33 11.33 17.5 11.33C16.67 11.33 16 12 16 12.83C16 13.66 16.67 14.33 17.5 14.33M13 2.05V4.06C16.39 4.54 19 7.45 19 11C19 12.44 18.53 13.77 17.75 14.86L16.29 13.4C16.74 12.76 17 12 17 11.17C17 8.61 14.87 6.5 12.28 6.5H12V8.5L9 5.5L12 2.5V4.5H12.28C15.97 4.5 19 7.47 19 11.17C19 12.95 18.26 14.57 17.07 15.74L18.5 17.17C20.04 15.65 21 13.54 21 11.17C21 6.5 17.5 2.63 13 2.05M10 12.5C10 12.5 10 12.5 10 12.5C8.9 12.5 8 13.4 8 14.5C8 15.6 8.9 16.5 10 16.5C11.1 16.5 12 15.6 12 14.5C12 13.4 11.1 12.5 10 12.5M6.5 14.33C6.5 13.5 7.17 12.83 8 12.83C8.83 12.83 9.5 13.5 9.5 14.33C9.5 15.16 8.83 15.83 8 15.83C7.17 15.83 6.5 15.16 6.5 14.33M12 20C9.24 20 6.86 18.34 5.68 15.96L4.08 17.08C5.61 20.09 8.59 22 12 22C15.41 22 18.39 20.09 19.92 17.08L18.32 15.96C17.14 18.34 14.76 20 12 20Z"/></svg>
     },
     {
       key: 'settings', label: 'Paramètres',
@@ -225,7 +294,7 @@ export default function Dashboard() {
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <div className="sidebar-logo">
-              <span className="logo-icon">B</span>
+              <img src="/icons/icon-192.png" alt="Botora" className="logo-icon" />
               <span className="logo-text">Botora</span>
             </div>
             <div className="sidebar-actions">
@@ -255,15 +324,26 @@ export default function Dashboard() {
                       <div>
                         <div className="dropdown-name">{account?.name}</div>
                         <div className="dropdown-email">{account?.email}</div>
+                        {creditBalance !== null && (
+                          <div className={`dropdown-credits ${creditBalance <= 0 ? 'empty' : creditBalance < 10 ? 'low' : ''}`}>
+                            💳 {creditBalance.toFixed(2)} crédits
+                          </div>
+                        )}
                       </div>
                     </div>
+                    {!iaGlobalEnabled && !isAdmin && (
+                      <div className="dropdown-flag-warn">⚠️ Bot IA désactivé par l'admin</div>
+                    )}
+                    {!isAdmin && creditBalance !== null && creditBalance <= 0 && (
+                      <div className="dropdown-flag-warn">⚠️ Solde de crédits épuisé</div>
+                    )}
                     <div className="dropdown-divider" />
-                    <button className="dropdown-item" onClick={() => { setActivePanel('config'); setShowMenu(false); }}>Configuration du bot</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('faq'); setShowMenu(false); }}>Gestion FAQ</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('stats'); setShowMenu(false); }}>Statistiques</button>
-                    <button className="dropdown-item" onClick={() => { setActivePanel('settings'); setShowMenu(false); }}>Paramètres</button>
+                    <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
+                    {account?.role === 'admin' && (
+                      <button className="dropdown-item" onClick={() => goToSettings('admin')}>Administration</button>
+                    )}
                     <div className="dropdown-divider" />
-                    <button className="dropdown-item danger" onClick={logout}>Déconnexion du compte</button>
+                    <button className="dropdown-item danger" onClick={logout}>Déconnexion</button>
                   </div>
                 )}
               </div>
@@ -289,28 +369,47 @@ export default function Dashboard() {
                   <div className="profile-dropdown-empty">Aucun profil — connectez WhatsApp</div>
                 )}
                 {profiles.map(p => (
-                  <button
-                    key={p.id}
-                    className={`profile-dropdown-item ${activeProfile?.id === p.id ? 'active' : ''}`}
-                    onClick={() => handleSwitchProfile(p)}
-                  >
-                    <span className="profile-item-dot" style={{ background: p.is_connected ? '#25d366' : '#aaa' }} />
-                    <span className="profile-item-label">
-                      {p.display_name || p.phone_number}
-                    </span>
-                    {activeProfile?.id === p.id && (
-                      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style={{ marginLeft: 'auto', color: '#25d366' }}>
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                      </svg>
+                  <div key={p.id} className="profile-dropdown-item-wrap">
+                    {editingProfileId === p.id ? (
+                      <form
+                        className="profile-rename-form"
+                        onSubmit={(e) => { e.preventDefault(); handleRenameProfile(p.id, editName); }}
+                      >
+                        <input
+                          className="profile-rename-input"
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          placeholder={p.phone_number}
+                          autoFocus
+                          maxLength={40}
+                        />
+                        <button type="submit" className="profile-rename-ok">✓</button>
+                        <button type="button" className="profile-rename-cancel" onClick={() => setEditingProfileId(null)}>✕</button>
+                      </form>
+                    ) : (
+                      <button
+                        className={`profile-dropdown-item ${activeProfile?.id === p.id ? 'active' : ''}`}
+                        onClick={() => handleSwitchProfile(p)}
+                      >
+                        <span className="profile-item-dot" style={{ background: p.is_connected ? '#25d366' : '#aaa' }} />
+                        <span className="profile-item-label">{p.display_name || p.phone_number}</span>
+                        <button
+                          className="profile-rename-btn"
+                          title="Renommer"
+                          onClick={(e) => { e.stopPropagation(); setEditingProfileId(p.id); setEditName(p.display_name || ''); }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                        </button>
+                      </button>
                     )}
-                  </button>
+                  </div>
                 ))}
                 <div className="profile-dropdown-divider" />
                 <button
                   className="profile-dropdown-add"
                   onClick={() => {
                     setShowProfileMenu(false);
-                    setActivePanel('config');
+                    goToSettings('config');
                     handleConnectWhatsApp();
                   }}
                 >
@@ -339,6 +438,15 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+
+          {creditBalance !== null && (
+            <div className={`sidebar-credits-bar ${creditBalance <= 0 ? 'empty' : creditBalance < 10 ? 'low' : ''}`}>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
+              </svg>
+              <span>{creditBalance.toFixed(2)} crédits</span>
+            </div>
+          )}
         </div>
 
         <div className="sidebar-content">
@@ -346,7 +454,7 @@ export default function Dashboard() {
             noProfile ? (
               <div className="no-profile-msg">
                 <p>Connectez un numéro WhatsApp pour commencer.</p>
-                <button className="btn-connect" onClick={() => { setActivePanel('config'); }}>
+                <button className="btn-connect" onClick={() => goToSettings('config')}>
                   Configurer WhatsApp
                 </button>
               </div>
@@ -363,20 +471,23 @@ export default function Dashboard() {
             )
           )}
           {activePanel === 'stats' && (
-            noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <Stats socket={socket} />
+            noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
           )}
-          {activePanel === 'faq' && (
-            noProfile ? <NoProfilePlaceholder onGoConfig={() => setActivePanel('config')} /> : <FAQManager />
+          {activePanel === 'broadcast' && campaignsEnabled && (
+            noProfile
+              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
+              : <Broadcast socket={socket} activeProfile={activeProfile} />
           )}
-          {activePanel === 'config' && (
-            <BotConfig
+          {(activePanel === 'bot' || activePanel === 'settings') && (
+            <SettingsHub
               waStatus={waStatus}
               onConnectWhatsApp={handleConnectWhatsApp}
               onLogoutWhatsApp={handleLogoutWhatsApp}
               activeProfile={activeProfile}
+              account={account}
+              initialTab={settingsInitialTab}
             />
           )}
-          {activePanel === 'settings' && <Settings />}
         </div>
       </div>
 
@@ -391,6 +502,30 @@ export default function Dashboard() {
 
       {(showMenu || showProfileMenu) && (
         <div className="overlay" onClick={() => { setShowMenu(false); setShowProfileMenu(false); }} />
+      )}
+
+      {botError && (
+        <div style={{
+          position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
+          background: '#c0392b', color: '#fff', borderRadius: 10,
+          padding: '12px 18px', maxWidth: 340, boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'flex-start', gap: 10
+        }}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style={{ flexShrink: 0, marginTop: 1 }}>
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 3 }}>Erreur bot IA</div>
+            <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{botError.error}</div>
+            {botError.contactPhone && (
+              <div style={{ fontSize: '0.78rem', opacity: 0.7, marginTop: 2 }}>Contact : {botError.contactPhone}</div>
+            )}
+          </div>
+          <button
+            onClick={() => setBotError(null)}
+            style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, marginLeft: 4, opacity: 0.8 }}
+          >✕</button>
+        </div>
       )}
     </div>
   );
