@@ -191,7 +191,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     if (!contact || togglingIA) return;
     setTogglingIA(true);
     try {
-      const res = await axios.post(`${API_URL}/messages/toggle-ia/${contact.id}`);
+      const res = await axios.post(`${API_URL}/messages/pause/${contact.id}`);
       setIaPaused(res.data.ia_paused);
     } catch (err) {
       console.error('Erreur toggle IA:', err);
