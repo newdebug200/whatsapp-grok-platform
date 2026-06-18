@@ -83,6 +83,7 @@ model Contact {
   notes             String?
   funnel_stage      String    @default("prospect")
   unread_count      Int       @default(0)
+  is_favorite       Boolean   @default(false)
 
   messages          Message[]
   profile           WhatsAppProfile  @relation(fields: [profile_id], references: [id])
@@ -136,6 +137,7 @@ model Message {
   created_at DateTime @default(now())
   unread     Boolean  @default(true)
   sentiment  String?
+  media_path String?
 
   contact Contact @relation(fields: [contact_id], references: [id])
 }
