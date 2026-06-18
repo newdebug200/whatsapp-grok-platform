@@ -286,28 +286,44 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
         <div className="field-group" style={{ marginBottom: 16 }}>
           <label>Personnalité du bot</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-            {PERSONALITIES.map(p => (
-              <label key={p.value} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                border: `1.5px solid ${config.personality === p.value ? 'var(--accent, #25d366)' : 'var(--border, rgba(255,255,255,0.1))'}`,
-                background: config.personality === p.value ? 'rgba(37,211,102,0.08)' : 'var(--bg-secondary, rgba(255,255,255,0.03))',
-                transition: 'all 0.15s'
-              }}>
-                <input
-                  type="radio"
-                  name="personality"
-                  value={p.value}
-                  checked={config.personality === p.value}
-                  onChange={() => setConfig(c => ({ ...c, personality: p.value }))}
-                  style={{ accentColor: '#25d366', width: 16, height: 16, flexShrink: 0 }}
-                />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary, #e8eaed)' }}>{p.label}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #8e9baa)' }}>{p.desc}</div>
-                </div>
-              </label>
-            ))}
+            {PERSONALITIES.map(p => {
+              const isSelected = config.personality === p.value;
+              return (
+                <label key={p.value} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                  border: `1.5px solid ${isSelected ? '#25d366' : 'var(--border, rgba(255,255,255,0.1))'}`,
+                  background: isSelected ? 'rgba(37,211,102,0.08)' : 'var(--bg-secondary, rgba(255,255,255,0.03))',
+                  transition: 'all 0.15s'
+                }}>
+                  <input
+                    type="radio"
+                    name="personality"
+                    value={p.value}
+                    checked={isSelected}
+                    onChange={() => setConfig(c => ({ ...c, personality: p.value }))}
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                    border: `2px solid ${isSelected ? '#25d366' : 'var(--border, #555)'}`,
+                    background: isSelected ? '#25d366' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s'
+                  }}>
+                    {isSelected && (
+                      <svg viewBox="0 0 12 10" width="11" height="9" fill="none">
+                        <path d="M1 5l3.5 3.5L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary, #e8eaed)' }}>{p.label}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #8e9baa)' }}>{p.desc}</div>
+                  </div>
+                </label>
+              );
+            })}
           </div>
         </div>
 
