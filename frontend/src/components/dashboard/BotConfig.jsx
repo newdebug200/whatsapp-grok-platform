@@ -295,7 +295,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
                 style={{
                   padding: '10px 12px', borderRadius: 10, border: '2px solid',
                   borderColor: config.personality === p.key ? 'var(--accent, #25d366)' : 'var(--border, #e0e0e0)',
-                  background: config.personality === p.key ? 'var(--accent, #25d366)1a' : 'var(--bg-secondary, #f5f5f5)',
+                  background: config.personality === p.key ? 'rgba(37,211,102,0.12)' : 'var(--bg-secondary, #f5f5f5)',
                   color: 'var(--text-primary, #111)', cursor: 'pointer', textAlign: 'left',
                   transition: 'all 0.15s'
                 }}
