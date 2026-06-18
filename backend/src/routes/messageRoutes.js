@@ -6,6 +6,16 @@ const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
 
+// ── Route PUBLIQUE — sert les fichiers médias (images, audio, vidéo, stickers) ──
+// Doit être AVANT authMiddleware car le navigateur ne peut pas envoyer de JWT dans <img src>
+router.get('/media/:filename', (req, res) => {
+  const filename = req.params.filename;
+  if (!/^[\w\-\.]+$/.test(filename)) return res.status(400).json({ error: 'Nom de fichier invalide' });
+  const filePath = pathModule.join(__dirname, '../../uploads', filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Fichier introuvable' });
+  res.sendFile(filePath);
+});
+
 router.use(authMiddleware);
 
 router.get('/status', (req, res) => {
@@ -93,15 +103,6 @@ router.post('/favorites/:contactId', profileMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du changement de favori' });
   }
-});
-
-// GET /api/messages/media/:filename — serve downloaded media files
-router.get('/media/:filename', (req, res) => {
-  const filename = req.params.filename;
-  if (!/^[\w\-\.]+$/.test(filename)) return res.status(400).json({ error: 'Nom de fichier invalide' });
-  const filePath = pathModule.join(__dirname, '../../uploads', filename);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Fichier introuvable' });
-  res.sendFile(filePath);
 });
 
 // POST /api/messages/conversations/archive/:contactId
