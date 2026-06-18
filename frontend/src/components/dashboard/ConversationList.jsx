@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -10,6 +10,12 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const [tags, setTags] = useState([]);
   const [activeTagId, setActiveTagId] = useState(null);
   const [showOlderConversations, setShowOlderConversations] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedContacts, setArchivedContacts] = useState([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
+  const [hoveredContact, setHoveredContact] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null); // { contactId, x, y }
+  const contextMenuRef = useRef(null);
 
   const loadTags = useCallback(async () => {
     try {
@@ -18,9 +24,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     } catch {}
   }, []);
 
-  useEffect(() => {
-    loadTags();
-  }, [loadTags]);
+  useEffect(() => { loadTags(); }, [loadTags]);
 
   useEffect(() => {
     if (socket) {
@@ -29,6 +33,16 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
       return () => socket.off('new-message', refresh);
     }
   }, [socket]);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setContextMenu(null);
+      }
+    };
+    if (contextMenu) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [contextMenu]);
 
   const loadConversations = async () => {
     try {
@@ -42,6 +56,54 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     } catch (err) {
       console.error('Erreur chargement conversations:', err);
     }
+  };
+
+  const loadArchivedConversations = async () => {
+    setLoadingArchived(true);
+    try {
+      const res = await axios.get(`${API_URL}/messages/conversations?archived=true`);
+      setArchivedContacts(res.data);
+    } catch (err) {
+      console.error('Erreur chargement archives:', err);
+    } finally {
+      setLoadingArchived(false);
+    }
+  };
+
+  const handleToggleArchived = () => {
+    const next = !showArchived;
+    setShowArchived(next);
+    if (next) loadArchivedConversations();
+  };
+
+  const handleArchive = async (contact, e) => {
+    e?.stopPropagation();
+    setContextMenu(null);
+    try {
+      await axios.post(`${API_URL}/messages/conversations/archive/${contact.id}`);
+      onContactsUpdate(contacts.filter(c => c.id !== contact.id));
+      if (showArchived) setArchivedContacts(prev => [{ ...contact, archived: true }, ...prev]);
+      if (selectedContact?.id === contact.id) onSelectContact(null);
+    } catch (err) {
+      console.error('Erreur archivage:', err);
+    }
+  };
+
+  const handleUnarchive = async (contact, e) => {
+    e?.stopPropagation();
+    setContextMenu(null);
+    try {
+      await axios.post(`${API_URL}/messages/conversations/unarchive/${contact.id}`);
+      setArchivedContacts(prev => prev.filter(c => c.id !== contact.id));
+      await loadConversations();
+    } catch (err) {
+      console.error('Erreur désarchivage:', err);
+    }
+  };
+
+  const handleContextMenu = (e, contact) => {
+    e.preventDefault();
+    setContextMenu({ contactId: contact.id, contact, x: e.clientX, y: e.clientY });
   };
 
   const filtered = contacts.filter(c => {
@@ -77,16 +139,21 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[id % avatarColors.length];
 
-  const renderContact = (contact) => {
+  const renderContact = (contact, isArchived = false) => {
     const lastMsg = contact.messages[0];
     const isSelected = selectedContact?.id === contact.id;
     const isPaused = contact.ia_paused;
+    const isHovered = hoveredContact === contact.id;
     const contactTags = contact.tags?.map(ct => ct.tag).filter(Boolean) || [];
     return (
       <div
         key={contact.id}
         className={`contact-item ${isSelected ? 'selected' : ''}`}
-        onClick={() => onSelectContact(contact)}
+        onClick={() => { setContextMenu(null); onSelectContact(contact); }}
+        onMouseEnter={() => setHoveredContact(contact.id)}
+        onMouseLeave={() => setHoveredContact(null)}
+        onContextMenu={(e) => handleContextMenu(e, contact)}
+        style={{ position: 'relative' }}
       >
         <div className="contact-avatar" style={{ background: getColor(contact.id) }}>
           {getInitial(contact)}
@@ -95,12 +162,17 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
           <div className="contact-row">
             <span className="contact-name">{getDisplayName(contact)}</span>
             <div className="contact-row-right">
-              {isPaused && contact.sensitive_flagged ? (
-                <span className="contact-mode-badge flagged" title="En attente humain — sujet sensible détecté">🚨</span>
-              ) : (
-                <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
-                  {isPaused ? '👤' : '🤖'}
-                </span>
+              {!isArchived && (
+                isPaused && contact.sensitive_flagged ? (
+                  <span className="contact-mode-badge flagged" title="En attente humain — sujet sensible détecté">🚨</span>
+                ) : (
+                  <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
+                    {isPaused ? '👤' : '🤖'}
+                  </span>
+                )
+              )}
+              {isArchived && (
+                <span className="contact-mode-badge" title="Archivé" style={{ opacity: 0.6, fontSize: '0.9em' }}>📁</span>
               )}
               {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
             </div>
@@ -139,11 +211,36 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             </span>
           </div>
         </div>
+
+        {/* Quick archive button on hover */}
+        {isHovered && !isArchived && (
+          <button
+            className="contact-archive-btn"
+            onClick={(e) => handleArchive(contact, e)}
+            title="Archiver cette discussion"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+              <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+            </svg>
+          </button>
+        )}
+        {isHovered && isArchived && (
+          <button
+            className="contact-archive-btn"
+            onClick={(e) => handleUnarchive(contact, e)}
+            title="Désarchiver cette discussion"
+            style={{ color: '#25d366' }}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+              <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 6.5l5.5 5.5H14v2h-4v-2H6.5L12 6.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+            </svg>
+          </button>
+        )}
       </div>
     );
   };
 
-  const hasNoResults = filtered.length === 0;
+  const hasNoResults = filtered.length === 0 && !showArchived;
 
   return (
     <div className="conversation-list">
@@ -232,7 +329,59 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             )}
           </>
         )}
+
+        {/* Archive toggle button */}
+        <button
+          className="load-older-btn"
+          onClick={handleToggleArchived}
+          style={{ marginTop: 4, color: showArchived ? 'var(--accent, #25d366)' : undefined }}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+            <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+          </svg>
+          {showArchived ? 'Masquer les archives' : 'Discussions archivées'}
+        </button>
+
+        {showArchived && (
+          <>
+            <div className="older-conversations-separator">
+              <span>📁 Archives</span>
+            </div>
+            {loadingArchived ? (
+              <div className="empty-list" style={{ fontSize: '0.82rem' }}>Chargement…</div>
+            ) : archivedContacts.length === 0 ? (
+              <div className="empty-list" style={{ fontSize: '0.82rem' }}>Aucune discussion archivée</div>
+            ) : (
+              archivedContacts.map(contact => renderContact(contact, true))
+            )}
+          </>
+        )}
       </div>
+
+      {/* Context menu (right-click) */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="conv-context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          {!contextMenu.contact.archived ? (
+            <button onClick={(e) => handleArchive(contextMenu.contact, e)}>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+              </svg>
+              Archiver la discussion
+            </button>
+          ) : (
+            <button onClick={(e) => handleUnarchive(contextMenu.contact, e)}>
+              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 6.5l5.5 5.5H14v2h-4v-2H6.5L12 6.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+              </svg>
+              Désarchiver
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
