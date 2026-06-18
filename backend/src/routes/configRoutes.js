@@ -7,15 +7,12 @@ router.use(authMiddleware);
 router.use(profileMiddleware);
 
 function isUnknownFieldError(err) {
-  return err?.constructor?.name === 'PrismaClientValidationError' &&
-    err.message.includes('Unknown argument');
+  return err?.constructor?.name === 'PrismaClientValidationError' && err.message.includes('Unknown argument');
 }
 
 router.get('/bot', async (req, res) => {
   try {
-    let config = await prisma.botConfig.findUnique({
-      where: { profile_id: req.profileId }
-    });
+    let config = await prisma.botConfig.findUnique({ where: { profile_id: req.profileId } });
     if (!config) {
       config = await prisma.botConfig.create({
         data: {
@@ -31,7 +28,10 @@ router.get('/bot', async (req, res) => {
           close_time: '18:00',
           timezone: 'UTC',
           away_message: '',
-          away_once_per_session: true
+          away_once_per_session: true,
+          personality: 'professional',
+          system_prompt_override: null,
+          sentiment_alert: true
         }
       });
     }
@@ -47,12 +47,15 @@ router.put('/bot', async (req, res) => {
     const {
       bot_name, bot_info, bot_behavior, ia_enabled, response_delay_seconds,
       business_hours_enabled, open_days, open_time, close_time, timezone,
-      away_message, away_once_per_session
+      away_message, away_once_per_session,
+      personality, system_prompt_override, sentiment_alert
     } = req.body;
 
     const delaySeconds = response_delay_seconds !== undefined
       ? Math.max(1, Math.min(300, parseInt(response_delay_seconds) || 5))
       : undefined;
+
+    const VALID_PERSONALITIES = ['professional', 'friendly', 'commercial', 'support'];
 
     const data = {
       ...(bot_name !== undefined && { bot_name }),
@@ -66,105 +69,55 @@ router.put('/bot', async (req, res) => {
       ...(close_time !== undefined && { close_time }),
       ...(timezone !== undefined && { timezone }),
       ...(away_message !== undefined && { away_message }),
-      ...(away_once_per_session !== undefined && { away_once_per_session })
+      ...(away_once_per_session !== undefined && { away_once_per_session }),
+      ...(personality !== undefined && VALID_PERSONALITIES.includes(personality) && { personality }),
+      ...(system_prompt_override !== undefined && { system_prompt_override: system_prompt_override || null }),
+      ...(sentiment_alert !== undefined && { sentiment_alert })
     };
 
-    const config = await prisma.botConfig.upsert({
-      where: { profile_id: req.profileId },
-      create: {
-        profile_id: req.profileId,
-        bot_name: bot_name || 'Botora',
-        bot_info: bot_info || '',
-        bot_behavior: bot_behavior || '',
-        ia_enabled: ia_enabled !== undefined ? ia_enabled : true,
-        response_delay_seconds: delaySeconds ?? 5,
-        business_hours_enabled: business_hours_enabled ?? false,
-        open_days: open_days || '1,2,3,4,5',
-        open_time: open_time || '09:00',
-        close_time: close_time || '18:00',
-        timezone: timezone || 'UTC',
-        away_message: away_message || '',
-        away_once_per_session: away_once_per_session !== undefined ? away_once_per_session : true
-      },
-      update: data
-    });
+    let config;
+    try {
+      config = await prisma.botConfig.upsert({
+        where: { profile_id: req.profileId },
+        create: {
+          profile_id: req.profileId,
+          bot_name: bot_name || 'Botora',
+          bot_info: bot_info || '',
+          bot_behavior: bot_behavior || '',
+          ia_enabled: ia_enabled !== undefined ? ia_enabled : true,
+          response_delay_seconds: delaySeconds ?? 5,
+          business_hours_enabled: business_hours_enabled ?? false,
+          open_days: open_days || '1,2,3,4,5',
+          open_time: open_time || '09:00',
+          close_time: close_time || '18:00',
+          timezone: timezone || 'UTC',
+          away_message: away_message || '',
+          away_once_per_session: away_once_per_session ?? true,
+          personality: personality || 'professional',
+          system_prompt_override: system_prompt_override || null,
+          sentiment_alert: sentiment_alert ?? true
+        },
+        update: data
+      });
+    } catch (err) {
+      if (isUnknownFieldError(err)) {
+        // Fallback without new fields for old DB
+        const safeData = { ...data };
+        delete safeData.personality;
+        delete safeData.system_prompt_override;
+        delete safeData.sentiment_alert;
+        config = await prisma.botConfig.upsert({
+          where: { profile_id: req.profileId },
+          create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: true, response_delay_seconds: 5 },
+          update: safeData
+        });
+      } else throw err;
+    }
 
-    res.json({ success: true, config });
+    res.json(config);
   } catch (error) {
     console.error('Erreur PUT bot config:', error);
     res.status(500).json({ error: 'Erreur lors de la sauvegarde de la configuration' });
-  }
-});
-
-// ── Sensitive Keywords ──
-
-router.get('/keywords', async (req, res) => {
-  try {
-    const keywords = await prisma.sensitiveKeyword.findMany({
-      where: { profile_id: req.profileId },
-      orderBy: { created_at: 'asc' }
-    });
-    res.json(keywords);
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur chargement mots-clés' });
-  }
-});
-
-router.post('/keywords', async (req, res) => {
-  try {
-    const { keyword } = req.body;
-    if (!keyword?.trim()) return res.status(400).json({ error: 'Mot-clé requis' });
-    const created = await prisma.sensitiveKeyword.create({
-      data: { profile_id: req.profileId, keyword: keyword.trim(), is_active: true }
-    });
-    res.json(created);
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur création mot-clé' });
-  }
-});
-
-router.patch('/keywords/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const kw = await prisma.sensitiveKeyword.findFirst({ where: { id, profile_id: req.profileId } });
-    if (!kw) return res.status(404).json({ error: 'Mot-clé introuvable' });
-    const updates = {};
-    if (req.body.is_active !== undefined) updates.is_active = req.body.is_active;
-    if (req.body.keyword !== undefined) updates.keyword = req.body.keyword.trim();
-    const updated = await prisma.sensitiveKeyword.update({ where: { id }, data: updates });
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur mise à jour mot-clé' });
-  }
-});
-
-router.delete('/keywords/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const kw = await prisma.sensitiveKeyword.findFirst({ where: { id, profile_id: req.profileId } });
-    if (!kw) return res.status(404).json({ error: 'Mot-clé introuvable' });
-    await prisma.sensitiveKeyword.delete({ where: { id } });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur suppression mot-clé' });
-  }
-});
-
-// ── Sensitive Flags Journal ──
-
-router.get('/flags', async (req, res) => {
-  try {
-    const flags = await prisma.sensitiveFlag.findMany({
-      where: { profile_id: req.profileId },
-      orderBy: { flagged_at: 'desc' },
-      take: 200,
-      include: {
-        contact: { select: { phone_number: true, name: true, ia_paused: true, sensitive_flagged: true } }
-      }
-    });
-    res.json(flags);
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur chargement journal' });
   }
 });
 
