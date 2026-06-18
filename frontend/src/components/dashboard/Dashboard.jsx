@@ -6,6 +6,7 @@ import ConversationList from './ConversationList';
 import ChatWindow from './ChatWindow';
 import Stats from './Stats';
 import Broadcast from './Broadcast';
+import Funnel from './Funnel';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import './Dashboard.css';
@@ -263,6 +264,10 @@ export default function Dashboard() {
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     }] : []),
     {
+      key: 'funnel', label: 'Entonnoir',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+    },
+    {
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
     },
@@ -469,6 +474,11 @@ export default function Dashboard() {
                 onConnectWhatsApp={handleConnectWhatsApp}
               />
             )
+          )}
+          {activePanel === 'funnel' && (
+            noProfile
+              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
+              : <Funnel onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />
           )}
           {activePanel === 'stats' && (
             noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
