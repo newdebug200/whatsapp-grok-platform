@@ -184,7 +184,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const handleCreateCampaign = async () => {
     if (!form.name.trim()) return setError('Donnez un nom à la campagne');
-    if (form.messages.some(m => !m.content.trim())) return setError('Chaque variante doit avoir un contenu');
+    if (form.messages.some(m => !m.content.trim() && !m.media_url?.trim())) return setError('Chaque variante doit avoir un contenu ou un lien média');
     if (targetMode === 'tag' && !form.tagId) return setError('Sélectionnez un tag cible');
     if (targetMode === 'manual' && form.contactIds.length === 0) return setError('Sélectionnez au moins un contact');
     if (form.delayMin < 5) return setError('Le délai minimum ne peut pas être inférieur à 5 secondes');
@@ -668,7 +668,14 @@ export default function Broadcast({ socket, activeProfile }) {
             {detail.messages?.map((m, i) => (
               <div key={m.id} className="bc-msg-preview">
                 <span className="bc-msg-index">{i + 1}</span>
-                <p className="bc-msg-content">{m.content}</p>
+                <div style={{ flex: 1 }}>
+                  {m.content && <p className="bc-msg-content" style={{ margin: 0 }}>{m.content}</p>}
+                  {m.media_url && (
+                    <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--text-muted, #999)', wordBreak: 'break-all' }}>
+                      📎 {m.media_type || 'media'} — <a href={m.media_url} target="_blank" rel="noopener noreferrer" style={{ color: '#25d366' }}>{m.media_url.length > 60 ? m.media_url.slice(0, 60) + '…' : m.media_url}</a>
+                    </p>
+                  )}
+                </div>
               </div>
             ))}
           </div>
