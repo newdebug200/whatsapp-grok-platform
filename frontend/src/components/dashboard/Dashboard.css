@@ -581,6 +581,66 @@
 }
 .load-older-btn:hover { background: #f5f6f6; }
 
+/* ── Archive button on hover ── */
+.contact-archive-btn {
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.06);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #54656f;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+  z-index: 2;
+}
+.contact-archive-btn:hover { background: rgba(0,0,0,0.12); color: #25d366; }
+
+/* ── Right-click context menu ── */
+.conv-context-menu {
+  position: fixed;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  min-width: 200px;
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropIn 0.12s ease;
+}
+.conv-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #3b4a54;
+  text-align: left;
+  transition: background 0.12s;
+}
+.conv-context-menu button:hover { background: #f5f6f7; }
+
+[data-theme="dark"] .conv-context-menu { background: #233138; }
+[data-theme="dark"] .conv-context-menu button { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .conv-context-menu button:hover { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .msg-menu-dropdown { background: #233138; }
+[data-theme="dark"] .msg-menu-item { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .msg-menu-item:hover { background: var(--bg-hover, #2a3942); }
+[data-theme="dark"] .msg-menu-item.danger { color: #e74c3c; }
+[data-theme="dark"] .msg-menu-item.danger:hover { background: rgba(231,76,60,0.1); }
+[data-theme="dark"] .msg-menu-btn { background: rgba(255,255,255,0.08); color: #aebac1; }
+[data-theme="dark"] .msg-menu-btn:hover { background: rgba(255,255,255,0.15); }
+
 .contact-item {
   display: flex;
   align-items: center;
@@ -791,6 +851,79 @@
   border-radius: 8px;
 }
 
+/* ── Message row: bubble + action button ── */
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.message-row.sent  { flex-direction: row; justify-content: flex-end; }
+.message-row.received { flex-direction: row; justify-content: flex-start; }
+.message-row.system { justify-content: center; }
+
+.msg-action-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.msg-menu-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.06);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #54656f;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  padding: 0;
+}
+.message-row:hover .msg-menu-btn { opacity: 1; }
+.msg-menu-btn:hover { background: rgba(0,0,0,0.12); }
+
+.msg-menu-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+  min-width: 180px;
+  z-index: 200;
+  overflow: hidden;
+  animation: dropIn 0.12s ease;
+}
+.msg-action-wrapper.left  .msg-menu-dropdown { left: 0; }
+.msg-action-wrapper.right .msg-menu-dropdown { right: 0; }
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msg-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #3b4a54;
+  text-align: left;
+  transition: background 0.12s;
+}
+.msg-menu-item:hover { background: #f5f6f7; }
+.msg-menu-item.danger { color: #c0392b; }
+.msg-menu-item.danger:hover { background: #fdf3f3; }
+
 .message-bubble {
   display: flex;
   flex-direction: column;
@@ -799,7 +932,6 @@
   border-radius: 8px;
   position: relative;
   word-wrap: break-word;
-  margin-bottom: 2px;
   box-shadow: 0 1px 1px rgba(0,0,0,0.08);
 }
 
