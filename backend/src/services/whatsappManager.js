@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
+const axios = require('axios');
 const messageHandler = require('./messageHandler');
 
 // ─── Lazy-load whatsapp-web.js ────────────────────────────────────────────────
