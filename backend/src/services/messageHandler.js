@@ -256,11 +256,62 @@ class MessageHandler {
 
   async _handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager) {
     try {
-      const verifyUrl = process.env.VERIFY_API_URL;
-      if (!verifyUrl) return;
-      const verifyResp = await axios.get(`${verifyUrl}?phone=${encodeURIComponent(phoneNumber)}`, { timeout: 10000 });
-      const result = verifyResp.data;
-      const replyText = result?.verified ? `✅ Numéro vérifié : ${phoneNumber}` : `❌ Numéro non vérifié : ${phoneNumber}`;
+      // 1. Resolve sender's LID
+      let senderLid;
+      if (waId.endsWith('@lid')) {
+        senderLid = waId.split('@')[0];
+      } else {
+        try {
+          const numId = await client.getNumberId(waId.split('@')[0]);
+          senderLid = numId ? numId.user : waId.split('@')[0];
+        } catch (_) {
+          senderLid = waId.split('@')[0];
+        }
+      }
+
+      // 2. Sync LIDs for numbers that don't have one yet in dressur.site
+      try {
+        const listRes = await axios.get(
+          'https://dressur.site/crud/user/find_number_not_have_lid',
+          { timeout: 8000 }
+        );
+        const numbersWithoutLid = Array.isArray(listRes.data)
+          ? listRes.data.slice(0, 50)
+          : [];
+
+        if (numbersWithoutLid.length > 0) {
+          console.log(`[Verification] Sync LID pour ${numbersWithoutLid.length} numéro(s)`);
+          const lidEntries = await Promise.all(
+            numbersWithoutLid.map(async (num) => {
+              try {
+                const numId = await client.getNumberId(String(num));
+                return numId ? { phone: String(num), lid: numId.user } : null;
+              } catch (_) { return null; }
+            })
+          );
+          const number_and_lid = {};
+          for (const entry of lidEntries) {
+            if (entry) number_and_lid[entry.phone] = entry.lid;
+          }
+          if (Object.keys(number_and_lid).length > 0) {
+            await axios.post(
+              'https://dressur.site/crud/user/number_and_lid',
+              { number_and_lid },
+              { timeout: 15000, responseType: 'text' }
+            );
+            console.log(`[Verification] Sync LID OK — ${Object.keys(number_and_lid).length} entrée(s) envoyée(s)`);
+          }
+        }
+      } catch (syncErr) {
+        console.warn('[Verification] Sync LID ignoré:', syncErr.message);
+      }
+
+      // 3. Check if sender's number is activatable and reply with exact API response
+      const apiRes = await axios.get(
+        `https://dressur.site/crud/user/find_whatsapp_is_activatable/${senderLid}`,
+        { timeout: 10000, responseType: 'text' }
+      );
+      const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
       await client.sendMessage(waId, replyText);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
       prisma.message.create({
