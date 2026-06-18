@@ -178,6 +178,102 @@ class WhatsAppManager {
     }
   }
 
+  // ─── Sync full chat history on reconnect ─────────────────────────────────
+
+  async _syncChatHistory(client, profileId, accountId) {
+    if (!WWEB_AVAILABLE) return;
+    try {
+      console.log(`[WA] Synchronisation historique — profil ${profileId}`);
+      const chats = await client.getChats();
+      let syncedMessages = 0;
+      let syncedChats = 0;
+
+      for (const chat of chats) {
+        try {
+          const isGroup = chat.isGroup;
+          const waId = chat.id._serialized;
+
+          let phoneNumber, contactName;
+          if (isGroup) {
+            phoneNumber = `group_${chat.id.user}`;
+            contactName = chat.name || `Groupe ${chat.id.user}`;
+          } else {
+            if (chat.id.server !== 'c.us') continue;
+            const digits = chat.id.user.replace(/\D/g, '');
+            if (digits.length < 7 || digits.length > 15) continue;
+            phoneNumber = `+${chat.id.user}`;
+            contactName = chat.name || null;
+          }
+
+          const dbContact = await this.prisma.contact.upsert({
+            where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } },
+            create: { profile_id: profileId, phone_number: phoneNumber, wa_id: waId, name: contactName },
+            update: { wa_id: waId, ...(contactName ? { name: contactName } : {}) }
+          });
+
+          const messages = await chat.fetchMessages({ limit: 50 });
+          syncedChats++;
+
+          for (const msg of messages) {
+            if (!msg.body && !msg.hasMedia) continue;
+            if (['e2e_notification', 'notification_template', 'call_log', 'gp2'].includes(msg.type)) continue;
+
+            const mediaTypeLabel = msg.hasMedia
+              ? (msg.type === 'image' ? 'Image' : msg.type === 'video' ? 'Vidéo'
+                : (msg.type === 'audio' || msg.type === 'ptt') ? 'Audio'
+                : msg.type === 'document' ? 'Document' : msg.type === 'sticker' ? 'Sticker' : 'Fichier')
+              : null;
+            const content = mediaTypeLabel ? `[${mediaTypeLabel}]` : (msg.body || '');
+            if (!content.trim()) continue;
+
+            const direction = msg.fromMe ? 'sent' : 'received';
+            const msgDate = new Date(msg.timestamp * 1000);
+
+            const existing = await this.prisma.message.findFirst({
+              where: {
+                contact_id: dbContact.id,
+                direction,
+                content,
+                created_at: {
+                  gte: new Date(msgDate.getTime() - 2 * 60 * 1000),
+                  lte: new Date(msgDate.getTime() + 2 * 60 * 1000)
+                }
+              }
+            });
+
+            if (!existing) {
+              await this.prisma.message.create({
+                data: {
+                  contact_id: dbContact.id,
+                  content,
+                  direction,
+                  type: msg.type || 'text',
+                  created_at: msgDate,
+                  unread: !msg.fromMe,
+                  sentiment: null
+                }
+              });
+              syncedMessages++;
+            }
+          }
+
+          const unreadCount = await this.prisma.message.count({
+            where: { contact_id: dbContact.id, unread: true }
+          });
+          await this.prisma.contact.update({
+            where: { id: dbContact.id },
+            data: { unread_count: unreadCount }
+          });
+        } catch (_) {}
+      }
+
+      console.log(`[WA] Historique synchronisé — ${syncedChats} chat(s), ${syncedMessages} nouveau(x) message(s) — profil ${profileId}`);
+      this.io?.to(`account_${accountId}`).emit('sync-complete', { profileId, syncedChats, syncedMessages });
+    } catch (err) {
+      console.warn('[WA] Sync historique impossible:', err.message);
+    }
+  }
+
   // ─── Initialize a WhatsApp client ─────────────────────────────────────────
 
   async initializeClient(accountId, profileId = null) {
@@ -335,6 +431,9 @@ class WhatsAppManager {
 
       // Import phone book contacts in background
       this._importContacts(client, profile.id).catch(() => {});
+
+      // Sync full chat history: missed messages + groups
+      this._syncChatHistory(client, profile.id, accountId).catch(() => {});
     });
 
     // ── Incoming message ──
