@@ -30,7 +30,11 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     if (socket) {
       const refresh = () => loadConversations();
       socket.on('new-message', refresh);
-      return () => socket.off('new-message', refresh);
+      socket.on('sync-complete', refresh);
+      return () => {
+        socket.off('new-message', refresh);
+        socket.off('sync-complete', refresh);
+      };
     }
   }, [socket]);
 
