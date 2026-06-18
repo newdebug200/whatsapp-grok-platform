@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -106,12 +106,32 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     setContextMenu({ contactId: contact.id, contact, x: e.clientX, y: e.clientY });
   };
 
-  const filtered = contacts.filter(c => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || c.phone_number?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q);
-    const matchTag = !activeTagId || c.tags?.some(ct => ct.tag_id === activeTagId);
-    return matchSearch && matchTag;
-  });
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeout = useRef(null);
+
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!search.trim()) { setSearchResults(null); return; }
+    searchTimeout.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await axios.get(`${API_URL}/messages/search`, { params: { q: search.trim() } });
+        setSearchResults(res.data);
+      } catch { setSearchResults(null); }
+      finally { setSearchLoading(false); }
+    }, 400);
+    return () => clearTimeout(searchTimeout.current);
+  }, [search]);
+
+  const filtered = searchResults !== null
+    ? contacts.filter(c => searchResults.some(m => m.contact_id === c.id || m.contactId === c.id))
+    : contacts.filter(c => {
+        const q = search.toLowerCase();
+        const matchSearch = !q || c.phone_number?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q);
+        const matchTag = !activeTagId || c.tags?.some(ct => ct.tag_id === activeTagId);
+        return matchSearch && matchTag;
+      });
 
   const getLastMessageTime = (contact) => {
     if (contact.messages[0]?.created_at) return new Date(contact.messages[0].created_at).getTime();
@@ -175,6 +195,16 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                 <span className="contact-mode-badge" title="Archivé" style={{ opacity: 0.6, fontSize: '0.9em' }}>📁</span>
               )}
               {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
+              {!isArchived && contact.unread_count > 0 && (
+                <span style={{
+                  minWidth: 18, height: 18, borderRadius: 9, background: '#25d366',
+                  color: '#fff', fontSize: '0.72rem', fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 5px', marginLeft: 4, flexShrink: 0
+                }}>
+                  {contact.unread_count > 99 ? '99+' : contact.unread_count}
+                </span>
+              )}
             </div>
           </div>
           {contactTags.length > 0 && (
@@ -263,7 +293,8 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             onChange={e => { setSearch(e.target.value); setShowOlderConversations(true); }}
             className="search-input"
           />
-          {search && <button className="search-clear" onClick={() => { setSearch(''); setShowOlderConversations(false); }}>✕</button>}
+          {searchLoading && <span style={{ fontSize: '0.75rem', color: '#25d366', marginRight: 4 }}>…</span>}
+          {search && <button className="search-clear" onClick={() => { setSearch(''); setShowOlderConversations(false); setSearchResults(null); }}>✕</button>}
         </div>
       </div>
 
