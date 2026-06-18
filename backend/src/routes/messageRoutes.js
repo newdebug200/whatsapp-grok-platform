@@ -28,7 +28,7 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-// GET /api/messages/contacts — ALL contacts in DB for this profile (for campaign picker)
+// GET /api/messages/contacts — ALL contacts in DB for this profile
 router.get('/contacts', profileMiddleware, async (req, res) => {
   try {
     const contacts = await prisma.contact.findMany({
@@ -42,17 +42,14 @@ router.get('/contacts', profileMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/messages/conversations — contacts with messages (non archivés par défaut)
+// GET /api/messages/conversations
 router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
     const showArchived = req.query.archived === 'true';
     const contacts = await prisma.contact.findMany({
       where: { profile_id: req.profileId, messages: { some: {} }, archived: showArchived },
       include: {
-        messages: {
-          orderBy: { created_at: 'desc' },
-          take: 1
-        },
+        messages: { orderBy: { created_at: 'desc' }, take: 1 },
         tags: { include: { tag: true } }
       }
     });
@@ -74,11 +71,8 @@ router.post('/conversations/archive/:contactId', profileMiddleware, async (req, 
       where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
-    await prisma.contact.update({
-      where: { id: contact.id },
-      data: { archived: true }
-    });
-    res.json({ success: true, archived: true });
+    await prisma.contact.update({ where: { id: contact.id }, data: { archived: true } });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de l'archivage" });
   }
@@ -91,126 +85,170 @@ router.post('/conversations/unarchive/:contactId', profileMiddleware, async (req
       where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
-    await prisma.contact.update({
-      where: { id: contact.id },
-      data: { archived: false }
-    });
-    res.json({ success: true, archived: false });
+    await prisma.contact.update({ where: { id: contact.id }, data: { archived: false } });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors du désarchivage" });
   }
 });
 
-router.get('/conversation/:contactId', profileMiddleware, async (req, res) => {
+// POST /api/messages/conversations/read/:contactId — mark all messages as read + reset unread_count
+router.post('/conversations/read/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    await prisma.message.updateMany({
+      where: { contact_id: contact.id, unread: true },
+      data: { unread: false }
+    });
+    await prisma.contact.update({ where: { id: contact.id }, data: { unread_count: 0 } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du marquage comme lu' });
+  }
+});
+
+// GET /api/messages/search?q=keyword&contactId=&profileId= — search messages
+router.get('/search', profileMiddleware, async (req, res) => {
+  try {
+    const { q, contactId } = req.query;
+    if (!q || q.trim().length < 2) return res.status(400).json({ error: 'Mot-clé trop court' });
+
+    const where = {
+      content: { contains: q.trim() },
+      contact: { profile_id: req.profileId }
+    };
+    if (contactId) where.contact_id = parseInt(contactId);
+
+    const messages = await prisma.message.findMany({
+      where,
+      include: { contact: { select: { id: true, name: true, phone_number: true } } },
+      orderBy: { created_at: 'desc' },
+      take: 50
+    });
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de la recherche' });
+  }
+});
+
+// GET /api/messages/:contactId — messages for a contact
+router.get('/:contactId', profileMiddleware, async (req, res) => {
   try {
     const contact = await prisma.contact.findFirst({
       where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
 
-    const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const skip = (page - 1) * limit;
-
-    const [messages, total] = await Promise.all([
-      prisma.message.findMany({
-        where: { contact_id: contact.id },
-        orderBy: { created_at: 'asc' },
-        skip,
-        take: limit
-      }),
-      prisma.message.count({ where: { contact_id: contact.id } })
-    ]);
-
-    res.json({
-      messages,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasMore: page * limit < total
-      }
+    const messages = await prisma.message.findMany({
+      where: { contact_id: contact.id },
+      orderBy: { created_at: 'asc' }
     });
+    res.json(messages);
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du chargement des messages' });
   }
 });
 
+// POST /api/messages/send
 router.post('/send', profileMiddleware, async (req, res) => {
   try {
-    const { contactId, content } = req.body;
-    if (!content?.trim()) {
-      return res.status(400).json({ error: 'Message vide' });
-    }
+    const { contactId, message } = req.body;
+    if (!contactId || !message) return res.status(400).json({ error: 'contactId et message requis' });
+
     const contact = await prisma.contact.findFirst({
       where: { id: parseInt(contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    if (!contact.wa_id) return res.status(400).json({ error: 'Contact sans ID WhatsApp' });
 
-    const waId = contact.wa_id || (contact.phone_number.replace('+', '') + '@c.us');
-    await whatsappManager.sendMessage(req.profileId, waId, content.trim());
+    const client = whatsappManager.getClient(req.profileId);
+    if (!client) return res.status(503).json({ error: 'WhatsApp non connecté' });
 
-    const msg = await prisma.message.create({
-      data: {
-        contact_id: contact.id,
-        content: content.trim(),
-        direction: 'sent',
-        type: 'text',
-        created_at: new Date()
-      }
+    await client.sendMessage(contact.wa_id, message);
+    const saved = await prisma.message.create({
+      data: { contact_id: contact.id, content: message, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
     });
-    await prisma.contact.update({
-      where: { id: contact.id },
-      data: { ia_paused: true }
-    });
-    res.json({ success: true, message: msg });
+    whatsappManager.addToCache(req.profileId, contact.id, 'sent', message);
+    res.json(saved);
   } catch (error) {
-    console.error('Erreur send message:', error);
     res.status(500).json({ error: "Erreur lors de l'envoi du message" });
   }
 });
 
-// DELETE /api/messages/:messageId — supprimer un message Botora (sent uniquement)
-router.delete('/:messageId', profileMiddleware, async (req, res) => {
-  try {
-    const msgId = parseInt(req.params.messageId);
-    const msg = await prisma.message.findFirst({
-      where: { id: msgId },
-      include: { contact: true }
-    });
-    if (!msg) return res.status(404).json({ error: 'Message introuvable' });
-    if (msg.contact.profile_id !== req.profileId)
-      return res.status(403).json({ error: 'Accès refusé' });
-    if (msg.direction !== 'sent')
-      return res.status(400).json({ error: 'Seuls les messages envoyés peuvent être supprimés' });
-
-    await prisma.message.delete({ where: { id: msgId } });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Erreur suppression message:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression du message' });
-  }
-});
-
-router.post('/toggle-ia/:contactId', profileMiddleware, async (req, res) => {
+// POST /api/messages/pause/:contactId
+router.post('/pause/:contactId', profileMiddleware, async (req, res) => {
   try {
     const contact = await prisma.contact.findFirst({
       where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
-    const newPaused = !contact.ia_paused;
     const updated = await prisma.contact.update({
       where: { id: contact.id },
-      data: {
-        ia_paused: newPaused,
-        ...(newPaused === false ? { sensitive_flagged: false } : {})
-      }
+      data: { ia_paused: !contact.ia_paused }
     });
-    res.json({ success: true, ia_paused: updated.ia_paused, sensitive_flagged: updated.sensitive_flagged });
+    res.json({ ia_paused: updated.ia_paused });
   } catch (error) {
-    console.error('Erreur toggle IA:', error);
-    res.status(500).json({ error: "Erreur lors du changement de mode IA" });
+    res.status(500).json({ error: 'Erreur lors du changement de statut IA' });
+  }
+});
+
+// GET /api/messages/notes/:contactId
+router.get('/notes/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId },
+      select: { notes: true }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    res.json({ notes: contact.notes || '' });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du chargement des notes' });
+  }
+});
+
+// PUT /api/messages/notes/:contactId
+router.put('/notes/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    const { notes } = req.body;
+    await prisma.contact.update({ where: { id: contact.id }, data: { notes: notes || null } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde des notes' });
+  }
+});
+
+// GET /api/messages/memory/:contactId
+router.get('/memory/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    const memory = await prisma.contactMemory.findUnique({ where: { contact_id: contact.id } });
+    res.json({ summary: memory?.summary || null, updated_at: memory?.updated_at || null });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du chargement de la mémoire' });
+  }
+});
+
+// DELETE /api/messages/memory/:contactId
+router.delete('/memory/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    await prisma.contactMemory.deleteMany({ where: { contact_id: contact.id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de la suppression de la mémoire' });
   }
 });
 
