@@ -36,6 +36,13 @@ const TIMEZONES = BASE_TIMEZONES.includes(BROWSER_TZ)
   ? BASE_TIMEZONES
   : [BROWSER_TZ, ...BASE_TIMEZONES];
 
+const PERSONALITIES = [
+  { value: 'professional', label: '💼 Professionnel', desc: 'Ton formel, clair et structuré' },
+  { value: 'friendly',     label: '😊 Amical',        desc: 'Chaleureux, proche, naturel' },
+  { value: 'commercial',   label: '🚀 Commercial agressif', desc: 'Orienté conversion et vente' },
+  { value: 'support',      label: '🛠️ Support technique', desc: 'Patient, précis, étape par étape' },
+];
+
 export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp }) {
   const [config, setConfig] = useState({
     bot_name: 'Botora',
@@ -53,13 +60,6 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     personality: 'professional',
     sentiment_alert: true
   });
-
-  const PERSONALITIES = [
-    { value: 'professional', label: '💼 Professionnel', desc: 'Ton formel, clair et structuré' },
-    { value: 'friendly',     label: '😊 Amical',        desc: 'Chaleureux, proche, naturel' },
-    { value: 'commercial',   label: '🚀 Commercial agressif', desc: 'Orienté conversion et vente' },
-    { value: 'support',      label: '🛠️ Support technique', desc: 'Patient, précis, étape par étape' },
-  ];
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
