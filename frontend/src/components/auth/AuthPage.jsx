@@ -14,23 +14,38 @@ export default function AuthPage() {
     setError('');
   };
 
+  const validate = () => {
+    if (!form.email.trim()) return 'L\'email est requis';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Format d\'email invalide';
+    if (!form.password) return 'Le mot de passe est requis';
+    if (form.password.length < 8) return 'Le mot de passe doit contenir au moins 8 caractères';
+    if (mode === 'register' && !form.name.trim()) return 'Le nom est requis';
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setLoading(true);
     try {
       if (mode === 'login') {
         await login(form.email, form.password);
       } else {
-        if (!form.name.trim()) {
-          setError('Le nom est requis');
-          setLoading(false);
-          return;
-        }
         await register(form.email, form.password, form.name);
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Une erreur est survenue');
+      if (!err.response) {
+        setError('Impossible de contacter le serveur. Vérifiez que le backend est lancé sur le port 3001.');
+      } else {
+        setError(err.response?.data?.error || 'Une erreur serveur est survenue. Réessayez.');
+      }
     } finally {
       setLoading(false);
     }
@@ -41,11 +56,7 @@ export default function AuthPage() {
       <div className="auth-container">
         <div className="auth-header">
           <div className="auth-logo">
-            <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="30" cy="30" r="30" fill="#25D366"/>
-              <path d="M30 10C19 10 10 19 10 30c0 3.7 1 7.2 2.8 10.2L10 50l10.1-2.7C23 49 26.4 50 30 50c11 0 20-9 20-20S41 10 30 10z" fill="white"/>
-              <text x="30" y="36" textAnchor="middle" fill="#25D366" fontSize="13" fontWeight="bold" fontFamily="system-ui">B</text>
-            </svg>
+            <img src="/icons/icon-192.png" alt="Botora" className="auth-logo-img" />
           </div>
           <h1 className="auth-title">Botora</h1>
           <p className="auth-subtitle">Assistant WhatsApp intelligent</p>
@@ -77,7 +88,6 @@ export default function AuthPage() {
                   value={form.name}
                   onChange={handleChange}
                   placeholder="Votre nom"
-                  required
                   autoComplete="name"
                 />
               </div>
@@ -91,7 +101,6 @@ export default function AuthPage() {
                 value={form.email}
                 onChange={handleChange}
                 placeholder="votre@email.com"
-                required
                 autoComplete="email"
               />
             </div>
@@ -103,8 +112,7 @@ export default function AuthPage() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                placeholder={mode === 'register' ? 'Min. 6 caractères' : '••••••••'}
-                required
+                placeholder={mode === 'register' ? 'Min. 8 caractères' : '••••••••'}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
             </div>
