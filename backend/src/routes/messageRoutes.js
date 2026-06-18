@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const pathModule = require('path');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
@@ -42,12 +44,24 @@ router.get('/contacts', profileMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/messages/conversations
+// GET /api/messages/conversations?filter=all|unread|favorites|groups|archived
 router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
-    const showArchived = req.query.archived === 'true';
+    const { filter } = req.query;
+    let whereExtra = {};
+    if (filter === 'unread') {
+      whereExtra = { archived: false, unread_count: { gt: 0 } };
+    } else if (filter === 'favorites') {
+      whereExtra = { archived: false, is_favorite: true };
+    } else if (filter === 'groups') {
+      whereExtra = { archived: false, phone_number: { startsWith: 'group_' } };
+    } else if (filter === 'archived') {
+      whereExtra = { archived: true };
+    } else {
+      whereExtra = { archived: false };
+    }
     const contacts = await prisma.contact.findMany({
-      where: { profile_id: req.profileId, messages: { some: {} }, archived: showArchived },
+      where: { profile_id: req.profileId, messages: { some: {} }, ...whereExtra },
       include: {
         messages: { orderBy: { created_at: 'desc' }, take: 1 },
         tags: { include: { tag: true } }
@@ -62,6 +76,32 @@ router.get('/conversations', profileMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du chargement des conversations' });
   }
+});
+
+// POST /api/messages/favorites/:contactId — toggle favorite
+router.post('/favorites/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(req.params.contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    const updated = await prisma.contact.update({
+      where: { id: contact.id },
+      data: { is_favorite: !contact.is_favorite }
+    });
+    res.json({ is_favorite: updated.is_favorite });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du changement de favori' });
+  }
+});
+
+// GET /api/messages/media/:filename — serve downloaded media files
+router.get('/media/:filename', (req, res) => {
+  const filename = req.params.filename;
+  if (!/^[\w\-\.]+$/.test(filename)) return res.status(400).json({ error: 'Nom de fichier invalide' });
+  const filePath = pathModule.join(__dirname, '../../uploads', filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Fichier introuvable' });
+  res.sendFile(filePath);
 });
 
 // POST /api/messages/conversations/archive/:contactId
