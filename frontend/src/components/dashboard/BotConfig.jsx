@@ -43,10 +43,6 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     bot_behavior: '',
     ia_enabled: true,
     response_delay_seconds: 5,
-    personality: 'professionnel',
-    custom_system_prompt: '',
-    memory_enabled: true,
-    sentiment_alert: true,
     business_hours_enabled: false,
     open_days: '1,2,3,4,5',
     open_time: '09:00',
@@ -276,65 +272,6 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           <label>Comportement & ton souhaité</label>
           <textarea value={config.bot_behavior} onChange={e => setConfig({ ...config, bot_behavior: e.target.value })}
             placeholder={`Décrivez comment le bot doit se comporter.\n\nExemple :\n- Répondre en français uniquement\n- Être chaleureux et professionnel`} rows={6} />
-        </div>
-
-        {/* ── Personnalité ── */}
-        <div className="field-group" style={{ marginTop: 16 }}>
-          <label style={{ marginBottom: 10, display: 'block' }}>Personnalité du bot</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[
-              { key: 'professionnel', label: '🤵 Professionnel', desc: 'Formel, soigné, vouvoiement' },
-              { key: 'amical', label: '😊 Amical', desc: 'Chaleureux, accessible, émojis' },
-              { key: 'commercial', label: '💼 Commercial', desc: 'Persuasif, orienté conversion' },
-              { key: 'support', label: '🛠 Support', desc: 'Empathique, patient, solutions' },
-            ].map(p => (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => setConfig(c => ({ ...c, personality: p.key }))}
-                style={{
-                  padding: '10px 12px', borderRadius: 10, border: '2px solid',
-                  borderColor: config.personality === p.key ? 'var(--accent, #25d366)' : 'var(--border, #e0e0e0)',
-                  background: config.personality === p.key ? 'rgba(37,211,102,0.12)' : 'var(--bg-secondary, #f5f5f5)',
-                  color: 'var(--text-primary, #111)', cursor: 'pointer', textAlign: 'left',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{p.label}</div>
-                <div style={{ fontSize: '0.74rem', opacity: 0.7, marginTop: 2 }}>{p.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="field-group" style={{ marginTop: 12 }}>
-          <label>Prompt système personnalisé <span style={{ fontWeight: 400, fontSize: '0.78rem', opacity: 0.6 }}>(optionnel — remplace tout si rempli)</span></label>
-          <textarea
-            value={config.custom_system_prompt}
-            onChange={e => setConfig(c => ({ ...c, custom_system_prompt: e.target.value }))}
-            placeholder={`Laissez vide pour utiliser le prompt automatique.\n\nSi rempli, ce texte remplace complètement le prompt système. Utilisez {{bot_name}} et {{bot_info}} comme variables.`}
-            rows={5}
-          />
-        </div>
-
-        <div className="toggle-row" style={{ marginTop: 12 }}>
-          <div>
-            <div className="toggle-label">🧠 Mémoire par contact</div>
-            <div className="toggle-desc">L'IA mémorise un résumé de chaque conversation et s'en souvient</div>
-          </div>
-          <button className={`toggle-btn ${config.memory_enabled ? 'on' : 'off'}`} onClick={() => setConfig(c => ({ ...c, memory_enabled: !c.memory_enabled }))}>
-            <span className="toggle-knob" />
-          </button>
-        </div>
-
-        <div className="toggle-row" style={{ marginTop: 8 }}>
-          <div>
-            <div className="toggle-label">😤 Alerte sentiment négatif</div>
-            <div className="toggle-desc">Détecte les clients en colère et alerte automatiquement l'humain</div>
-          </div>
-          <button className={`toggle-btn ${config.sentiment_alert ? 'on' : 'off'}`} onClick={() => setConfig(c => ({ ...c, sentiment_alert: !c.sentiment_alert }))}>
-            <span className="toggle-knob" />
-          </button>
         </div>
 
         <div className="toggle-row">
