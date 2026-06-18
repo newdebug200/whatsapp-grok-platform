@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../prisma');
+const axios = require('axios');
+const whatsappManager = require('../services/whatsappManager');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 router.use(authMiddleware);
@@ -376,6 +378,169 @@ router.delete('/verification-triggers/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Erreur suppression trigger' });
   }
+});
+
+// ─────────────────────────────────────────────────────────────
+// DRESSUR QUEUE — file d'attente WhatsApp dressur.site
+// ─────────────────────────────────────────────────────────────
+
+const DRESSUR_QUEUE_URL = 'https://dressur.site/crud/communication-mail/file-attente-whatsapp/json';
+
+let dressurJob = {
+  running: false,
+  cancelled: false,
+  accountId: null,
+  profileId: null,
+  total: 0,
+  sent: 0,
+  failed: 0,
+  current: null,
+  results: []
+};
+
+function emitDressurProgress() {
+  if (whatsappManager.io && dressurJob.accountId) {
+    whatsappManager.io.to(`account_${dressurJob.accountId}`).emit('dressur-progress', {
+      running: dressurJob.running,
+      cancelled: dressurJob.cancelled,
+      sent: dressurJob.sent,
+      failed: dressurJob.failed,
+      total: dressurJob.total,
+      current: dressurJob.current,
+      results: dressurJob.results
+    });
+  }
+}
+
+// GET /api/admin/dressur-queue — fetch queue from dressur.site
+router.get('/dressur-queue', async (req, res) => {
+  try {
+    const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
+    const items = Array.isArray(r.data) ? r.data : [];
+    res.json({ items, count: items.length });
+  } catch (err) {
+    res.status(502).json({ error: `Impossible de joindre dressur.site : ${err.message}` });
+  }
+});
+
+// GET /api/admin/dressur-queue/status — current job state
+router.get('/dressur-queue/status', (req, res) => {
+  res.json({
+    running: dressurJob.running,
+    cancelled: dressurJob.cancelled,
+    sent: dressurJob.sent,
+    failed: dressurJob.failed,
+    total: dressurJob.total,
+    current: dressurJob.current,
+    results: dressurJob.results
+  });
+});
+
+// POST /api/admin/dressur-queue/start — launch sending
+router.post('/dressur-queue/start', async (req, res) => {
+  if (dressurJob.running) {
+    return res.status(409).json({ error: 'Un envoi est déjà en cours' });
+  }
+
+  const { profileId, minDelay = 10, maxDelay = 30 } = req.body;
+  if (!profileId) return res.status(400).json({ error: 'profileId requis' });
+
+  const min = Math.max(1, Number(minDelay));
+  const max = Math.max(min, Number(maxDelay));
+
+  let items;
+  try {
+    const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
+    items = Array.isArray(r.data) ? r.data : [];
+  } catch (err) {
+    return res.status(502).json({ error: `Impossible de joindre dressur.site : ${err.message}` });
+  }
+
+  if (items.length === 0) {
+    return res.status(400).json({ error: "La file d'attente est vide" });
+  }
+
+  dressurJob = {
+    running: true,
+    cancelled: false,
+    accountId: req.accountId,
+    profileId: parseInt(profileId),
+    total: items.length,
+    sent: 0,
+    failed: 0,
+    current: null,
+    results: []
+  };
+
+  res.json({ success: true, total: items.length });
+
+  // Async sending loop — runs after response is sent
+  (async () => {
+    for (let i = 0; i < items.length; i++) {
+      if (dressurJob.cancelled) break;
+
+      const { numero, message } = items[i];
+      dressurJob.current = { numero, index: i + 1 };
+      emitDressurProgress();
+
+      try {
+        const waId = String(numero).replace(/^\+/, '') + '@c.us';
+        await whatsappManager.sendMessage(dressurJob.profileId, waId, message);
+        dressurJob.sent++;
+        dressurJob.results.push({
+          numero,
+          preview: String(message).slice(0, 80),
+          status: 'sent',
+          at: new Date().toISOString()
+        });
+      } catch (err) {
+        dressurJob.failed++;
+        dressurJob.results.push({
+          numero,
+          preview: String(message).slice(0, 80),
+          status: 'failed',
+          error: err.message,
+          at: new Date().toISOString()
+        });
+      }
+
+      emitDressurProgress();
+
+      // Random delay between messages (skip after last one)
+      if (!dressurJob.cancelled && i < items.length - 1) {
+        const delayMs = (Math.random() * (max - min) + min) * 1000;
+        await new Promise(resolve => {
+          const timer = setTimeout(resolve, delayMs);
+          const check = setInterval(() => {
+            if (dressurJob.cancelled) { clearTimeout(timer); clearInterval(check); resolve(); }
+          }, 200);
+          setTimeout(() => clearInterval(check), delayMs + 500);
+        });
+      }
+    }
+
+    dressurJob.running = false;
+    dressurJob.current = null;
+    emitDressurProgress();
+    if (whatsappManager.io && dressurJob.accountId) {
+      whatsappManager.io.to(`account_${dressurJob.accountId}`).emit('dressur-done', {
+        sent: dressurJob.sent,
+        failed: dressurJob.failed,
+        total: dressurJob.total
+      });
+    }
+  })();
+});
+
+// POST /api/admin/dressur-queue/stop — cancel current job
+router.post('/dressur-queue/stop', (req, res) => {
+  if (!dressurJob.running) {
+    return res.status(400).json({ error: 'Aucun envoi en cours' });
+  }
+  dressurJob.cancelled = true;
+  dressurJob.running = false;
+  emitDressurProgress();
+  res.json({ success: true, sent: dressurJob.sent, failed: dressurJob.failed });
 });
 
 module.exports = router;
