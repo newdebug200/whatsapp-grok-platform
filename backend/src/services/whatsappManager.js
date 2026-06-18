@@ -207,8 +207,17 @@ class WhatsAppManager {
 
           const dbContact = await this.prisma.contact.upsert({
             where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } },
-            create: { profile_id: profileId, phone_number: phoneNumber, wa_id: waId, name: contactName, archived: chat.isArchived || false },
-            update: { wa_id: waId, ...(contactName ? { name: contactName } : {}), ...(chat.isArchived ? { archived: true } : {}) }
+            create: {
+              profile_id: profileId, phone_number: phoneNumber, wa_id: waId, name: contactName,
+              archived: chat.isArchived || false,
+              is_favorite: chat.pinned || false
+            },
+            update: {
+              wa_id: waId,
+              ...(contactName ? { name: contactName } : {}),
+              ...(chat.isArchived ? { archived: true } : {}),
+              ...(chat.pinned ? { is_favorite: true } : {})
+            }
           });
 
           const messages = await chat.fetchMessages({ limit: 50 });
