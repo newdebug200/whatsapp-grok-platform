@@ -97,15 +97,23 @@ class MessageHandler {
     try {
       if (message.fromMe) return;
       if (message.from === 'status@broadcast' || message.from.includes('@broadcast')) return;
-      if (message.from.includes('@g.us')) return;
 
       const messageAgeMs = Date.now() - message.timestamp * 1000;
       if (messageAgeMs > 60000) return;
 
-      const contact = await message.getContact();
-      const phoneNumber = '+' + (contact.number || contact.id.user);
-      const contactName = contact.name || contact.pushname || null;
+      const isGroup = message.from.includes('@g.us');
       const waId = message.from;
+
+      let phoneNumber, contactName;
+      if (isGroup) {
+        const chat = await message.getChat();
+        phoneNumber = `group_${message.from.split('@')[0]}`;
+        contactName = chat.name || `Groupe ${message.from.split('@')[0]}`;
+      } else {
+        const contact = await message.getContact();
+        phoneNumber = '+' + (contact.number || contact.id.user);
+        contactName = contact.name || contact.pushname || null;
+      }
 
       let dbContact = await prisma.contact.findUnique({
         where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } }
@@ -159,6 +167,9 @@ class MessageHandler {
       }).catch(() => {});
 
       waManager.addToCache(profileId, dbContact.id, 'received', messageContent);
+
+      // ── Groups: save message but skip AI and triggers ──
+      if (isGroup) return;
 
       // ── Sentiment alert ──
       if (sentimentResult === 'colere' || sentimentResult === 'negatif') {
