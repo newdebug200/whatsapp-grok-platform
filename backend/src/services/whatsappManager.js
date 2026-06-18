@@ -1,7 +1,6 @@
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
-const axios = require('axios');
 const messageHandler = require('./messageHandler');
 
 // ─── Lazy-load whatsapp-web.js ────────────────────────────────────────────────
@@ -9,13 +8,10 @@ let Client = null;
 let LocalAuth = null;
 let WWEB_AVAILABLE = false;
 
-let MessageMedia = null;
-
 try {
   const wweb = require('whatsapp-web.js');
   Client = wweb.Client;
   LocalAuth = wweb.LocalAuth;
-  MessageMedia = wweb.MessageMedia;
   WWEB_AVAILABLE = true;
 } catch (err) {
   console.error('');
@@ -697,27 +693,14 @@ class WhatsAppManager {
             console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
             this.campaignSendingWaIds.add(waId);
             try {
-              if (msg.media_url && MessageMedia) {
-                try {
-                  const mediaResp = await axios.get(msg.media_url, { responseType: 'arraybuffer', timeout: 30000 });
-                  const base64Data = Buffer.from(mediaResp.data).toString('base64');
-                  const mimeType = msg.media_type || mediaResp.headers['content-type'] || 'application/octet-stream';
-                  const media = new MessageMedia(mimeType, base64Data);
-                  await waClient.sendMessage(waId, media, content ? { caption: content } : {});
-                } catch (mediaErr) {
-                  console.error(`[Campaign ${campaignId}] Erreur média → ${contact.phone_number}: ${mediaErr.message}`);
-                  if (content) await this._sendWithTyping(waClient, waId, content, handle);
-                }
-              } else {
-                await this._sendWithTyping(waClient, waId, content, handle);
-              }
+              await this._sendWithTyping(waClient, waId, content, handle);
             } finally {
               setTimeout(() => this.campaignSendingWaIds.delete(waId), 3000);
             }
 
             if (!handle.cancelled) {
               this.prisma.message.create({
-                data: { contact_id: contact.id, content: msg.media_url ? `[Média] ${content}`.trim() : content, direction: 'sent', type: msg.media_url ? 'media' : 'text', created_at: new Date() }
+                data: { contact_id: contact.id, content, direction: 'sent', type: 'text', created_at: new Date() }
               }).catch(() => {});
               await this.prisma.campaignTarget.update({
                 where: { id: target.id },
