@@ -338,8 +338,39 @@ router.post('/import-contacts', async (req, res) => {
     if (parsed.length === 0)
       return res.status(400).json({ error: 'Aucun contact valide trouvé dans le fichier. Vérifiez le format.' });
 
-    let imported = 0, skipped = 0;
+    // ── Étape 1 : détecter les numéros sans indicatif pays (format local "0XXXXXXXXX") ──
+    // normalizePhone() les retourne sous forme +0XXXXXXX — invalides pour WhatsApp.
+    const invalidLocal = [];
+    const validParsed = [];
     for (const c of parsed) {
+      if (c.phone && /^\+0\d+$/.test(c.phone)) {
+        invalidLocal.push(c.phone);
+      } else {
+        validParsed.push(c);
+      }
+    }
+
+    // ── Étape 2 : déduplication par numéro (même numéro présent N fois dans le fichier) ──
+    const seen = new Set();
+    const deduplicated = [];
+    for (const c of validParsed) {
+      if (!seen.has(c.phone)) {
+        seen.add(c.phone);
+        deduplicated.push(c);
+      }
+    }
+    const duplicatesRemoved = validParsed.length - deduplicated.length;
+
+    if (deduplicated.length === 0) {
+      return res.status(400).json({
+        error: 'Aucun contact valide trouvé dans le fichier. Vérifiez le format.',
+        invalid_format: invalidLocal.length
+      });
+    }
+
+    // ── Étape 3 : upsert en base ──
+    let imported = 0, skipped = 0;
+    for (const c of deduplicated) {
       try {
         await prisma.contact.upsert({
           where: { profile_id_phone_number: { profile_id: req.profileId, phone_number: c.phone } },
@@ -351,7 +382,18 @@ router.post('/import-contacts', async (req, res) => {
         skipped++;
       }
     }
-    res.json({ imported, skipped, total: parsed.length });
+
+    res.json({
+      imported,
+      skipped,
+      duplicates_removed: duplicatesRemoved,
+      invalid_format: invalidLocal.length,
+      total_in_file: parsed.length,
+      total_unique: deduplicated.length,
+      ...(invalidLocal.length > 0 ? {
+        warning: `${invalidLocal.length} numéro(s) ignoré(s) : format local sans indicatif pays (ex: 0612345678). Ajoutez l'indicatif international (ex: +33612345678).`
+      } : {})
+    });
   } catch (error) {
     console.error('Erreur import contacts:', error);
     res.status(500).json({ error: "Erreur lors de l'import des contacts" });
