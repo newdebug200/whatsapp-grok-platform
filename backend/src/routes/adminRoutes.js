@@ -484,7 +484,58 @@ router.post('/dressur-queue/start', async (req, res) => {
       emitDressurProgress();
 
       try {
-        const waId = String(numero).replace(/^\+/, '') + '@c.us';
+        // ── Résolution du vrai waId WhatsApp ──────────────────────────────────
+        // Certains numéros dans dressur.site sont stockés avec un "0" parasite
+        // après l'indicatif pays (ex: +229 0158519556 → +2290158519556 sur 13 chiffres
+        // au lieu des 11 attendus). On tente getNumberId() d'abord, puis une
+        // deuxième tentative avec le "0" supprimé si la première échoue.
+        const waClient = whatsappManager.getClient(dressurJob.profileId);
+        const rawDigits = String(numero).replace(/[^\d]/g, '');
+
+        let waId = null;
+
+        if (waClient) {
+          // Tentative 1 : numéro tel quel
+          try {
+            const numId1 = await waClient.getNumberId(rawDigits);
+            if (numId1 && !numId1._serialized.includes('@lid')) {
+              waId = numId1._serialized;
+            } else if (numId1 && numId1._serialized.includes('@lid')) {
+              // @lid : résoudre le vrai numéro
+              try {
+                const realContact = await waClient.getContactById(numId1._serialized);
+                waId = (realContact?.number ? String(realContact.number) : rawDigits) + '@c.us';
+              } catch (_) { waId = rawDigits + '@c.us'; }
+            }
+          } catch (_) { /* ignoré, on tente la variante */ }
+
+          // Tentative 2 : supprimer un "0" parasite après l'indicatif pays
+          // Détection : indicatif (1-4 chiffres) + "0" + numéro local (6-10 chiffres)
+          if (!waId) {
+            const stripped = rawDigits.replace(/^(\d{1,4})0(\d{6,10})$/, '$1$2');
+            if (stripped !== rawDigits) {
+              try {
+                const numId2 = await waClient.getNumberId(stripped);
+                if (numId2 && !numId2._serialized.includes('@lid')) {
+                  waId = numId2._serialized;
+                  console.log(`[DressurQueue] Zéro parasite corrigé : ${rawDigits} → ${stripped}`);
+                } else if (numId2 && numId2._serialized.includes('@lid')) {
+                  try {
+                    const realContact = await waClient.getContactById(numId2._serialized);
+                    waId = (realContact?.number ? String(realContact.number) : stripped) + '@c.us';
+                  } catch (_) { waId = stripped + '@c.us'; }
+                }
+              } catch (_) { /* ignoré */ }
+            }
+          }
+        }
+
+        // Fallback final : construire le waId depuis les chiffres bruts
+        if (!waId) {
+          waId = rawDigits + '@c.us';
+          console.log(`[DressurQueue] Fallback waId : ${waId}`);
+        }
+
         await whatsappManager.sendMessage(dressurJob.profileId, waId, message);
         dressurJob.sent++;
         dressurJob.results.push({
