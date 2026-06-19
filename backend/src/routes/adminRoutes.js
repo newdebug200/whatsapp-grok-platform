@@ -484,62 +484,43 @@ router.post('/dressur-queue/start', async (req, res) => {
       emitDressurProgress();
 
       try {
-        // ── Résolution du vrai waId WhatsApp ──────────────────────────────────
-        // Stratégie : toujours essayer getNumberId() en premier pour obtenir
-        // un @c.us valide. Le @lid de dressur.site n'est utilisé qu'en dernier
-        // recours car client.sendMessage(@lid) retourne null sans erreur.
-        let waId = null;
+        // ── Résolution du waId et envoi avec fallbacks ─────────────────────────
+        // Priorité 1 : numéro de téléphone en format @c.us (ID de chat standard).
+        //   sendMessage(@lid) crée un objet local mais n'envoie RIEN — le @lid est
+        //   l'identifiant interne utilisateur, pas l'identifiant du chat.
+        // Priorité 2 : variantes béninoises du numéro en @c.us.
+        // Priorité 3 : @lid fourni par dressur.site (dernier recours).
+        const rawDigits = String(numero).replace(/[^\d]/g, '');
         const lidFallback = (itemWaId && String(itemWaId).trim())
           ? String(itemWaId).trim() + '@lid'
           : null;
 
-        const waClient = whatsappManager.getClient(dressurJob.profileId);
-        const rawDigits = String(numero).replace(/[^\d]/g, '');
+        // Construire la liste des candidats dans l'ordre de préférence
+        const candidates = [rawDigits + '@c.us'];
+        const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
+        if (noPrefix01 !== rawDigits) candidates.push(noPrefix01 + '@c.us');
+        const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
+        if (withPrefix01 !== rawDigits) candidates.push(withPrefix01 + '@c.us');
+        if (lidFallback) candidates.push(lidFallback);
 
-        if (waClient) {
-          const resolveNumId = async (digits) => {
-            const numId = await waClient.getNumberId(digits);
-            if (!numId) return null;
-            // Retourner directement l'ID WhatsApp résolu, que ce soit @c.us ou @lid.
-            // getNumberId() retourne toujours le bon identifiant pour ce contact.
-            return numId._serialized;
-          };
+        let sent = false;
+        let lastError = null;
 
-          const variants = new Set([rawDigits]);
-          const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
-          if (noPrefix01 !== rawDigits) variants.add(noPrefix01);
-          const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
-          if (withPrefix01 !== rawDigits) variants.add(withPrefix01);
-          const no0 = rawDigits.replace(/^(\d{1,4})0(\d{6,9})$/, '$1$2');
-          if (no0 !== rawDigits) variants.add(no0);
-
-          for (const variant of variants) {
-            if (waId) break;
-            try {
-              const resolved = await resolveNumId(variant);
-              if (resolved) {
-                waId = resolved;
-                if (variant !== rawDigits) console.log(`[DressurQueue] Variante trouvée : ${rawDigits} → ${variant} → ${waId}`);
-              }
-            } catch (_) { /* essai suivant */ }
+        for (const candidate of candidates) {
+          try {
+            console.log(`[DressurQueue] Tentative → ${candidate} (${numero})`);
+            await whatsappManager.sendMessage(dressurJob.profileId, candidate, message);
+            console.log(`[DressurQueue] ✅ Envoyé → ${candidate}`);
+            sent = true;
+            break;
+          } catch (err) {
+            lastError = err;
+            console.log(`[DressurQueue] ❌ Échec ${candidate} : ${err.message}`);
           }
         }
 
-        // Priorité 2 : @lid fourni par dressur.site (si getNumberId a échoué)
-        if (!waId && lidFallback) {
-          waId = lidFallback;
-          console.log(`[DressurQueue] @lid dressur utilisé → ${waId} (${numero})`);
-        }
+        if (!sent) throw lastError || new Error('Tous les formats ont échoué');
 
-        // Fallback final : numéro brut @c.us
-        if (!waId) {
-          waId = rawDigits + '@c.us';
-          console.log(`[DressurQueue] Fallback @c.us : ${waId}`);
-        }
-
-        console.log(`[DressurQueue] Envoi → ${waId} (${numero})`);
-
-        await whatsappManager.sendMessage(dressurJob.profileId, waId, message);
         dressurJob.sent++;
         dressurJob.results.push({
           numero,
