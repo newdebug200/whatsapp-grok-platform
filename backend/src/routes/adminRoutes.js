@@ -479,68 +479,62 @@ router.post('/dressur-queue/start', async (req, res) => {
     for (let i = 0; i < items.length; i++) {
       if (dressurJob.cancelled) break;
 
-      const { numero, message } = items[i];
+      const { numero, message, wa_id: itemWaId } = items[i];
       dressurJob.current = { numero, index: i + 1 };
       emitDressurProgress();
 
       try {
         // ── Résolution du vrai waId WhatsApp ──────────────────────────────────
-        // dressur.site peut stocker le même numéro sous deux formats (migration
-        // opérateur béninois : ajout du préfixe "01" après l'indicatif pays) :
-        //   Format court  : 22969165323  (229 + 8 chiffres locaux, 11 chiffres)
-        //   Format long   : 2290169165323 (229 + 01 + 8 chiffres locaux, 13 chiffres)
-        //   Format intermédiaire : +229 0XXXXXXXX (229 + 0 + 9 chiffres, 12 chiffres)
-        // On essaie toutes les variantes jusqu'à trouver le bon waId WhatsApp.
-        const waClient = whatsappManager.getClient(dressurJob.profileId);
-        const rawDigits = String(numero).replace(/[^\d]/g, '');
-
-        // Helper : résoudre un numId (gère aussi @lid)
-        const resolveNumId = async (digits) => {
-          const numId = await waClient.getNumberId(digits);
-          if (!numId) return null;
-          if (!numId._serialized.includes('@lid')) return numId._serialized;
-          try {
-            const rc = await waClient.getContactById(numId._serialized);
-            return (rc?.number ? String(rc.number) : digits) + '@c.us';
-          } catch (_) { return digits + '@c.us'; }
-        };
-
-        // Générer toutes les variantes du numéro à tester
-        const variants = new Set([rawDigits]);
-
-        // Variante A : supprimer "01" après les 3 premiers chiffres (13 chiffres → 11)
-        // ex: 2290169165323 → 22969165323
-        const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
-        if (noPrefix01 !== rawDigits) variants.add(noPrefix01);
-
-        // Variante B : insérer "01" après les 3 premiers chiffres (11 chiffres → 13)
-        // ex: 22969165323 → 2290169165323
-        const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
-        if (withPrefix01 !== rawDigits) variants.add(withPrefix01);
-
-        // Variante C : supprimer un "0" seul après l'indicatif pays (12 chiffres → 11)
-        // ex: 2290969165323 (229 + 0 + 969165323) → 229969165323
-        const no0 = rawDigits.replace(/^(\d{1,4})0(\d{6,9})$/, '$1$2');
-        if (no0 !== rawDigits) variants.add(no0);
-
+        // Priorité 1 : si dressur.site fournit un wa_id (identifiant @lid),
+        // on l'utilise directement — aucun appel getNumberId() nécessaire.
+        // C'est la seule façon d'atteindre les comptes protégés par @lid.
         let waId = null;
-        for (const variant of variants) {
-          if (waId) break;
-          try {
-            const resolved = await resolveNumId(variant);
-            if (resolved) {
-              waId = resolved;
-              if (variant !== rawDigits) {
-                console.log(`[DressurQueue] Variante trouvée : ${rawDigits} → ${variant}`);
-              }
-            }
-          } catch (_) { /* essai suivant */ }
-        }
 
-        // Fallback final : construire le waId depuis les chiffres bruts
-        if (!waId) {
-          waId = rawDigits + '@c.us';
-          console.log(`[DressurQueue] Fallback waId : ${waId}`);
+        if (itemWaId && String(itemWaId).trim()) {
+          waId = String(itemWaId).trim() + '@lid';
+          console.log(`[DressurQueue] wa_id fourni → ${waId} (${numero})`);
+        } else {
+          // Priorité 2 : résolution via getNumberId() avec variantes de format
+          // (migration béninoise : 229XXXXXXXX ↔ 22901XXXXXXXX)
+          const waClient = whatsappManager.getClient(dressurJob.profileId);
+          const rawDigits = String(numero).replace(/[^\d]/g, '');
+
+          if (waClient) {
+            const resolveNumId = async (digits) => {
+              const numId = await waClient.getNumberId(digits);
+              if (!numId) return null;
+              if (!numId._serialized.includes('@lid')) return numId._serialized;
+              try {
+                const rc = await waClient.getContactById(numId._serialized);
+                return (rc?.number ? String(rc.number) : digits) + '@c.us';
+              } catch (_) { return digits + '@c.us'; }
+            };
+
+            const variants = new Set([rawDigits]);
+            const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
+            if (noPrefix01 !== rawDigits) variants.add(noPrefix01);
+            const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
+            if (withPrefix01 !== rawDigits) variants.add(withPrefix01);
+            const no0 = rawDigits.replace(/^(\d{1,4})0(\d{6,9})$/, '$1$2');
+            if (no0 !== rawDigits) variants.add(no0);
+
+            for (const variant of variants) {
+              if (waId) break;
+              try {
+                const resolved = await resolveNumId(variant);
+                if (resolved) {
+                  waId = resolved;
+                  if (variant !== rawDigits) console.log(`[DressurQueue] Variante trouvée : ${rawDigits} → ${variant}`);
+                }
+              } catch (_) { /* essai suivant */ }
+            }
+          }
+
+          // Fallback final
+          if (!waId) {
+            waId = rawDigits + '@c.us';
+            console.log(`[DressurQueue] Fallback waId : ${waId}`);
+          }
         }
 
         await whatsappManager.sendMessage(dressurJob.profileId, waId, message);
