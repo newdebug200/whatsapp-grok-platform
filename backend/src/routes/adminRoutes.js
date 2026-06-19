@@ -485,57 +485,64 @@ router.post('/dressur-queue/start', async (req, res) => {
 
       try {
         // ── Résolution du vrai waId WhatsApp ──────────────────────────────────
-        // Priorité 1 : si dressur.site fournit un wa_id (identifiant @lid),
-        // on l'utilise directement — aucun appel getNumberId() nécessaire.
-        // C'est la seule façon d'atteindre les comptes protégés par @lid.
+        // Stratégie : toujours essayer getNumberId() en premier pour obtenir
+        // un @c.us valide. Le @lid de dressur.site n'est utilisé qu'en dernier
+        // recours car client.sendMessage(@lid) retourne null sans erreur.
         let waId = null;
+        const lidFallback = (itemWaId && String(itemWaId).trim())
+          ? String(itemWaId).trim() + '@lid'
+          : null;
 
-        if (itemWaId && String(itemWaId).trim()) {
-          waId = String(itemWaId).trim() + '@lid';
-          console.log(`[DressurQueue] wa_id fourni → ${waId} (${numero})`);
-        } else {
-          // Priorité 2 : résolution via getNumberId() avec variantes de format
-          // (migration béninoise : 229XXXXXXXX ↔ 22901XXXXXXXX)
-          const waClient = whatsappManager.getClient(dressurJob.profileId);
-          const rawDigits = String(numero).replace(/[^\d]/g, '');
+        const waClient = whatsappManager.getClient(dressurJob.profileId);
+        const rawDigits = String(numero).replace(/[^\d]/g, '');
 
-          if (waClient) {
-            const resolveNumId = async (digits) => {
-              const numId = await waClient.getNumberId(digits);
-              if (!numId) return null;
-              if (!numId._serialized.includes('@lid')) return numId._serialized;
-              try {
-                const rc = await waClient.getContactById(numId._serialized);
-                return (rc?.number ? String(rc.number) : digits) + '@c.us';
-              } catch (_) { return digits + '@c.us'; }
-            };
+        if (waClient) {
+          const resolveNumId = async (digits) => {
+            const numId = await waClient.getNumberId(digits);
+            if (!numId) return null;
+            // Si getNumberId retourne @c.us directement → parfait
+            if (!numId._serialized.includes('@lid')) return numId._serialized;
+            // Si getNumberId retourne @lid → essayer de récupérer le numéro réel
+            try {
+              const rc = await waClient.getContactById(numId._serialized);
+              if (rc?.number) return String(rc.number) + '@c.us';
+            } catch (_) {}
+            return null; // ne pas utiliser ce @lid, on préfère le fallback dressur
+          };
 
-            const variants = new Set([rawDigits]);
-            const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
-            if (noPrefix01 !== rawDigits) variants.add(noPrefix01);
-            const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
-            if (withPrefix01 !== rawDigits) variants.add(withPrefix01);
-            const no0 = rawDigits.replace(/^(\d{1,4})0(\d{6,9})$/, '$1$2');
-            if (no0 !== rawDigits) variants.add(no0);
+          const variants = new Set([rawDigits]);
+          const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
+          if (noPrefix01 !== rawDigits) variants.add(noPrefix01);
+          const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
+          if (withPrefix01 !== rawDigits) variants.add(withPrefix01);
+          const no0 = rawDigits.replace(/^(\d{1,4})0(\d{6,9})$/, '$1$2');
+          if (no0 !== rawDigits) variants.add(no0);
 
-            for (const variant of variants) {
-              if (waId) break;
-              try {
-                const resolved = await resolveNumId(variant);
-                if (resolved) {
-                  waId = resolved;
-                  if (variant !== rawDigits) console.log(`[DressurQueue] Variante trouvée : ${rawDigits} → ${variant}`);
-                }
-              } catch (_) { /* essai suivant */ }
-            }
-          }
-
-          // Fallback final
-          if (!waId) {
-            waId = rawDigits + '@c.us';
-            console.log(`[DressurQueue] Fallback waId : ${waId}`);
+          for (const variant of variants) {
+            if (waId) break;
+            try {
+              const resolved = await resolveNumId(variant);
+              if (resolved) {
+                waId = resolved;
+                if (variant !== rawDigits) console.log(`[DressurQueue] Variante trouvée : ${rawDigits} → ${variant} → ${waId}`);
+              }
+            } catch (_) { /* essai suivant */ }
           }
         }
+
+        // Priorité 2 : @lid fourni par dressur.site (si getNumberId a échoué)
+        if (!waId && lidFallback) {
+          waId = lidFallback;
+          console.log(`[DressurQueue] @lid dressur utilisé → ${waId} (${numero})`);
+        }
+
+        // Fallback final : numéro brut @c.us
+        if (!waId) {
+          waId = rawDigits + '@c.us';
+          console.log(`[DressurQueue] Fallback @c.us : ${waId}`);
+        }
+
+        console.log(`[DressurQueue] Envoi → ${waId} (${numero})`);
 
         await whatsappManager.sendMessage(dressurJob.profileId, waId, message);
         dressurJob.sent++;
