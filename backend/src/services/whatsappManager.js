@@ -755,43 +755,53 @@ class WhatsAppManager {
           const target = targets[i];
           const contact = target.contact;
 
-          // Resolve the real WhatsApp ID to handle @lid accounts
+          // Resolve the real WhatsApp ID
+          // Optimisation : si le contact a déjà un wa_id valide (synchronisé depuis WhatsApp),
+          // on l'utilise directement — pas besoin d'appeler getNumberId() et risquer le rate-limit.
           let waId;
-          try {
-            const rawPhone = contact.phone_number.replace('+', '');
-            const numId = await waClient.getNumberId(rawPhone);
-            if (!numId) {
-              console.log(`[Campaign ${campaignId}] Numéro non WhatsApp — ${contact.phone_number}`);
-              await this.prisma.campaignTarget.update({
-                where: { id: target.id },
-                data: { status: 'failed', error: 'Numéro non enregistré sur WhatsApp' }
-              }).catch(() => {});
-              continue;
-            }
-            // If getNumberId returns a @lid (new WA format), resolve the real phone number
-            if (numId._serialized && numId._serialized.includes('@lid')) {
-              let resolvedPhone = rawPhone;
-              try {
-                // Try to get the actual phone number from the @lid contact object
-                const realContact = await waClient.getContactById(numId._serialized);
-                if (realContact?.number && String(realContact.number).length >= 7) {
-                  resolvedPhone = String(realContact.number);
-                  console.log(`[Campaign ${campaignId}] @lid résolu → +${resolvedPhone}`);
-                } else {
+          const storedWaId = contact.wa_id;
+          const hasValidWaId = storedWaId &&
+            storedWaId.includes('@c.us') &&
+            !storedWaId.includes('@lid');
+
+          if (hasValidWaId) {
+            waId = storedWaId;
+            console.log(`[Campaign ${campaignId}] wa_id connu → ${waId}`);
+          } else {
+            // wa_id absent ou @lid : résolution via getNumberId()
+            try {
+              const rawPhone = contact.phone_number.replace('+', '');
+              const numId = await waClient.getNumberId(rawPhone);
+              if (!numId) {
+                console.log(`[Campaign ${campaignId}] Numéro non WhatsApp — ${contact.phone_number}`);
+                await this.prisma.campaignTarget.update({
+                  where: { id: target.id },
+                  data: { status: 'failed', error: 'Numéro non enregistré sur WhatsApp' }
+                }).catch(() => {});
+                continue;
+              }
+              // Si getNumberId retourne un @lid (nouveau format WA), résoudre le vrai numéro
+              if (numId._serialized && numId._serialized.includes('@lid')) {
+                let resolvedPhone = rawPhone;
+                try {
+                  const realContact = await waClient.getContactById(numId._serialized);
+                  if (realContact?.number && String(realContact.number).length >= 7) {
+                    resolvedPhone = String(realContact.number);
+                    console.log(`[Campaign ${campaignId}] @lid résolu → +${resolvedPhone}`);
+                  } else {
+                    console.log(`[Campaign ${campaignId}] @lid → fallback numéro stocké ${rawPhone}`);
+                  }
+                } catch (_) {
                   console.log(`[Campaign ${campaignId}] @lid → fallback numéro stocké ${rawPhone}`);
                 }
-              } catch (_) {
-                console.log(`[Campaign ${campaignId}] @lid → fallback numéro stocké ${rawPhone}`);
+                waId = resolvedPhone + '@c.us';
+              } else {
+                waId = numId._serialized;
               }
-              waId = resolvedPhone + '@c.us';
-            } else {
-              waId = numId._serialized;
+            } catch (_) {
+              // Dernier recours
+              waId = contact.phone_number.replace('+', '') + '@c.us';
             }
-          } catch (_) {
-            // Fallback if getNumberId throws
-            waId = (contact.wa_id && !contact.wa_id.includes('@lid'))
-              ? contact.wa_id
-              : (contact.phone_number.replace('+', '') + '@c.us');
           }
 
           try {
