@@ -240,11 +240,11 @@ router.post('/send', profileMiddleware, async (req, res) => {
     const client = whatsappManager.getClient(req.profileId);
     if (!client) return res.status(503).json({ error: 'WhatsApp non connecté' });
 
-    await client.sendMessage(contact.wa_id, message);
+    await client.sendMessage(contact.wa_id, text);
     const saved = await prisma.message.create({
-      data: { contact_id: contact.id, content: message, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
+      data: { contact_id: contact.id, content: text, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
     });
-    whatsappManager.addToCache(req.profileId, contact.id, 'sent', message);
+    whatsappManager.addToCache(req.profileId, contact.id, 'sent', text);
     res.json(saved);
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de l'envoi du message" });
