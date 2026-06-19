@@ -575,7 +575,8 @@ class WhatsAppManager {
     if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
-    await found.entry.client.sendMessage(to, content);
+    const result = await found.entry.client.sendMessage(to, content);
+    if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
