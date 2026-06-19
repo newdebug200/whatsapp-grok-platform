@@ -575,7 +575,37 @@ class WhatsAppManager {
     if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
-    const result = await found.entry.client.sendMessage(to, content);
+    const client = found.entry.client;
+
+    // ── Méthode 1 : WPP.js natif via pupPage (plus fiable que le wrapper wweb) ─
+    // window.WPP est injecté par whatsapp-web.js dans la page Puppeteer.
+    // WPP.chat.sendTextMessage gère les nouveaux chats (sans conversation préalable)
+    // et envoie réellement via le réseau WhatsApp, contrairement au wrapper wweb qui
+    // peut créer un objet Message local sans jamais atteindre les serveurs WA.
+    try {
+      const wppResult = await client.pupPage.evaluate(async (chatId, text) => {
+        try {
+          if (!window.WPP || !window.WPP.chat) return { ok: false, error: 'WPP non disponible' };
+          await window.WPP.chat.sendTextMessage(chatId, text, {});
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: String(e && e.message ? e.message : e) };
+        }
+      }, to, content);
+
+      if (wppResult && wppResult.ok) return;
+      // WPP disponible mais erreur explicite → on la propage directement
+      if (wppResult && wppResult.error && wppResult.error !== 'WPP non disponible') {
+        throw new Error(wppResult.error);
+      }
+      // WPP non disponible → fallback sur le wrapper wweb ci-dessous
+    } catch (err) {
+      // Si l'erreur vient de notre throw ci-dessus, on la propage
+      if (err.message && err.message !== 'WPP non disponible') throw err;
+    }
+
+    // ── Méthode 2 : fallback wrapper whatsapp-web.js ───────────────────────────
+    const result = await client.sendMessage(to, content);
     if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
   }
 
