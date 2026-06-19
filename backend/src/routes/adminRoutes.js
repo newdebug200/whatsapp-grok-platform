@@ -495,13 +495,17 @@ router.post('/dressur-queue/start', async (req, res) => {
           ? String(itemWaId).trim() + '@lid'
           : null;
 
-        // Construire la liste des candidats dans l'ordre de préférence
-        const candidates = [rawDigits + '@c.us'];
+        // Construire la liste des candidats dans l'ordre de préférence.
+        // Le @lid de dressur.site est EN PREMIER car ces contacts ont déjà interagi
+        // avec le bot → leur chat existe sous ce LID dans WhatsApp. sendMessage()
+        // utilisera getChatById(@lid) pour envoyer via le chat existant.
+        const candidates = [];
+        if (lidFallback) candidates.push(lidFallback);            // 1. @lid dressur (priorité absolue)
+        candidates.push(rawDigits + '@c.us');                      // 2. nouveau format béninois @c.us
         const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
-        if (noPrefix01 !== rawDigits) candidates.push(noPrefix01 + '@c.us');
+        if (noPrefix01 !== rawDigits) candidates.push(noPrefix01 + '@c.us');  // 3. ancien format béninois
         const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
-        if (withPrefix01 !== rawDigits) candidates.push(withPrefix01 + '@c.us');
-        if (lidFallback) candidates.push(lidFallback);
+        if (withPrefix01 !== rawDigits) candidates.push(withPrefix01 + '@c.us'); // 4. variante +01
 
         let sent = false;
         let lastError = null;
