@@ -500,14 +500,9 @@ router.post('/dressur-queue/start', async (req, res) => {
           const resolveNumId = async (digits) => {
             const numId = await waClient.getNumberId(digits);
             if (!numId) return null;
-            // Si getNumberId retourne @c.us directement → parfait
-            if (!numId._serialized.includes('@lid')) return numId._serialized;
-            // Si getNumberId retourne @lid → essayer de récupérer le numéro réel
-            try {
-              const rc = await waClient.getContactById(numId._serialized);
-              if (rc?.number) return String(rc.number) + '@c.us';
-            } catch (_) {}
-            return null; // ne pas utiliser ce @lid, on préfère le fallback dressur
+            // Retourner directement l'ID WhatsApp résolu, que ce soit @c.us ou @lid.
+            // getNumberId() retourne toujours le bon identifiant pour ce contact.
+            return numId._serialized;
           };
 
           const variants = new Set([rawDigits]);
