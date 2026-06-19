@@ -485,49 +485,56 @@ router.post('/dressur-queue/start', async (req, res) => {
 
       try {
         // ── Résolution du vrai waId WhatsApp ──────────────────────────────────
-        // Certains numéros dans dressur.site sont stockés avec un "0" parasite
-        // après l'indicatif pays (ex: +229 0158519556 → +2290158519556 sur 13 chiffres
-        // au lieu des 11 attendus). On tente getNumberId() d'abord, puis une
-        // deuxième tentative avec le "0" supprimé si la première échoue.
+        // dressur.site peut stocker le même numéro sous deux formats (migration
+        // opérateur béninois : ajout du préfixe "01" après l'indicatif pays) :
+        //   Format court  : 22969165323  (229 + 8 chiffres locaux, 11 chiffres)
+        //   Format long   : 2290169165323 (229 + 01 + 8 chiffres locaux, 13 chiffres)
+        //   Format intermédiaire : +229 0XXXXXXXX (229 + 0 + 9 chiffres, 12 chiffres)
+        // On essaie toutes les variantes jusqu'à trouver le bon waId WhatsApp.
         const waClient = whatsappManager.getClient(dressurJob.profileId);
         const rawDigits = String(numero).replace(/[^\d]/g, '');
 
-        let waId = null;
-
-        if (waClient) {
-          // Tentative 1 : numéro tel quel
+        // Helper : résoudre un numId (gère aussi @lid)
+        const resolveNumId = async (digits) => {
+          const numId = await waClient.getNumberId(digits);
+          if (!numId) return null;
+          if (!numId._serialized.includes('@lid')) return numId._serialized;
           try {
-            const numId1 = await waClient.getNumberId(rawDigits);
-            if (numId1 && !numId1._serialized.includes('@lid')) {
-              waId = numId1._serialized;
-            } else if (numId1 && numId1._serialized.includes('@lid')) {
-              // @lid : résoudre le vrai numéro
-              try {
-                const realContact = await waClient.getContactById(numId1._serialized);
-                waId = (realContact?.number ? String(realContact.number) : rawDigits) + '@c.us';
-              } catch (_) { waId = rawDigits + '@c.us'; }
-            }
-          } catch (_) { /* ignoré, on tente la variante */ }
+            const rc = await waClient.getContactById(numId._serialized);
+            return (rc?.number ? String(rc.number) : digits) + '@c.us';
+          } catch (_) { return digits + '@c.us'; }
+        };
 
-          // Tentative 2 : supprimer un "0" parasite après l'indicatif pays
-          // Détection : indicatif (1-4 chiffres) + "0" + numéro local (6-10 chiffres)
-          if (!waId) {
-            const stripped = rawDigits.replace(/^(\d{1,4})0(\d{6,10})$/, '$1$2');
-            if (stripped !== rawDigits) {
-              try {
-                const numId2 = await waClient.getNumberId(stripped);
-                if (numId2 && !numId2._serialized.includes('@lid')) {
-                  waId = numId2._serialized;
-                  console.log(`[DressurQueue] Zéro parasite corrigé : ${rawDigits} → ${stripped}`);
-                } else if (numId2 && numId2._serialized.includes('@lid')) {
-                  try {
-                    const realContact = await waClient.getContactById(numId2._serialized);
-                    waId = (realContact?.number ? String(realContact.number) : stripped) + '@c.us';
-                  } catch (_) { waId = stripped + '@c.us'; }
-                }
-              } catch (_) { /* ignoré */ }
+        // Générer toutes les variantes du numéro à tester
+        const variants = new Set([rawDigits]);
+
+        // Variante A : supprimer "01" après les 3 premiers chiffres (13 chiffres → 11)
+        // ex: 2290169165323 → 22969165323
+        const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
+        if (noPrefix01 !== rawDigits) variants.add(noPrefix01);
+
+        // Variante B : insérer "01" après les 3 premiers chiffres (11 chiffres → 13)
+        // ex: 22969165323 → 2290169165323
+        const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
+        if (withPrefix01 !== rawDigits) variants.add(withPrefix01);
+
+        // Variante C : supprimer un "0" seul après l'indicatif pays (12 chiffres → 11)
+        // ex: 2290969165323 (229 + 0 + 969165323) → 229969165323
+        const no0 = rawDigits.replace(/^(\d{1,4})0(\d{6,9})$/, '$1$2');
+        if (no0 !== rawDigits) variants.add(no0);
+
+        let waId = null;
+        for (const variant of variants) {
+          if (waId) break;
+          try {
+            const resolved = await resolveNumId(variant);
+            if (resolved) {
+              waId = resolved;
+              if (variant !== rawDigits) {
+                console.log(`[DressurQueue] Variante trouvée : ${rawDigits} → ${variant}`);
+              }
             }
-          }
+          } catch (_) { /* essai suivant */ }
         }
 
         // Fallback final : construire le waId depuis les chiffres bruts
