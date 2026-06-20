@@ -1,239 +1,254 @@
 @echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul 2>&1
-title Botora — Démarrage de la plateforme WhatsApp IA
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  Botora / SanRobot — Script de démarrage Windows
-REM  Double-cliquez sur ce fichier depuis le dossier whatsapp-grok-platform
+REM  BOTORA — Script de démarrage Windows
+REM  Double-cliquez depuis le dossier whatsapp-grok-platform
+REM  Journal automatique dans : botora-debug.log
 REM ══════════════════════════════════════════════════════════════════════════
 
+REM ── Auto-logging (redirige tout dans botora-debug.log + écran) ────────────
+if "%BOTORA_LOG%"=="" (
+    set "BOTORA_LOG=1"
+    call "%~f0" %* 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%~dp0botora-debug.log'"
+    exit /b
+)
+
+REM ── Répertoire racine ─────────────────────────────────────────────────────
+set "ROOT=%~dp0"
+if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+cd /d "%ROOT%"
+
+title Botora — Démarrage
 echo.
 echo  ╔══════════════════════════════════════════════════════════╗
 echo  ║          BOTORA — Plateforme WhatsApp IA                ║
-echo  ║          Démarrage automatique Windows                  ║
+echo  ║          %DATE%  %TIME%                   ║
 echo  ╚══════════════════════════════════════════════════════════╝
 echo.
 
-REM ── Sauvegarde du répertoire racine ──
-set "ROOT_DIR=%~dp0"
-if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
-
 REM ══════════════════════════════════════════════════════════════════════════
-REM  MISE À JOUR AUTOMATIQUE DU CODE
+REM  ÉTAPE 0 — Vérification du dossier
 REM ══════════════════════════════════════════════════════════════════════════
-
-where git >nul 2>&1
-if %errorlevel% equ 0 (
-    echo  Verification des mises a jour...
-    cd /d "%ROOT_DIR%"
-    git pull origin work --no-edit >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo  [OK] Code a jour ^(branche work^).
-    ) else (
-        echo  [INFO] Pas de mise a jour ou pas de connexion - on continue.
-    )
-    echo.
+if not exist "%ROOT%\backend\package.json" (
+    echo  [ERREUR] Lancez demarrer.bat DEPUIS le dossier whatsapp-grok-platform.
+    echo  Dossier detecte : %ROOT%
+    pause & exit /b 1
 )
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  VÉRIFICATIONS PRÉALABLES
+REM  ÉTAPE 1 — Mise à jour du code (git pull)
 REM ══════════════════════════════════════════════════════════════════════════
+echo  [1/8] Mise a jour du code...
+where git >nul 2>&1
+if %errorlevel% equ 0 (
+    git pull origin work --no-edit >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo  [OK] Code mis a jour depuis GitHub ^(branche work^).
+    ) else (
+        echo  [INFO] Pas de connexion ou pas de changement — on continue.
+    )
+) else (
+    echo  [INFO] git non detecte — pas de mise a jour automatique.
+)
+echo.
 
-REM ── Vérification Node.js ──
+REM ══════════════════════════════════════════════════════════════════════════
+REM  ÉTAPE 2 — Vérification Node.js
+REM ══════════════════════════════════════════════════════════════════════════
+echo  [2/8] Verification Node.js...
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  [ERREUR] Node.js n'est pas installe.
     echo.
-    echo  Telechargez Node.js 18+ sur : https://nodejs.org
+    echo  [ERREUR] Node.js introuvable !
+    echo.
+    echo  Telechargez et installez Node.js 18+ depuis :
+    echo    https://nodejs.org
+    echo.
     echo  Apres installation, relancez ce fichier.
     echo.
-    pause
-    exit /b 1
+    pause & exit /b 1
 )
 for /f "tokens=*" %%v in ('node -v 2^>nul') do set NODE_VER=%%v
 echo  [OK] Node.js %NODE_VER% detecte.
-
-REM ── Vérification npm ──
-where npm >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  [ERREUR] npm introuvable. Reinstallez Node.js.
-    pause
-    exit /b 1
-)
-echo  [OK] npm detecte.
 echo.
 
-REM ── Vérification du dossier racine ──
-if not exist "%ROOT_DIR%\backend\package.json" (
-    echo  [ERREUR] Lancez ce fichier DEPUIS le dossier whatsapp-grok-platform.
-    echo  Dossier actuel : %ROOT_DIR%
-    echo.
-    pause
-    exit /b 1
+REM ══════════════════════════════════════════════════════════════════════════
+REM  ÉTAPE 3 — Libérer les ports (tuer Node existants)
+REM ══════════════════════════════════════════════════════════════════════════
+echo  [3/8] Liberation des ports (arret processus Node existants)...
+taskkill /F /IM node.exe /T >nul 2>&1
+if %errorlevel% equ 0 (
+    echo  [OK] Processus Node arretes — attente 3s...
+    timeout /t 3 /nobreak >nul
+) else (
+    echo  [OK] Aucun processus Node actif.
 )
-echo  [OK] Dossier du projet detecte.
+echo.
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  CRÉATION DES FICHIERS .env SI ABSENTS
+REM  ÉTAPE 4 — Fichiers .env
 REM ══════════════════════════════════════════════════════════════════════════
+echo  [4/8] Verification des fichiers de configuration...
 
-if not exist "%ROOT_DIR%\backend\.env" (
-    if exist "%ROOT_DIR%\backend\.env.example" (
-        copy "%ROOT_DIR%\backend\.env.example" "%ROOT_DIR%\backend\.env" >nul
+REM ── backend/.env ──
+if not exist "%ROOT%\backend\.env" (
+    if exist "%ROOT%\backend\.env.example" (
+        copy "%ROOT%\backend\.env.example" "%ROOT%\backend\.env" >nul
         echo.
         echo  ┌─────────────────────────────────────────────────────────┐
         echo  │  PREMIERE INSTALLATION detectee                         │
         echo  │                                                         │
-        echo  │  Le fichier backend\.env a ete cree.                   │
-        echo  │  Vous DEVEZ renseigner vos cles avant de continuer :   │
+        echo  │  Le fichier backend\.env vient d'etre cree.            │
+        echo  │  Vous DEVEZ y renseigner vos cles API :                │
         echo  │                                                         │
         echo  │    GROK_API_KEY=votre_cle_groq                         │
-        echo  │    JWT_SECRET=une_chaine_secrete_longue                 │
+        echo  │    JWT_SECRET=une_longue_chaine_secrete                 │
         echo  │                                                         │
-        echo  │  Editez backend\.env puis relancez ce script.          │
+        echo  │  Le Bloc-notes va s'ouvrir. Remplissez, sauvegardez,  │
+        echo  │  fermez le Bloc-notes puis appuyez sur une touche.     │
         echo  └─────────────────────────────────────────────────────────┘
         echo.
-        start notepad "%ROOT_DIR%\backend\.env"
-        echo  Le fichier backend\.env a ete ouvert dans le Bloc-notes.
-        echo  Remplissez GROK_API_KEY et JWT_SECRET, sauvegardez, puis...
-        echo.
-        pause
+        start /wait notepad "%ROOT%\backend\.env"
+        echo  [OK] Configuration sauvegardee — on continue.
     ) else (
-        echo  [AVERT] backend\.env absent et backend\.env.example introuvable.
-        echo  Creez backend\.env manuellement avant de continuer.
-        echo.
-        pause
-        exit /b 1
+        echo  [ERREUR] backend\.env absent et pas de .env.example.
+        echo  Creez backend\.env avec au minimum :
+        echo    PORT=3001
+        echo    DATABASE_URL=file:./dev.db
+        echo    GROK_API_KEY=votre_cle
+        echo    JWT_SECRET=votre_secret
+        pause & exit /b 1
     )
-)
-
-if not exist "%ROOT_DIR%\frontend\.env" (
-    if exist "%ROOT_DIR%\frontend\.env.example" (
-        copy "%ROOT_DIR%\frontend\.env.example" "%ROOT_DIR%\frontend\.env" >nul
-        echo  [SETUP] frontend\.env cree.
-    ) else (
-        echo VITE_API_URL=http://localhost:3001/api> "%ROOT_DIR%\frontend\.env"
-        echo VITE_SOCKET_URL=http://localhost:3001>> "%ROOT_DIR%\frontend\.env"
-        echo  [SETUP] frontend\.env cree avec valeurs par defaut.
-    )
-)
-echo  [OK] Fichiers .env prets.
-echo.
-
-REM ══════════════════════════════════════════════════════════════════════════
-REM  INSTALLATION DES DÉPENDANCES BACKEND
-REM ══════════════════════════════════════════════════════════════════════════
-
-echo  [1/4] Installation des dependances backend...
-echo        (peut prendre quelques minutes la premiere fois)
-cd /d "%ROOT_DIR%\backend"
-call npm install --prefer-offline
-if %errorlevel% neq 0 (
-    echo.
-    echo  [ERREUR] npm install backend a echoue.
-    echo  Verifiez votre connexion internet et relancez.
-    cd /d "%ROOT_DIR%"
-    pause
-    exit /b 1
-)
-echo  [OK] Dependances backend OK.
-echo.
-
-REM ══════════════════════════════════════════════════════════════════════════
-REM  BASE DE DONNÉES — MIGRATION ET INITIALISATION
-REM ══════════════════════════════════════════════════════════════════════════
-
-echo  [2/4] Configuration de la base de donnees...
-
-REM ── Génération du client Prisma ──
-call npx prisma generate
-if %errorlevel% neq 0 (
-    echo  [ERREUR] prisma generate a echoue.
-    pause
-    exit /b 1
-)
-
-REM ── Si la base de données n'existe pas encore : créer avec prisma db push ──
-if not exist "%ROOT_DIR%\backend\prisma\dev.db" (
-    echo  Premiere installation : creation de la base de donnees...
-    call npx prisma db push --accept-data-loss
-    echo  [OK] Base de donnees creee.
 ) else (
-    REM ── Base existante : migration safe pour ajouter les nouvelles colonnes ──
-    echo  Mise a jour du schema de la base de donnees...
-    node "%ROOT_DIR%\backend\migrate-safe.js"
-    echo  [OK] Schema mis a jour.
+    echo  [OK] backend\.env present.
 )
 
-REM ── Créer le dossier uploads pour les médias (images, audio, vidéo) ──
-if not exist "%ROOT_DIR%\backend\uploads" (
-    mkdir "%ROOT_DIR%\backend\uploads"
-    echo  [OK] Dossier media cree ^(backend\uploads\^).
+REM ── frontend/.env ──
+if not exist "%ROOT%\frontend\.env" (
+    if exist "%ROOT%\frontend\.env.example" (
+        copy "%ROOT%\frontend\.env.example" "%ROOT%\frontend\.env" >nul
+        echo  [SETUP] frontend\.env cree depuis .env.example.
+    ) else (
+        echo VITE_API_URL=http://localhost:3001/api> "%ROOT%\frontend\.env"
+        echo VITE_SOCKET_URL=http://localhost:3001>> "%ROOT%\frontend\.env"
+        echo  [SETUP] frontend\.env cree ^(valeurs par defaut^).
+    )
+) else (
+    echo  [OK] frontend\.env present.
 )
-
-echo  [OK] Base de donnees et stockage media prets.
 echo.
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  INSTALLATION DES DÉPENDANCES FRONTEND
+REM  Variables Puppeteer — OBLIGATOIRES pour whatsapp-web.js
 REM ══════════════════════════════════════════════════════════════════════════
+set PUPPETEER_SKIP_DOWNLOAD=true
+set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD_STEP=true
 
-echo  [3/4] Installation des dependances frontend...
-cd /d "%ROOT_DIR%\frontend"
-call npm install --prefer-offline
+REM ══════════════════════════════════════════════════════════════════════════
+REM  ÉTAPE 5 — Dépendances backend
+REM ══════════════════════════════════════════════════════════════════════════
+echo  [5/8] Dependances backend...
+cd /d "%ROOT%\backend"
+
+if not exist "node_modules" (
+    echo  [INSTALL] Premiere installation — peut prendre 2 a 5 minutes...
+    call npm install --prefer-offline --no-audit --no-fund
+    if %errorlevel% neq 0 (
+        echo  [ERREUR] npm install backend a echoue. Verifiez votre connexion.
+        cd /d "%ROOT%"
+        pause & exit /b 1
+    )
+    echo  [OK] Dependances backend installees.
+) else (
+    echo  [OK] node_modules backend deja present.
+)
+
+REM ── Toujours régénérer le client Prisma (rapide, évite les erreurs) ──────
+echo  [5b] Generation du client Prisma...
+call npx prisma generate --no-hints >nul 2>&1
 if %errorlevel% neq 0 (
-    echo.
-    echo  [ERREUR] npm install frontend a echoue.
-    cd /d "%ROOT_DIR%"
-    pause
-    exit /b 1
+    echo  [ATTENTION] prisma generate a echoue — tentative sans --no-hints...
+    call npx prisma generate >nul 2>&1
 )
-echo  [OK] Dependances frontend OK.
+echo  [OK] Client Prisma pret.
+cd /d "%ROOT%"
 echo.
-
-REM ── Retour à la racine ──
-cd /d "%ROOT_DIR%"
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  DÉMARRAGE DES SERVEURS
+REM  ÉTAPE 6 — Base de données
 REM ══════════════════════════════════════════════════════════════════════════
+echo  [6/8] Synchronisation base de donnees...
+cd /d "%ROOT%\backend"
+node setup-db.js
+if %errorlevel% neq 0 (
+    echo  [ERREUR] setup-db.js a echoue.
+    cd /d "%ROOT%"
+    pause & exit /b 1
+)
+cd /d "%ROOT%"
 
-echo  [4/4] Demarrage des serveurs...
+REM ── Créer le dossier uploads (médias WhatsApp) ────────────────────────────
+if not exist "%ROOT%\backend\uploads" (
+    mkdir "%ROOT%\backend\uploads"
+    echo  [OK] Dossier backend\uploads cree.
+)
 echo.
-echo  ╔══════════════════════════════════════════════════════════╗
-echo  ║  Backend  API  →  http://localhost:3001               ║
-echo  ║  Frontend App  →  http://localhost:5173               ║
-echo  ╚══════════════════════════════════════════════════════════╝
+
+REM ══════════════════════════════════════════════════════════════════════════
+REM  ÉTAPE 7 — Dépendances frontend
+REM ══════════════════════════════════════════════════════════════════════════
+echo  [7/8] Dependances frontend...
+cd /d "%ROOT%\frontend"
+
+if not exist "node_modules" (
+    echo  [INSTALL] Installation frontend...
+    call npm install --prefer-offline --no-audit --no-fund
+    if %errorlevel% neq 0 (
+        echo  [ERREUR] npm install frontend a echoue.
+        cd /d "%ROOT%"
+        pause & exit /b 1
+    )
+    echo  [OK] Dependances frontend installees.
+) else (
+    echo  [OK] node_modules frontend deja present.
+)
+cd /d "%ROOT%"
 echo.
-echo  Deux nouvelles fenetres vont s'ouvrir.
-echo  NE PAS les fermer pendant l'utilisation de la plateforme.
+
+REM ══════════════════════════════════════════════════════════════════════════
+REM  ÉTAPE 8 — Démarrage des serveurs
+REM ══════════════════════════════════════════════════════════════════════════
+echo  [8/8] Demarrage des serveurs...
 echo.
 
-REM ── Lancer le Backend dans une nouvelle fenêtre ──
-start "BOTORA — Backend API (port 3001)" cmd /k "chcp 65001 >nul && cd /d "%ROOT_DIR%\backend" && echo. && echo  [BACKEND] Demarrage sur http://localhost:3001 && echo  Ctrl+C pour arreter && echo. && npm run dev"
+REM ── Backend ───────────────────────────────────────────────────────────────
+start "BOTORA Backend — port 3001" cmd /k "chcp 65001 >nul && title BOTORA Backend && cd /d "%ROOT%\backend" && set PUPPETEER_SKIP_DOWNLOAD=true && set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && echo. && echo  Backend demarre sur http://localhost:3001 && echo  Fermez cette fenetre pour arreter le backend. && echo. && npm run dev"
 
-REM ── Attendre 3 secondes que le backend s'initialise ──
-echo  Attente du backend...
-timeout /t 3 /nobreak >nul
+echo  Backend en cours de demarrage...
+timeout /t 4 /nobreak >nul
 
-REM ── Lancer le Frontend dans une nouvelle fenêtre ──
-start "BOTORA — Frontend UI (port 5173)" cmd /k "chcp 65001 >nul && cd /d "%ROOT_DIR%\frontend" && echo. && echo  [FRONTEND] Demarrage sur http://localhost:5173 && echo  Ctrl+C pour arreter && echo. && npm run dev"
+REM ── Frontend ──────────────────────────────────────────────────────────────
+start "BOTORA Frontend — port 5173" cmd /k "chcp 65001 >nul && title BOTORA Frontend && cd /d "%ROOT%\frontend" && echo. && echo  Frontend demarre sur http://localhost:5173 && echo  Fermez cette fenetre pour arreter le frontend. && echo. && npm run dev"
 
-REM ── Attendre 5 secondes puis ouvrir le navigateur ──
-echo  Attente du frontend...
+echo  Frontend en cours de demarrage...
 timeout /t 5 /nobreak >nul
 
-echo  Ouverture de la plateforme dans le navigateur...
+REM ── Ouvrir le navigateur ──────────────────────────────────────────────────
+echo  Ouverture du navigateur...
 start "" "http://localhost:5173"
 
 echo.
 echo  ╔══════════════════════════════════════════════════════════╗
-echo  ║  ✓  Plateforme Botora demarree avec succes !           ║
+echo  ║  BOTORA est lance !                                     ║
 echo  ║                                                         ║
-echo  ║  Ouvrez : http://localhost:5173                        ║
+echo  ║  Interface :  http://localhost:5173                     ║
+echo  ║  API       :  http://localhost:3001                     ║
+echo  ║  Journal   :  botora-debug.log (dans ce dossier)       ║
 echo  ║                                                         ║
-echo  ║  Pour arreter :                                         ║
-echo  ║    Fermez les fenetres "Backend" et "Frontend"         ║
+echo  ║  Pour arreter : fermez les fenetres Backend/Frontend    ║
 echo  ╚══════════════════════════════════════════════════════════╝
 echo.
 echo  Vous pouvez fermer CETTE fenetre. Les serveurs continuent.
