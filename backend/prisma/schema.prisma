@@ -66,6 +66,7 @@ model BotConfig {
   personality            String  @default("professional")
   system_prompt_override String?
   sentiment_alert        Boolean @default(true)
+  media_auto_reply       Boolean @default(true)
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
