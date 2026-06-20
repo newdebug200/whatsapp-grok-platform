@@ -58,7 +58,8 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     away_message: '',
     away_once_per_session: true,
     personality: 'professional',
-    sentiment_alert: true
+    sentiment_alert: true,
+    media_auto_reply: true
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -343,6 +344,16 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             <div className="toggle-desc">Notifie quand un client semble en colère ou insatisfait</div>
           </div>
           <button className={`toggle-btn ${config.sentiment_alert ? 'on' : 'off'}`} onClick={() => setConfig(c => ({ ...c, sentiment_alert: !c.sentiment_alert }))}>
+            <span className="toggle-knob" />
+          </button>
+        </div>
+
+        <div className="toggle-row" style={{ marginTop: 12 }}>
+          <div>
+            <div className="toggle-label">🖼️ Réponse automatique aux médias</div>
+            <div className="toggle-desc">Le bot répond automatiquement quand un contact envoie une image, vidéo, audio, sticker ou document</div>
+          </div>
+          <button className={`toggle-btn ${config.media_auto_reply ? 'on' : 'off'}`} onClick={() => setConfig(c => ({ ...c, media_auto_reply: !c.media_auto_reply }))}>
             <span className="toggle-knob" />
           </button>
         </div>
