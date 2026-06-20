@@ -48,7 +48,7 @@ router.put('/bot', async (req, res) => {
       bot_name, bot_info, bot_behavior, ia_enabled, response_delay_seconds,
       business_hours_enabled, open_days, open_time, close_time, timezone,
       away_message, away_once_per_session,
-      personality, system_prompt_override, sentiment_alert
+      personality, system_prompt_override, sentiment_alert, media_auto_reply
     } = req.body;
 
     const delaySeconds = response_delay_seconds !== undefined
@@ -72,7 +72,8 @@ router.put('/bot', async (req, res) => {
       ...(away_once_per_session !== undefined && { away_once_per_session }),
       ...(personality !== undefined && VALID_PERSONALITIES.includes(personality) && { personality }),
       ...(system_prompt_override !== undefined && { system_prompt_override: system_prompt_override || null }),
-      ...(sentiment_alert !== undefined && { sentiment_alert })
+      ...(sentiment_alert !== undefined && { sentiment_alert }),
+      ...(media_auto_reply !== undefined && { media_auto_reply })
     };
 
     let config;
@@ -95,7 +96,8 @@ router.put('/bot', async (req, res) => {
           away_once_per_session: away_once_per_session ?? true,
           personality: personality || 'professional',
           system_prompt_override: system_prompt_override || null,
-          sentiment_alert: sentiment_alert ?? true
+          sentiment_alert: sentiment_alert ?? true,
+          media_auto_reply: media_auto_reply ?? true
         },
         update: data
       });
