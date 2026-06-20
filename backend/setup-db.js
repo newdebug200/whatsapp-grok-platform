@@ -2,9 +2,8 @@
 
 /**
  * setup-db.js — Synchronisation SQLite sans Prisma CLI
- * Compatible Node.js v22.5+ (node:sqlite natif)
  * Crée toutes les tables si elles n'existent pas,
- * et ajoute les colonnes manquantes pour les mises à jour.
+ * et ajoute les colonnes manquantes pour les mises à jour (idempotent).
  */
 
 const path = require('node:path');
@@ -84,6 +83,10 @@ CREATE TABLE IF NOT EXISTS "BotConfig" (
   "timezone"               TEXT    NOT NULL DEFAULT 'UTC',
   "away_message"           TEXT    NOT NULL DEFAULT '',
   "away_once_per_session"  INTEGER NOT NULL DEFAULT 1,
+  "personality"            TEXT    NOT NULL DEFAULT 'professional',
+  "system_prompt_override" TEXT,
+  "sentiment_alert"        INTEGER NOT NULL DEFAULT 1,
+  "media_auto_reply"       INTEGER NOT NULL DEFAULT 1,
   FOREIGN KEY ("profile_id") REFERENCES "WhatsAppProfile"("id")
 );
 
@@ -96,8 +99,21 @@ CREATE TABLE IF NOT EXISTS "Contact" (
   "created_at"       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "ia_paused"        INTEGER  NOT NULL DEFAULT 0,
   "sensitive_flagged" INTEGER NOT NULL DEFAULT 0,
+  "archived"         INTEGER  NOT NULL DEFAULT 0,
+  "notes"            TEXT,
+  "funnel_stage"     TEXT     NOT NULL DEFAULT 'prospect',
+  "unread_count"     INTEGER  NOT NULL DEFAULT 0,
+  "is_favorite"      INTEGER  NOT NULL DEFAULT 0,
   FOREIGN KEY ("profile_id") REFERENCES "WhatsAppProfile"("id"),
   UNIQUE ("profile_id", "phone_number")
+);
+
+CREATE TABLE IF NOT EXISTS "ContactMemory" (
+  "id"         INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "contact_id" INTEGER  NOT NULL UNIQUE,
+  "summary"    TEXT     NOT NULL,
+  "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("contact_id") REFERENCES "Contact"("id") ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS "Tag" (
@@ -125,6 +141,9 @@ CREATE TABLE IF NOT EXISTS "Message" (
   "direction"  TEXT     NOT NULL,
   "type"       TEXT     NOT NULL,
   "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "unread"     INTEGER  NOT NULL DEFAULT 1,
+  "sentiment"  TEXT,
+  "media_path" TEXT,
   FOREIGN KEY ("contact_id") REFERENCES "Contact"("id")
 );
 
@@ -170,6 +189,8 @@ CREATE TABLE IF NOT EXISTS "CampaignMessage" (
   "content"             TEXT    NOT NULL,
   "order_index"         INTEGER NOT NULL DEFAULT 0,
   "delay_after_seconds" INTEGER NOT NULL DEFAULT 0,
+  "media_url"           TEXT,
+  "media_type"          TEXT,
   FOREIGN KEY ("campaign_id") REFERENCES "Campaign"("id") ON DELETE CASCADE
 );
 
@@ -213,6 +234,16 @@ CREATE TABLE IF NOT EXISTS "SensitiveFlag" (
   FOREIGN KEY ("contact_id")  REFERENCES "Contact"("id")         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS "Status" (
+  "id"         INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "profile_id" INTEGER  NOT NULL,
+  "content"    TEXT     NOT NULL,
+  "type"       TEXT     NOT NULL DEFAULT 'text',
+  "wa_msg_id"  TEXT,
+  "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("profile_id") REFERENCES "WhatsAppProfile"("id") ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS "PlatformConfig" (
   "key"   TEXT NOT NULL PRIMARY KEY,
   "value" TEXT NOT NULL
@@ -233,10 +264,12 @@ CREATE TABLE IF NOT EXISTS "CreditTransaction" (
 // ── Ajouter les colonnes manquantes (mises à jour silencieuses) ───────────
 // SQLite ne supporte pas "ADD COLUMN IF NOT EXISTS" — on capture les erreurs
 const migrations = [
-  'ALTER TABLE "Account"   ADD COLUMN "credit_balance"          REAL    NOT NULL DEFAULT 0',
-  'ALTER TABLE "Account"   ADD COLUMN "is_blocked"              INTEGER NOT NULL DEFAULT 0',
-  'ALTER TABLE "Account"   ADD COLUMN "reset_token"             TEXT',
-  'ALTER TABLE "Account"   ADD COLUMN "reset_token_expiry"      DATETIME',
+  // Account
+  'ALTER TABLE "Account" ADD COLUMN "credit_balance"          REAL    NOT NULL DEFAULT 0',
+  'ALTER TABLE "Account" ADD COLUMN "is_blocked"              INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "Account" ADD COLUMN "reset_token"             TEXT',
+  'ALTER TABLE "Account" ADD COLUMN "reset_token_expiry"      DATETIME',
+  // BotConfig
   'ALTER TABLE "BotConfig" ADD COLUMN "business_hours_enabled"  INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "BotConfig" ADD COLUMN "open_days"               TEXT    NOT NULL DEFAULT \'1,2,3,4,5\'',
   'ALTER TABLE "BotConfig" ADD COLUMN "open_time"               TEXT    NOT NULL DEFAULT \'09:00\'',
@@ -244,12 +277,30 @@ const migrations = [
   'ALTER TABLE "BotConfig" ADD COLUMN "timezone"                TEXT    NOT NULL DEFAULT \'UTC\'',
   'ALTER TABLE "BotConfig" ADD COLUMN "away_message"            TEXT    NOT NULL DEFAULT \'\'',
   'ALTER TABLE "BotConfig" ADD COLUMN "away_once_per_session"   INTEGER NOT NULL DEFAULT 1',
-  'ALTER TABLE "Contact"   ADD COLUMN "sensitive_flagged"       INTEGER NOT NULL DEFAULT 0',
-  'ALTER TABLE "Contact"   ADD COLUMN "wa_id"                   TEXT',
-  'ALTER TABLE "Campaign"  ADD COLUMN "tag_id"                  INTEGER',
-  'ALTER TABLE "Campaign"  ADD COLUMN "scheduled_at"            DATETIME',
-  'ALTER TABLE "Campaign"  ADD COLUMN "started_at"              DATETIME',
-  'ALTER TABLE "Campaign"  ADD COLUMN "completed_at"            DATETIME',
+  'ALTER TABLE "BotConfig" ADD COLUMN "personality"             TEXT    NOT NULL DEFAULT \'professional\'',
+  'ALTER TABLE "BotConfig" ADD COLUMN "system_prompt_override"  TEXT',
+  'ALTER TABLE "BotConfig" ADD COLUMN "sentiment_alert"         INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE "BotConfig" ADD COLUMN "media_auto_reply"        INTEGER NOT NULL DEFAULT 1',
+  // Contact
+  'ALTER TABLE "Contact" ADD COLUMN "sensitive_flagged" INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "Contact" ADD COLUMN "wa_id"             TEXT',
+  'ALTER TABLE "Contact" ADD COLUMN "archived"          INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "Contact" ADD COLUMN "notes"             TEXT',
+  'ALTER TABLE "Contact" ADD COLUMN "funnel_stage"      TEXT    NOT NULL DEFAULT \'prospect\'',
+  'ALTER TABLE "Contact" ADD COLUMN "unread_count"      INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "Contact" ADD COLUMN "is_favorite"       INTEGER NOT NULL DEFAULT 0',
+  // Message
+  'ALTER TABLE "Message" ADD COLUMN "unread"     INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE "Message" ADD COLUMN "sentiment"  TEXT',
+  'ALTER TABLE "Message" ADD COLUMN "media_path" TEXT',
+  // Campaign
+  'ALTER TABLE "Campaign" ADD COLUMN "tag_id"       INTEGER',
+  'ALTER TABLE "Campaign" ADD COLUMN "scheduled_at" DATETIME',
+  'ALTER TABLE "Campaign" ADD COLUMN "started_at"   DATETIME',
+  'ALTER TABLE "Campaign" ADD COLUMN "completed_at" DATETIME',
+  // CampaignMessage
+  'ALTER TABLE "CampaignMessage" ADD COLUMN "media_url"  TEXT',
+  'ALTER TABLE "CampaignMessage" ADD COLUMN "media_type" TEXT',
 ];
 
 for (const stmt of migrations) {
