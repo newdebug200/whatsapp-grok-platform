@@ -194,11 +194,29 @@ REM  ÉTAPE 6 — Base de données
 REM ══════════════════════════════════════════════════════════════════════════
 echo  [6/8] Synchronisation base de donnees...
 cd /d "%ROOT%\backend"
-node setup-db.js
-if %errorlevel% neq 0 (
-    echo  [ERREUR] setup-db.js a echoue.
-    cd /d "%ROOT%"
-    pause & exit /b 1
+
+REM ── Étape 6a : prisma db push (crée/met à jour les tables depuis schema.prisma) ─
+echo  [6a] Creation des tables via Prisma...
+call npx prisma db push --skip-generate >nul 2>&1
+if %errorlevel% equ 0 (
+    echo  [OK] Tables creees/mises a jour par Prisma.
+) else (
+    echo  [ATTENTION] prisma db push a echoue, tentative avec --accept-data-loss...
+    call npx prisma db push --skip-generate --accept-data-loss >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo  [OK] Tables synchronisees.
+    ) else (
+        echo  [ATTENTION] Prisma db push indisponible — passage a setup-db.js...
+    )
+)
+
+REM ── Étape 6b : setup-db.js (colonnes manquantes sur DB existante, idempotent) ─
+echo  [6b] Application des migrations complementaires...
+node setup-db.js >nul 2>&1
+if %errorlevel% equ 0 (
+    echo  [OK] Migrations complementaires appliquees.
+) else (
+    echo  [INFO] setup-db.js indisponible ^(Node ^< 22.5^) — Prisma seul est utilise.
 )
 cd /d "%ROOT%"
 
