@@ -72,6 +72,18 @@ if %errorlevel% neq 0 (
 )
 for /f "tokens=*" %%v in ('node -v 2^>nul') do set NODE_VER=%%v
 echo  [OK] Node.js %NODE_VER% detecte.
+
+REM ── Vérification version minimale : 22.5 ──────────────────────────────────
+for /f "tokens=1 delims=." %%m in ("%NODE_VER:v=%") do set NODE_MAJOR=%%m
+if %NODE_MAJOR% LSS 22 (
+    echo.
+    echo  [ERREUR] Node.js 22 ou superieur est requis ^(detecte : %NODE_VER%^)
+    echo.
+    echo  setup-db.js utilise le module "node:sqlite" disponible depuis Node 22.5.
+    echo  Telechargez Node.js 22 LTS sur : https://nodejs.org/en/download
+    echo.
+    pause ^& exit /b 1
+)
 echo.
 
 REM ══════════════════════════════════════════════════════════════════════════
