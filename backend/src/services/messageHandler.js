@@ -263,13 +263,15 @@ class MessageHandler {
       if (skipAI) return;
 
       if (message.hasMedia) {
-        const label = mediaTypeLabel?.toLowerCase() || 'fichier';
-        const response = `Je reçois votre ${label} mais je ne traite que les messages texte. Merci de reformuler votre demande par écrit.`;
-        await client.sendMessage(waId, response);
-        waManager.addToCache(profileId, dbContact.id, 'sent', response);
-        prisma.message.create({
-          data: { contact_id: dbContact.id, content: response, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
-        }).catch(() => {});
+        if (botConfig?.media_auto_reply !== false) {
+          const label = mediaTypeLabel?.toLowerCase() || 'fichier';
+          const response = `Nous recevons votre ${label} mais nous ne traitons que les messages texte. Merci de reformuler votre demande par écrit.`;
+          await client.sendMessage(waId, response);
+          waManager.addToCache(profileId, dbContact.id, 'sent', response);
+          prisma.message.create({
+            data: { contact_id: dbContact.id, content: response, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
+          }).catch(() => {});
+        }
         return;
       }
 
