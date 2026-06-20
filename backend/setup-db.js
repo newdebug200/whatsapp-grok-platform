@@ -4,7 +4,20 @@
  * setup-db.js — Synchronisation SQLite sans Prisma CLI
  * Crée toutes les tables si elles n'existent pas,
  * et ajoute les colonnes manquantes pour les mises à jour (idempotent).
+ *
+ * Requiert Node.js 22.5+ (module node:sqlite expérimental).
  */
+
+// ── Vérification version Node.js ──────────────────────────────────────────
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+if (nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 5)) {
+  console.error('');
+  console.error('[DB] ERREUR : Node.js 22.5 ou superieur est requis.');
+  console.error('[DB] Version detectee : ' + process.version);
+  console.error('[DB] Telechargez Node.js 22 LTS : https://nodejs.org/en/download');
+  console.error('');
+  process.exit(1);
+}
 
 const path = require('node:path');
 const fs   = require('node:fs');
@@ -282,6 +295,7 @@ const migrations = [
   'ALTER TABLE "BotConfig" ADD COLUMN "sentiment_alert"         INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE "BotConfig" ADD COLUMN "media_auto_reply"        INTEGER NOT NULL DEFAULT 1',
   // Contact
+  'ALTER TABLE "Contact" ADD COLUMN "ia_paused"         INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "Contact" ADD COLUMN "sensitive_flagged" INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "Contact" ADD COLUMN "wa_id"             TEXT',
   'ALTER TABLE "Contact" ADD COLUMN "archived"          INTEGER NOT NULL DEFAULT 0',
