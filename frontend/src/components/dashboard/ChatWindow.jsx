@@ -261,48 +261,111 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const renderMedia = (msg) => {
     const src = `${API_URL}/messages/media/${msg.media_path}`;
     const type = msg.type;
-    if (type === 'image' || type === 'sticker') {
+
+    if (type === 'sticker') {
       return (
-        <img
-          src={src}
-          alt={type === 'sticker' ? 'Sticker' : 'Image'}
-          style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block', cursor: 'pointer', objectFit: 'contain' }}
-          onClick={() => window.open(src, '_blank')}
-          onError={e => { e.target.style.display = 'none'; }}
-        />
+        <div className="media-sticker-wrap">
+          <img
+            src={src}
+            alt="Sticker"
+            className="media-sticker"
+            onClick={() => window.open(src, '_blank')}
+            onError={e => { e.target.style.display = 'none'; }}
+          />
+        </div>
       );
     }
+
+    if (type === 'image') {
+      return (
+        <div className="media-image-wrap" onClick={() => window.open(src, '_blank')}>
+          <img
+            src={src}
+            alt="Image"
+            className="media-image"
+            onError={e => { e.target.style.display = 'none'; }}
+          />
+          <div className="media-image-overlay">
+            <svg viewBox="0 0 24 24" fill="white" width="22" height="22">
+              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+          </div>
+        </div>
+      );
+    }
+
     if (type === 'ptt' || type === 'audio') {
+      const isPtt = type === 'ptt';
+      const bars = [3, 5, 8, 4, 7, 9, 5, 3, 6, 8, 4, 7, 9, 5, 3];
       return (
-        <audio controls style={{ maxWidth: 240, height: 36, outline: 'none' }}>
-          <source src={src} />
-        </audio>
+        <div className="media-audio-card">
+          <div className="media-audio-icon">
+            {isPtt ? (
+              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+              </svg>
+            )}
+          </div>
+          <div className="media-audio-body">
+            <div className="media-audio-label">{isPtt ? 'Message vocal' : 'Audio'}</div>
+            <div className="media-audio-waves">
+              {bars.map((h, i) => (
+                <span key={i} className="media-audio-bar" style={{ height: h * 2.4 + 'px' }} />
+              ))}
+            </div>
+            <audio controls className="media-audio-native">
+              <source src={src} />
+            </audio>
+          </div>
+        </div>
       );
     }
+
     if (type === 'video') {
       return (
-        <video controls style={{ maxWidth: 260, maxHeight: 200, borderRadius: 8, display: 'block' }}>
-          <source src={src} />
-        </video>
+        <div className="media-video-wrap">
+          <video controls className="media-video" preload="metadata">
+            <source src={src} />
+          </video>
+        </div>
       );
     }
+
     if (type === 'document') {
+      const ext = (msg.media_path || '').split('.').pop().toLowerCase();
+      const extLabel = ext ? ext.toUpperCase().slice(0, 4) : 'DOC';
+      const extColors = {
+        pdf: '#e53e3e', doc: '#2b6cb0', docx: '#2b6cb0',
+        xls: '#276749', xlsx: '#276749', ppt: '#c05621', pptx: '#c05621',
+        zip: '#744210', rar: '#744210', txt: '#555', csv: '#276749'
+      };
+      const color = extColors[ext] || '#553c9a';
       return (
-        <a
-          href={src}
-          download
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#53bdeb', textDecoration: 'none', fontSize: '0.88rem' }}
-        >
-          <span style={{ fontSize: '1.2em' }}>📄</span>
-          <span>Télécharger le document</span>
+        <a href={src} download target="_blank" rel="noopener noreferrer" className="media-document-card">
+          <div className="media-document-icon" style={{ background: color }}>
+            <span className="media-document-ext">{extLabel}</span>
+          </div>
+          <div className="media-document-info">
+            <div className="media-document-name">Document {extLabel}</div>
+            <div className="media-document-dl">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="11" height="11" style={{ marginRight: 3 }}>
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/>
+              </svg>
+              Télécharger
+            </div>
+          </div>
         </a>
       );
     }
+
     return (
-      <a href={src} download target="_blank" rel="noopener noreferrer" style={{ color: '#53bdeb', fontSize: '0.88rem' }}>
-        📎 Télécharger le fichier
+      <a href={src} download target="_blank" rel="noopener noreferrer" className="media-badge-fallback file">
+        <span>📎</span>
+        <span>Télécharger le fichier</span>
       </a>
     );
   };
@@ -493,15 +556,22 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
                       {msg.media_path ? (
                         renderMedia(msg)
                       ) : /^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: 0.85, fontStyle: 'italic' }}>
-                          <span style={{ fontSize: '1.1em' }}>
+                        <span className={`media-badge-fallback ${
+                          msg.content === '[Image]' ? 'image' :
+                          msg.content === '[Vidéo]' ? 'video' :
+                          msg.content === '[Audio]' ? 'audio' :
+                          msg.content === '[Document]' ? 'document' :
+                          msg.content === '[Sticker]' ? 'sticker' : 'file'
+                        }`}>
+                          <span className="media-badge-icon">
                             {msg.content === '[Image]' ? '📷' :
                              msg.content === '[Vidéo]' ? '🎥' :
                              msg.content === '[Audio]' ? '🎵' :
                              msg.content === '[Document]' ? '📄' :
                              msg.content === '[Sticker]' ? '🎭' : '📎'}
                           </span>
-                          {msg.content.replace(/[\[\]]/g, '')}
+                          <span>{msg.content.replace(/[\[\]]/g, '')}</span>
+                          <span className="media-badge-unavail">· non disponible</span>
                         </span>
                       ) : renderText(msg.content)}
                     </span>
