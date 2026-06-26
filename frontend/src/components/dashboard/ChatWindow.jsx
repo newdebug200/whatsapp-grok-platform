@@ -40,7 +40,10 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [notesSaved, setNotesSaved] = useState(false);
   const [mediaModal, setMediaModal] = useState(null);
   const [sendingMedia, setSendingMedia] = useState(false);
-  const [recording, setRecording] = useState(false);
+  const [recordPhase, setRecordPhase] = useState('idle');
+  const [recordDuration, setRecordDuration] = useState(0);
+  const [recordedBlob, setRecordedBlob] = useState(null);
+  const [recordedBlobUrl, setRecordedBlobUrl] = useState(null);
 
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
@@ -51,6 +54,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
 
   useEffect(() => {
     if (contact) {
@@ -280,51 +284,102 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     }
   };
 
-  const handleToggleRecord = async () => {
-    if (recording) {
-      mediaRecorderRef.current?.stop();
-      return;
-    }
+  const recordCancelledRef = useRef(false);
+
+  const stopRecordTimer = () => {
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+  };
+
+  const formatRecordDuration = (s) =>
+    `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+  const handleStartRecord = async () => {
+    recordCancelledRef.current = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
       const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/ogg' });
       mediaRecorderRef.current = mr;
       mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      mr.onstop = async () => {
+      mr.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
-        setRecording(false);
+        stopRecordTimer();
+        if (recordCancelledRef.current) { setRecordPhase('idle'); setRecordDuration(0); return; }
         const blob = new Blob(audioChunksRef.current, { type: mr.mimeType });
-        if (blob.size < 500) return;
-        setSendingMedia(true);
-        try {
-          const reader = new FileReader();
-          reader.onload = async (ev) => {
+        if (blob.size < 100) { setRecordPhase('idle'); setRecordDuration(0); return; }
+        const url = URL.createObjectURL(blob);
+        setRecordedBlob(blob);
+        setRecordedBlobUrl(url);
+        setRecordPhase('preview');
+      };
+      mr.start();
+      setRecordDuration(0);
+      setRecordPhase('recording');
+      recordTimerRef.current = setInterval(() => setRecordDuration(d => d + 1), 1000);
+    } catch {
+      setSendError("Microphone inaccessible. Vérifiez les permissions.");
+      setTimeout(() => setSendError(''), 4000);
+    }
+  };
+
+  const handleCancelRecord = () => {
+    recordCancelledRef.current = true;
+    stopRecordTimer();
+    mediaRecorderRef.current?.stop();
+    setRecordPhase('idle');
+    setRecordDuration(0);
+    audioChunksRef.current = [];
+  };
+
+  const handleStopRecordForPreview = () => {
+    mediaRecorderRef.current?.stop();
+  };
+
+  const handleRestartRecord = () => {
+    if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
+    setRecordedBlob(null);
+    setRecordedBlobUrl(null);
+    setRecordPhase('idle');
+    setRecordDuration(0);
+    setTimeout(handleStartRecord, 50);
+  };
+
+  const handleSendAudio = async () => {
+    if (!recordedBlob) return;
+    setSendingMedia(true);
+    try {
+      const blobToSend = recordedBlob;
+      const urlToRevoke = recordedBlobUrl;
+      setRecordedBlob(null);
+      setRecordedBlobUrl(null);
+      setRecordPhase('idle');
+      setRecordDuration(0);
+      await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
             const base64 = ev.target.result.split(',')[1];
-            const ext = mr.mimeType.includes('ogg') ? 'ogg' : 'webm';
+            const ext = blobToSend.type.includes('ogg') ? 'ogg' : 'webm';
             await axios.post(`${API_URL}/messages/send-media`, {
               contactId: contact.id,
               filename: `audio_${Date.now()}.${ext}`,
-              mimeType: mr.mimeType,
+              mimeType: blobToSend.type,
               data: base64,
               messageType: 'ptt'
             });
             setIaPaused(true);
             await loadMessages(contact.id);
-          };
-          reader.readAsDataURL(blob);
-        } catch {
-          setSendError("Échec de l'envoi audio.");
-          setTimeout(() => setSendError(''), 4000);
-        } finally {
-          setSendingMedia(false);
-        }
-      };
-      mr.start();
-      setRecording(true);
-    } catch (err) {
-      setSendError("Microphone inaccessible. Vérifiez les permissions.");
+            resolve();
+          } catch (e) { reject(e); }
+          finally { if (urlToRevoke) URL.revokeObjectURL(urlToRevoke); }
+        };
+        reader.readAsDataURL(blobToSend);
+      });
+    } catch {
+      setSendError("Échec de l'envoi audio.");
       setTimeout(() => setSendError(''), 4000);
+    } finally {
+      setSendingMedia(false);
     }
   };
 
@@ -415,10 +470,24 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
     if (type === 'video') {
       return (
-        <div className="media-video-wrap">
+        <div className="media-video-wrap" style={{ position: 'relative' }}>
           <video controls className="media-video" preload="metadata">
             <source src={src} />
           </video>
+          <button
+            onClick={e => { e.stopPropagation(); setMediaModal({ src, type: 'video' }); }}
+            title="Agrandir"
+            style={{
+              position: 'absolute', top: 6, right: 6,
+              background: 'rgba(0,0,0,0.52)', border: 'none', borderRadius: '50%',
+              width: 28, height: 28, cursor: 'pointer', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15">
+              <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+            </svg>
+          </button>
         </div>
       );
     }
@@ -526,17 +595,32 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
             }}
             title="Fermer"
           >✕</button>
-          <img
-            src={mediaModal.src}
-            alt="Aperçu"
-            onClick={e => e.stopPropagation()}
-            style={{
-              maxWidth: '92vw', maxHeight: '88vh',
-              borderRadius: 8, objectFit: 'contain',
-              boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
-              cursor: 'default'
-            }}
-          />
+          {mediaModal.type === 'video' ? (
+            <video
+              controls
+              autoPlay
+              onClick={e => e.stopPropagation()}
+              style={{
+                maxWidth: '92vw', maxHeight: '88vh',
+                borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+                cursor: 'default', background: '#000'
+              }}
+            >
+              <source src={mediaModal.src} />
+            </video>
+          ) : (
+            <img
+              src={mediaModal.src}
+              alt="Aperçu"
+              onClick={e => e.stopPropagation()}
+              style={{
+                maxWidth: '92vw', maxHeight: '88vh',
+                borderRadius: 8, objectFit: 'contain',
+                boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+                cursor: 'default'
+              }}
+            />
+          )}
           <a
             href={mediaModal.src}
             download
@@ -875,52 +959,119 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
             </svg>
           )}
         </button>
-        <button
-          className={`emoji-toggle-btn ${recording ? 'active' : ''}`}
-          onClick={handleToggleRecord}
-          title={recording ? 'Arrêter l\'enregistrement' : 'Enregistrer un message vocal'}
-          type="button"
-          disabled={sendingMedia || !waStatus.isConnected}
-          style={{ color: recording ? '#e74c3c' : undefined }}
-        >
-          {recording ? (
-            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-              <path d="M6 6h12v12H6z"/>
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-            </svg>
-          )}
-        </button>
-        <input
-          ref={inputRef}
-          type="text"
-          className="chat-input"
-          placeholder={iaPaused ? 'Écrire un message...' : 'Écrire un message (prendra la main sur l\'IA)...'}
-          value={inputText}
-          onChange={e => setInputText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={sending || !waStatus.isConnected}
-          maxLength={4096}
-        />
-        <button
-          className="send-btn"
-          onClick={handleSend}
-          disabled={!inputText.trim() || sending || !waStatus.isConnected}
-          title="Envoyer (Entrée)"
-          type="button"
-        >
-          {sending ? (
-            <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeDasharray="56" strokeDashoffset="14" style={{animation:'spin .8s linear infinite'}}/>
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-            </svg>
-          )}
-        </button>
+        {recordPhase === 'recording' ? (
+          <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: 8, padding: '0 4px' }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: '50%', background: '#e74c3c', flexShrink: 0,
+              animation: 'recPulse 1s ease-in-out infinite'
+            }} />
+            <span style={{ color: '#e74c3c', fontSize: '0.82rem', fontWeight: 600 }}>Enregistrement…</span>
+            <span style={{ color: '#e74c3c', fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem', fontWeight: 700, minWidth: 38 }}>
+              {formatRecordDuration(recordDuration)}
+            </span>
+            <span style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={handleCancelRecord}
+              style={{
+                background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: 6,
+                color: '#aaa', padding: '5px 10px', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={handleStopRecordForPreview}
+              style={{
+                background: '#e74c3c', border: 'none', borderRadius: 6,
+                color: '#fff', padding: '5px 10px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M6 6h12v12H6z"/></svg>
+              Arrêter
+            </button>
+          </div>
+        ) : recordPhase === 'preview' ? (
+          <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: 8, padding: '0 4px' }}>
+            <audio controls src={recordedBlobUrl} style={{ flex: 1, height: 32, minWidth: 0 }} />
+            <button
+              type="button"
+              onClick={handleRestartRecord}
+              title="Recommencer"
+              style={{
+                background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: 6,
+                color: '#aaa', padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem'
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+              Recommencer
+            </button>
+            <button
+              type="button"
+              onClick={handleSendAudio}
+              disabled={sendingMedia}
+              title="Envoyer le message vocal"
+              style={{
+                background: '#25d366', border: 'none', borderRadius: 6,
+                color: '#fff', padding: '5px 12px', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.82rem',
+                opacity: sendingMedia ? 0.6 : 1
+              }}
+            >
+              {sendingMedia ? (
+                <svg viewBox="0 0 24 24" fill="none" width="15" height="15">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeDasharray="56" strokeDashoffset="14" style={{animation:'spin .8s linear infinite'}}/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              )}
+              Envoyer
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="emoji-toggle-btn"
+              onClick={handleStartRecord}
+              title="Enregistrer un message vocal"
+              disabled={sendingMedia || !waStatus.isConnected}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+              </svg>
+            </button>
+            <input
+              ref={inputRef}
+              type="text"
+              className="chat-input"
+              placeholder={iaPaused ? 'Écrire un message...' : 'Écrire un message (prendra la main sur l\'IA)...'}
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={sending || !waStatus.isConnected}
+              maxLength={4096}
+            />
+            <button
+              className="send-btn"
+              onClick={handleSend}
+              disabled={!inputText.trim() || sending || !waStatus.isConnected}
+              title="Envoyer (Entrée)"
+              type="button"
+            >
+              {sending ? (
+                <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeDasharray="56" strokeDashoffset="14" style={{animation:'spin .8s linear infinite'}}/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              )}
+            </button>
+          </>
+        )}
       </div>
 
       {!waStatus.isConnected && (
