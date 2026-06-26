@@ -250,7 +250,17 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
               )}
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {lastMsg
-                  ? lastMsg.content.substring(0, 45) + (lastMsg.content.length > 45 ? '…' : '')
+                  ? (() => {
+                      const t = lastMsg.type;
+                      if (t === 'image') return '📷 Photo';
+                      if (t === 'video') return '🎥 Vidéo';
+                      if (t === 'ptt') return '🎤 Message vocal';
+                      if (t === 'audio') return '🎵 Audio';
+                      if (t === 'sticker') return '🪄 Sticker';
+                      if (t === 'document') return '📄 Document';
+                      const c = lastMsg.content || '';
+                      return c.substring(0, 45) + (c.length > 45 ? '…' : '');
+                    })()
                   : 'Aucun message'}
               </span>
             </span>
