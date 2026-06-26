@@ -123,4 +123,81 @@ router.put('/bot', async (req, res) => {
   }
 });
 
+// ── Mots-clés sensibles ────────────────────────────────────────────
+
+// GET /api/config/keywords
+router.get('/keywords', async (req, res) => {
+  try {
+    const keywords = await prisma.sensitiveKeyword.findMany({
+      where: { profile_id: req.profileId },
+      orderBy: { created_at: 'desc' }
+    });
+    res.json(keywords);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du chargement des mots-clés' });
+  }
+});
+
+// POST /api/config/keywords
+router.post('/keywords', async (req, res) => {
+  try {
+    const { keyword } = req.body;
+    if (!keyword || !keyword.trim()) return res.status(400).json({ error: 'Le mot-clé est requis' });
+    const trimmed = keyword.trim().toLowerCase();
+    const existing = await prisma.sensitiveKeyword.findFirst({ where: { profile_id: req.profileId, keyword: trimmed } });
+    if (existing) return res.status(409).json({ error: 'Ce mot-clé existe déjà' });
+    const kw = await prisma.sensitiveKeyword.create({ data: { profile_id: req.profileId, keyword: trimmed, is_active: true } });
+    res.status(201).json(kw);
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors de l'ajout du mot-clé" });
+  }
+});
+
+// PATCH /api/config/keywords/:id — toggle is_active
+router.patch('/keywords/:id', async (req, res) => {
+  try {
+    const kw = await prisma.sensitiveKeyword.findFirst({ where: { id: parseInt(req.params.id), profile_id: req.profileId } });
+    if (!kw) return res.status(404).json({ error: 'Mot-clé introuvable' });
+    const { is_active } = req.body;
+    const updated = await prisma.sensitiveKeyword.update({
+      where: { id: kw.id },
+      data: { ...(is_active !== undefined && { is_active }) }
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  }
+});
+
+// DELETE /api/config/keywords/:id
+router.delete('/keywords/:id', async (req, res) => {
+  try {
+    const kw = await prisma.sensitiveKeyword.findFirst({ where: { id: parseInt(req.params.id), profile_id: req.profileId } });
+    if (!kw) return res.status(404).json({ error: 'Mot-clé introuvable' });
+    await prisma.sensitiveKeyword.delete({ where: { id: kw.id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
+  }
+});
+
+// ── Journal des alertes sensibles ──────────────────────────────────
+
+// GET /api/config/flags
+router.get('/flags', async (req, res) => {
+  try {
+    const flags = await prisma.sensitiveFlag.findMany({
+      where: { profile_id: req.profileId },
+      include: {
+        contact: { select: { id: true, name: true, phone_number: true, ia_paused: true, sensitive_flagged: true } }
+      },
+      orderBy: { flagged_at: 'desc' },
+      take: 200
+    });
+    res.json(flags);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du chargement du journal' });
+  }
+});
+
 module.exports = router;
