@@ -38,6 +38,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [notesDraft, setNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
+  const [mediaModal, setMediaModal] = useState(null);
+  const [sendingMedia, setSendingMedia] = useState(false);
+  const [recording, setRecording] = useState(false);
 
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
@@ -45,6 +48,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const emojiRef = useRef(null);
   const templatesRef = useRef(null);
   const menuRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     if (contact) {
@@ -241,6 +247,87 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     setShowTemplates(v => !v);
   };
 
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !contact) return;
+    e.target.value = '';
+    setSendingMedia(true);
+    setSendError('');
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target.result.split(',')[1];
+        await axios.post(`${API_URL}/messages/send-media`, {
+          contactId: contact.id,
+          filename: file.name,
+          mimeType: file.type,
+          data: base64
+        });
+        setIaPaused(true);
+        await loadMessages(contact.id);
+      };
+      reader.onerror = () => {
+        setSendError("Erreur lors de la lecture du fichier.");
+        setTimeout(() => setSendError(''), 4000);
+        setSendingMedia(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setSendError("Échec de l'envoi du fichier.");
+      setTimeout(() => setSendError(''), 4000);
+    } finally {
+      setSendingMedia(false);
+    }
+  };
+
+  const handleToggleRecord = async () => {
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/ogg' });
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setRecording(false);
+        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType });
+        if (blob.size < 500) return;
+        setSendingMedia(true);
+        try {
+          const reader = new FileReader();
+          reader.onload = async (ev) => {
+            const base64 = ev.target.result.split(',')[1];
+            const ext = mr.mimeType.includes('ogg') ? 'ogg' : 'webm';
+            await axios.post(`${API_URL}/messages/send-media`, {
+              contactId: contact.id,
+              filename: `audio_${Date.now()}.${ext}`,
+              mimeType: mr.mimeType,
+              data: base64,
+              messageType: 'ptt'
+            });
+            setIaPaused(true);
+            await loadMessages(contact.id);
+          };
+          reader.readAsDataURL(blob);
+        } catch {
+          setSendError("Échec de l'envoi audio.");
+          setTimeout(() => setSendError(''), 4000);
+        } finally {
+          setSendingMedia(false);
+        }
+      };
+      mr.start();
+      setRecording(true);
+    } catch (err) {
+      setSendError("Microphone inaccessible. Vérifiez les permissions.");
+      setTimeout(() => setSendError(''), 4000);
+    }
+  };
+
   const getInitial = (c) => (c.name || c.phone_number || '?').charAt(0).toUpperCase();
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[(id || 0) % avatarColors.length];
@@ -269,8 +356,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
             src={src}
             alt="Sticker"
             className="media-sticker"
-            onClick={() => window.open(src, '_blank')}
+            onClick={() => setMediaModal({ src, type: 'sticker' })}
             onError={e => { e.target.style.display = 'none'; }}
+            style={{ cursor: 'zoom-in' }}
           />
         </div>
       );
@@ -278,7 +366,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
     if (type === 'image') {
       return (
-        <div className="media-image-wrap" onClick={() => window.open(src, '_blank')}>
+        <div className="media-image-wrap" onClick={() => setMediaModal({ src, type: 'image' })}>
           <img
             src={src}
             alt="Image"
@@ -416,6 +504,60 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
   return (
     <div className="chat-window">
+
+      {mediaModal && (
+        <div
+          onClick={() => setMediaModal(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.88)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'zoom-out'
+          }}
+        >
+          <button
+            onClick={() => setMediaModal(null)}
+            style={{
+              position: 'absolute', top: 16, right: 16,
+              background: 'rgba(255,255,255,0.15)', border: 'none',
+              borderRadius: '50%', width: 40, height: 40,
+              cursor: 'pointer', color: '#fff', fontSize: '1.2rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+            title="Fermer"
+          >✕</button>
+          <img
+            src={mediaModal.src}
+            alt="Aperçu"
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: '92vw', maxHeight: '88vh',
+              borderRadius: 8, objectFit: 'contain',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+              cursor: 'default'
+            }}
+          />
+          <a
+            href={mediaModal.src}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(255,255,255,0.15)', color: '#fff', padding: '8px 20px',
+              borderRadius: 20, fontSize: '0.82rem', textDecoration: 'none',
+              display: 'flex', alignItems: 'center', gap: 6, backdropFilter: 'blur(4px)'
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+              <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/>
+            </svg>
+            Télécharger
+          </a>
+        </div>
+      )}
+
       <div className="chat-header">
         <button className="back-btn" onClick={onBack} title="Retour">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
@@ -687,6 +829,14 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         </div>
       )}
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.txt,.csv"
+        style={{ display: 'none' }}
+        onChange={handleFileSelect}
+      />
+
       <div className="chat-input-bar">
         <button
           className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
@@ -706,6 +856,42 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
           <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
             <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
           </svg>
+        </button>
+        <button
+          className="emoji-toggle-btn"
+          onClick={() => fileInputRef.current?.click()}
+          title="Joindre un fichier"
+          type="button"
+          disabled={sendingMedia || !waStatus.isConnected}
+          style={{ opacity: sendingMedia ? 0.5 : 1 }}
+        >
+          {sendingMedia ? (
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeDasharray="56" strokeDashoffset="14" style={{animation:'spin .8s linear infinite'}}/>
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5V6H9v9.5a3 3 0 0 0 6 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
+            </svg>
+          )}
+        </button>
+        <button
+          className={`emoji-toggle-btn ${recording ? 'active' : ''}`}
+          onClick={handleToggleRecord}
+          title={recording ? 'Arrêter l\'enregistrement' : 'Enregistrer un message vocal'}
+          type="button"
+          disabled={sendingMedia || !waStatus.isConnected}
+          style={{ color: recording ? '#e74c3c' : undefined }}
+        >
+          {recording ? (
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <path d="M6 6h12v12H6z"/>
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+            </svg>
+          )}
         </button>
         <input
           ref={inputRef}
