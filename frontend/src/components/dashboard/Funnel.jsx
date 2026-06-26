@@ -190,7 +190,13 @@ export default function Funnel({ onSelectContact }) {
                       </div>
                       {lastMsg && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #8e9baa)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: 36 }}>
-                          {lastMsg.content?.substring(0, 50)}
+                          {lastMsg.type === 'image' ? '📷 Photo' :
+                           lastMsg.type === 'video' ? '🎥 Vidéo' :
+                           lastMsg.type === 'ptt' ? '🎤 Message vocal' :
+                           lastMsg.type === 'audio' ? '🎵 Audio' :
+                           lastMsg.type === 'sticker' ? '🪄 Sticker' :
+                           lastMsg.type === 'document' ? '📄 Document' :
+                           (lastMsg.content || '').substring(0, 50)}
                         </div>
                       )}
 
