@@ -311,6 +311,61 @@ router.get('/memory/:contactId', profileMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/messages/send-media — envoyer un fichier ou audio via WhatsApp (base64)
+router.post('/send-media', profileMiddleware, async (req, res) => {
+  try {
+    const { contactId, filename, mimeType, data, messageType } = req.body;
+    if (!contactId || !data || !mimeType) {
+      return res.status(400).json({ error: 'contactId, mimeType et data requis' });
+    }
+    const contact = await prisma.contact.findFirst({
+      where: { id: parseInt(contactId), profile_id: req.profileId }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
+    if (!contact.wa_id) return res.status(400).json({ error: 'Contact sans ID WhatsApp' });
+
+    const client = whatsappManager.getClient(req.profileId);
+    if (!client) return res.status(503).json({ error: 'WhatsApp non connecté' });
+
+    const { MessageMedia } = require('whatsapp-web.js');
+    const media = new MessageMedia(mimeType, data, filename || 'fichier');
+    const sendOptions = {};
+    if (messageType === 'ptt') sendOptions.sendAudioAsVoice = true;
+
+    await client.sendMessage(contact.wa_id, media, sendOptions);
+
+    const ext = (filename || 'file').split('.').pop().replace(/[^a-z0-9]/gi, '') || 'bin';
+    const saveName = `sent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+    const savePath = pathModule.join(__dirname, '../../uploads', saveName);
+    fs.writeFileSync(savePath, Buffer.from(data, 'base64'));
+
+    const type = messageType || (
+      mimeType.startsWith('image') ? 'image' :
+      mimeType.startsWith('video') ? 'video' :
+      mimeType.startsWith('audio') ? 'audio' : 'document'
+    );
+    const contentLabel = type === 'image' ? '[Image]' : type === 'video' ? '[Vidéo]' :
+      (type === 'ptt' || type === 'audio') ? '[Audio]' : '[Document]';
+
+    const saved = await prisma.message.create({
+      data: {
+        contact_id: contact.id,
+        content: contentLabel,
+        direction: 'sent',
+        type,
+        media_path: saveName,
+        created_at: new Date(),
+        unread: false
+      }
+    });
+    whatsappManager.addToCache(req.profileId, contact.id, 'sent', contentLabel);
+    res.json(saved);
+  } catch (error) {
+    console.error('send-media error:', error);
+    res.status(500).json({ error: "Erreur lors de l'envoi du fichier" });
+  }
+});
+
 // DELETE /api/messages/memory/:contactId
 router.delete('/memory/:contactId', profileMiddleware, async (req, res) => {
   try {
