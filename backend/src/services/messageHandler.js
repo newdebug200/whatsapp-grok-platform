@@ -266,7 +266,8 @@ class MessageHandler {
         if (botConfig?.media_auto_reply !== false) {
           const label = mediaTypeLabel?.toLowerCase() || 'fichier';
           const response = `Nous recevons votre ${label} mais nous ne traitons que les messages texte. Merci de reformuler votre demande par écrit.`;
-          await client.sendMessage(waId, response);
+          const sentMediaReply = await client.sendMessage(waId, response);
+          waManager.trackBotSentId(sentMediaReply?.id?._serialized);
           waManager.addToCache(profileId, dbContact.id, 'sent', response);
           prisma.message.create({
             data: { contact_id: dbContact.id, content: response, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
@@ -346,7 +347,8 @@ class MessageHandler {
         { timeout: 10000, responseType: 'text' }
       );
       const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
-      await client.sendMessage(waId, replyText);
+      const sentVerif = await client.sendMessage(waId, replyText);
+      waManager.trackBotSentId(sentVerif?.id?._serialized);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
       prisma.message.create({
         data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
@@ -391,7 +393,8 @@ class MessageHandler {
           if (shouldSend) {
             this.awaySentMap.set(awayKey, Date.now());
             try {
-              await client.sendMessage(from, awayMsg);
+              const sentAway = await client.sendMessage(from, awayMsg);
+              waManager.trackBotSentId(sentAway?.id?._serialized);
               waManager.addToCache(profileId, contact.id, 'sent', awayMsg);
               prisma.message.create({
                 data: { contact_id: contact.id, content: awayMsg, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
@@ -484,7 +487,8 @@ class MessageHandler {
       const aiResponse = response.data.choices[0].message.content;
       const totalTokens = response.data.usage?.total_tokens || 0;
 
-      await client.sendMessage(from, aiResponse);
+      const sentAI = await client.sendMessage(from, aiResponse);
+      waManager.trackBotSentId(sentAI?.id?._serialized);
       waManager.addToCache(profileId, contact.id, 'sent', aiResponse);
       prisma.message.create({
         data: { contact_id: contact.id, content: aiResponse, direction: 'sent', type: 'text', created_at: new Date(), unread: false }

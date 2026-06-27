@@ -32,12 +32,22 @@ class WhatsAppManager {
     this.contextCache = new Map();
     this.runningCampaigns = new Map(); // campaignId → { cancelled: boolean }
     this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
+    this._botSentIds = new Set(); // WA message IDs sent by Botora API — used to skip duplicates in message_create
     this.io = null;
     this.prisma = null;
   }
 
   setIO(io) { this.io = io; }
   setPrisma(prisma) { this.prisma = prisma; }
+
+  // ─── Dedup tracker for Botora-sent messages ───────────────────────────────
+  // Call this right after every client.sendMessage() done by the bot API so
+  // the message_create listener can recognize and skip those IDs.
+  trackBotSentId(msgId) {
+    if (!msgId) return;
+    this._botSentIds.add(msgId);
+    setTimeout(() => this._botSentIds.delete(msgId), 30000);
+  }
 
   // ─── Context cache ────────────────────────────────────────────────────────
 
@@ -473,6 +483,74 @@ class WhatsAppManager {
         });
       } catch (err) {
         console.error('[WA] Erreur message:', err.message);
+      }
+    });
+
+    // ── Outgoing message typed manually from the phone ──
+    // message_create fires for ALL created messages (sent + received).
+    // We only care about fromMe=true that were NOT already saved by Botora's API.
+    client.on('message_create', async (msg) => {
+      try {
+        if (!msg.fromMe) return;
+        if (!msg.to || msg.to === 'status@broadcast' || msg.to.includes('@broadcast')) return;
+        if (msg.to.includes('@g.us')) return; // groups not handled here
+
+        // If Botora's API sent this message, it's already saved — skip to avoid duplicate
+        const msgId = msg.id?._serialized;
+        if (msgId && this._botSentIds.has(msgId)) return;
+
+        const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
+          || this._findEntryByClient(client);
+        if (!entry?.entry?.profileId) return;
+        const currentProfileId = entry.entry.profileId;
+
+        // Skip messages older than session ready time (avoid replaying history on reconnect)
+        const readyAt = entry.entry.readyAt || 0;
+        if (msg.timestamp * 1000 < readyAt) return;
+        if (Date.now() - readyAt < 20000) return;
+
+        const waId = msg.to;
+        const phoneNumber = '+' + waId.split('@')[0];
+
+        // Find or create the contact this message was sent to
+        let dbContact = await this.prisma.contact.findUnique({
+          where: { profile_id_phone_number: { profile_id: currentProfileId, phone_number: phoneNumber } }
+        });
+        if (!dbContact) {
+          dbContact = await this.prisma.contact.create({
+            data: { profile_id: currentProfileId, phone_number: phoneNumber, wa_id: waId }
+          });
+        } else if (!dbContact.wa_id) {
+          dbContact = await this.prisma.contact.update({
+            where: { id: dbContact.id }, data: { wa_id: waId }
+          });
+        }
+
+        const mediaTypeLabel = msg.hasMedia
+          ? (msg.type === 'image' ? 'Image' : msg.type === 'video' ? 'Vidéo'
+            : msg.type === 'audio' || msg.type === 'ptt' ? 'Audio'
+            : msg.type === 'document' ? 'Document' : msg.type === 'sticker' ? 'Sticker' : 'Fichier')
+          : null;
+        const content = mediaTypeLabel ? `[${mediaTypeLabel}]` : (msg.body || '');
+
+        await this.prisma.message.create({
+          data: {
+            contact_id: dbContact.id,
+            content,
+            direction: 'sent',
+            type: msg.type || 'text',
+            created_at: new Date(),
+            unread: false
+          }
+        });
+
+        this.addToCache(currentProfileId, dbContact.id, 'sent', content);
+        this.io?.to(`account_${accountId}`).emit('new-message', {
+          from: phoneNumber, body: content, timestamp: msg.timestamp,
+          profileId: currentProfileId, fromMe: true
+        });
+      } catch (err) {
+        console.error('[WA] Erreur message_create (fromMe):', err.message);
       }
     });
 
