@@ -59,7 +59,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const [form, setForm] = useState({
     name: '',
-    messages: [{ content: '', media_url: '', media_type: '' }],
+    messages: [{ content: '', media_url: '', media_type: '', media_source: 'url', media_data: '', media_filename: '' }],
     contactIds: [],
     tagId: null,
     delayMin: 30,
@@ -74,9 +74,12 @@ export default function Broadcast({ socket, activeProfile }) {
   const [hiddenContactIds, setHiddenContactIds] = useState([]);
 
   const fileInputRef = useRef(null);
+  const mediaFileRef = useRef(null);
+
+  const EMPTY_MSG = { content: '', media_url: '', media_type: '', media_source: 'url', media_data: '', media_filename: '' };
 
   const resetForm = () => {
-    setForm({ name: '', messages: [{ content: '', media_url: '', media_type: '' }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90, scheduled: false, scheduledAt: '' });
+    setForm({ name: '', messages: [{ ...EMPTY_MSG }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90, scheduled: false, scheduledAt: '' });
     setContactSearch('');
     setContactTagFilter(null);
     setSelectAll(false);
@@ -173,7 +176,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const handleRestoreAll = () => setHiddenContactIds([]);
 
-  const handleAddMessage = () => setForm(prev => ({ ...prev, messages: [...prev.messages, { content: '', media_url: '', media_type: '' }] }));
+  const handleAddMessage = () => setForm(prev => ({ ...prev, messages: [...prev.messages, { ...EMPTY_MSG }] }));
   const handleRemoveMessage = (i) => setForm(prev => ({ ...prev, messages: prev.messages.filter((_, j) => j !== i) }));
   const handleMessageChange = (i, value) => {
     const msgs = [...form.messages];
@@ -184,6 +187,27 @@ export default function Broadcast({ socket, activeProfile }) {
     const msgs = [...form.messages];
     msgs[i] = { ...msgs[i], [field]: value };
     setForm(prev => ({ ...prev, messages: msgs }));
+  };
+
+  const handleMediaFileSelect = (idx, base64, filename) => {
+    setForm(prev => {
+      const msgs = [...prev.messages];
+      msgs[idx] = { ...msgs[idx], media_data: base64, media_filename: filename, media_url: '' };
+      return { ...prev, messages: msgs };
+    });
+  };
+
+  const handleMediaFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const idx = parseInt(e.target.dataset.msgIdx ?? '0');
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result.split(',')[1];
+      handleMediaFileSelect(idx, base64, file.name);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleCreateCampaign = async () => {
@@ -201,12 +225,17 @@ export default function Broadcast({ socket, activeProfile }) {
     try {
       const payload = {
         name: form.name.trim(),
-        messages: form.messages.map((m, i) => ({
-          content: m.content,
-          order_index: i,
-          delay_after_seconds: 0,
-          ...(m.media_url?.trim() && { media_url: m.media_url.trim(), media_type: m.media_type || 'image' })
-        })),
+        messages: form.messages.map((m, i) => {
+          const base = { content: m.content, order_index: i, delay_after_seconds: 0 };
+          if (m.media_type) {
+            if (m.media_source === 'file' && m.media_data) {
+              return { ...base, media_data: m.media_data, media_filename: m.media_filename, media_type: m.media_type };
+            } else if (m.media_url?.trim()) {
+              return { ...base, media_url: m.media_url.trim(), media_type: m.media_type };
+            }
+          }
+          return base;
+        }),
         delay_min_seconds: form.delayMin,
         delay_max_seconds: form.delayMax,
         ...(form.scheduled && form.scheduledAt && { scheduled_at: new Date(form.scheduledAt).toISOString() })
@@ -397,26 +426,61 @@ export default function Broadcast({ socket, activeProfile }) {
                     </button>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, marginLeft: 28, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 6, marginLeft: 28, alignItems: 'center', flexWrap: 'wrap' }}>
                   <select
                     value={msg.media_type || ''}
-                    onChange={e => handleMediaChange(i, 'media_type', e.target.value)}
+                    onChange={e => {
+                      handleMediaChange(i, 'media_type', e.target.value);
+                      if (!e.target.value) {
+                        setForm(prev => {
+                          const msgs = [...prev.messages];
+                          msgs[i] = { ...msgs[i], media_type: '', media_url: '', media_data: '', media_filename: '' };
+                          return { ...prev, messages: msgs };
+                        });
+                      }
+                    }}
                     style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border, #2d3f50)', background: 'var(--bg-secondary, #1e2a35)', color: 'var(--text-secondary, #8e9baa)', fontSize: '0.78rem', cursor: 'pointer', flexShrink: 0 }}
                   >
                     <option value="">📎 Média (optionnel)</option>
                     <option value="image">🖼️ Image</option>
-                    <option value="document">📄 Document / PDF</option>
+                    <option value="document">📄 Document (PDF, DOCX, PPTX…)</option>
                     <option value="audio">🎵 Audio</option>
-                    <option value="video">🎥 Vidéo</option>
+                    <option value="video">🎥 Vidéo (MP4, MOV, AVI…)</option>
                   </select>
                   {msg.media_type && (
-                    <input
-                      type="url"
-                      value={msg.media_url || ''}
-                      onChange={e => handleMediaChange(i, 'media_url', e.target.value)}
-                      placeholder="URL du fichier (https://…)"
-                      style={{ flex: 1, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border, #2d3f50)', background: 'var(--bg-secondary, #1e2a35)', color: 'var(--text-primary, #e8eaed)', fontSize: '0.8rem' }}
-                    />
+                    <>
+                      <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border, #2d3f50)', flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleMediaChange(i, 'media_source', 'url')}
+                          style={{ padding: '4px 10px', fontSize: '0.75rem', background: (msg.media_source || 'url') === 'url' ? '#25d366' : 'var(--bg-secondary, #1e2a35)', color: (msg.media_source || 'url') === 'url' ? '#fff' : 'var(--text-secondary, #8e9baa)', border: 'none', cursor: 'pointer' }}
+                        >🔗 URL</button>
+                        <button
+                          onClick={() => handleMediaChange(i, 'media_source', 'file')}
+                          style={{ padding: '4px 10px', fontSize: '0.75rem', background: msg.media_source === 'file' ? '#25d366' : 'var(--bg-secondary, #1e2a35)', color: msg.media_source === 'file' ? '#fff' : 'var(--text-secondary, #8e9baa)', border: 'none', cursor: 'pointer' }}
+                        >📁 Fichier</button>
+                      </div>
+                      {(msg.media_source || 'url') === 'url' ? (
+                        <input
+                          type="url"
+                          value={msg.media_url || ''}
+                          onChange={e => handleMediaChange(i, 'media_url', e.target.value)}
+                          placeholder="URL du fichier (https://…)"
+                          style={{ flex: 1, minWidth: 160, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border, #2d3f50)', background: 'var(--bg-secondary, #1e2a35)', color: 'var(--text-primary, #e8eaed)', fontSize: '0.8rem' }}
+                        />
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <button
+                            onClick={() => { if (mediaFileRef.current) { mediaFileRef.current.dataset.msgIdx = i; mediaFileRef.current.click(); } }}
+                            style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #25d366', background: 'transparent', color: '#25d366', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >Choisir un fichier</button>
+                          {msg.media_filename ? (
+                            <span style={{ fontSize: '0.78rem', color: '#25d366', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>✅ {msg.media_filename}</span>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary, #8e9baa)' }}>Aucun fichier choisi</span>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -501,6 +565,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
                 <div className="bc-import-bar">
                   <input ref={fileInputRef} type="file" accept=".csv,.vcf" style={{ display: 'none' }} onChange={handleImportFile} />
+                  <input ref={mediaFileRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.csv" style={{ display: 'none' }} onChange={handleMediaFileChange} />
                   <button className="bc-import-btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
                     <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
                     {importing ? 'Import en cours…' : 'Importer CSV / VCF'}

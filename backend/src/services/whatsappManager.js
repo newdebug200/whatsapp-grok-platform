@@ -6,12 +6,14 @@ const messageHandler = require('./messageHandler');
 // ─── Lazy-load whatsapp-web.js ────────────────────────────────────────────────
 let Client = null;
 let LocalAuth = null;
+let MessageMedia = null;
 let WWEB_AVAILABLE = false;
 
 try {
   const wweb = require('whatsapp-web.js');
   Client = wweb.Client;
   LocalAuth = wweb.LocalAuth;
+  MessageMedia = wweb.MessageMedia;
   WWEB_AVAILABLE = true;
 } catch (err) {
   console.error('');
@@ -937,14 +939,43 @@ class WhatsAppManager {
             console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
             this.campaignSendingWaIds.add(waId);
             try {
-              await this._sendWithTyping(waClient, waId, content, handle);
+              const hasMedia = (msg.media_path || msg.media_url) && MessageMedia;
+              if (hasMedia) {
+                // ── Send media (with text as caption if present) ──
+                let media = null;
+                if (msg.media_path) {
+                  const filePath = path.join(__dirname, '../../uploads', msg.media_path);
+                  if (fs.existsSync(filePath)) {
+                    const fileData = fs.readFileSync(filePath).toString('base64');
+                    const ext = msg.media_path.split('.').pop().toLowerCase();
+                    const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+                    media = new MessageMedia(mimeMap[ext] || 'application/octet-stream', fileData, msg.media_path);
+                  }
+                } else if (msg.media_url) {
+                  try { media = await MessageMedia.fromUrl(msg.media_url, { unsafeMime: true }); } catch (_) {}
+                }
+
+                if (media) {
+                  try { const chat = await waClient.getChatById(waId); await chat.sendStateTyping(); await this._sleep(Math.min(this._typingDuration(content), 2000), handle); await chat.clearState(); } catch (_) {}
+                  if (!handle.cancelled) {
+                    await waClient.sendMessage(waId, media, content ? { caption: content } : {});
+                  }
+                } else {
+                  // Media could not be loaded — fallback to text only
+                  await this._sendWithTyping(waClient, waId, content, handle);
+                }
+              } else {
+                await this._sendWithTyping(waClient, waId, content, handle);
+              }
             } finally {
               setTimeout(() => this.campaignSendingWaIds.delete(waId), 3000);
             }
 
             if (!handle.cancelled) {
+              const msgType = (msg.media_path || msg.media_url) ? (msg.media_type || 'document') : 'text';
+              const savedContent = content || (msg.media_type ? `[${msg.media_type}]` : '');
               this.prisma.message.create({
-                data: { contact_id: contact.id, content, direction: 'sent', type: 'text', created_at: new Date() }
+                data: { contact_id: contact.id, content: savedContent, direction: 'sent', type: msgType, created_at: new Date() }
               }).catch(() => {});
               await this.prisma.campaignTarget.update({
                 where: { id: target.id },

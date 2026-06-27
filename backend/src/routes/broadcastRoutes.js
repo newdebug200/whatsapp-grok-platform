@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const pathModule = require('path');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
@@ -296,6 +298,33 @@ router.post('/campaigns', async (req, res) => {
     if (contacts.length === 0)
       return res.status(400).json({ error: 'Aucun contact valide sélectionné' });
 
+    // Process messages: save any uploaded files to disk before the DB insert
+    const uploadsDir = pathModule.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+    const processedMessages = messages.map((m, i) => {
+      const msgData = {
+        content: m.content || '',
+        order_index: i,
+        delay_after_seconds: m.delay_after_seconds || 0
+      };
+      if (m.media_type) {
+        if (m.media_data) {
+          // File uploaded from browser — save to disk
+          const origName = m.media_filename || 'file';
+          const ext = origName.split('.').pop().replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'bin';
+          const filename = `campaign_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+          fs.writeFileSync(pathModule.join(uploadsDir, filename), Buffer.from(m.media_data, 'base64'));
+          msgData.media_path = filename;
+          msgData.media_type = m.media_type;
+        } else if (m.media_url?.trim()) {
+          msgData.media_url = m.media_url.trim();
+          msgData.media_type = m.media_type;
+        }
+      }
+      return msgData;
+    });
+
     const campaign = await prisma.campaign.create({
       data: {
         profile_id: req.profileId,
@@ -305,13 +334,7 @@ router.post('/campaigns', async (req, res) => {
         delay_min_seconds: delayMin,
         delay_max_seconds: delayMax,
         ...(tag_id ? { tag_id: parseInt(tag_id) } : {}),
-        messages: {
-          create: messages.map((m, i) => ({
-            content: m.content,
-            order_index: i,
-            delay_after_seconds: m.delay_after_seconds || 0
-          }))
-        },
+        messages: { create: processedMessages },
         targets: { create: contacts.map(c => ({ contact_id: c.id })) }
       },
       include: {

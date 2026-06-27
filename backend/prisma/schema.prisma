@@ -193,6 +193,7 @@ model CampaignMessage {
   delay_after_seconds Int    @default(0)
   media_url           String?
   media_type          String?
+  media_path          String?
 
   campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
 }
