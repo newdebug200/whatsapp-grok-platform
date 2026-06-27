@@ -262,6 +262,8 @@ class MessageHandler {
 
       if (skipAI) return;
 
+      const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
+
       if (message.hasMedia) {
         if (botConfig?.media_auto_reply !== false) {
           const label = mediaTypeLabel?.toLowerCase() || 'fichier';
@@ -281,7 +283,6 @@ class MessageHandler {
         this._updateMemory(dbContact, prisma, apiKey, message.body).catch(() => {});
       }
 
-      const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
       const delayMs = (botConfig?.response_delay_seconds ?? 5) * 1000;
       this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs, botConfig);
     } catch (error) {
