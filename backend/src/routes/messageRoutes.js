@@ -1,10 +1,40 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
+const os = require('os');
 const pathModule = require('path');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
+
+// ── Audio conversion helper (WebM → OGG Opus) ─────────────────────────────────
+async function convertWebmToOgg(base64Data) {
+  try {
+    const ffmpegStatic = require('ffmpeg-static');
+    const ffmpeg = require('fluent-ffmpeg');
+    const tmpIn  = pathModule.join(os.tmpdir(), `wa_audio_in_${Date.now()}.webm`);
+    const tmpOut = pathModule.join(os.tmpdir(), `wa_audio_out_${Date.now()}.ogg`);
+    fs.writeFileSync(tmpIn, Buffer.from(base64Data, 'base64'));
+    await new Promise((resolve, reject) => {
+      ffmpeg(tmpIn)
+        .setFfmpegPath(ffmpegStatic)
+        .audioCodec('libopus')
+        .audioBitrate('64k')
+        .format('ogg')
+        .output(tmpOut)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    const result = fs.readFileSync(tmpOut).toString('base64');
+    try { fs.unlinkSync(tmpIn); } catch (_) {}
+    try { fs.unlinkSync(tmpOut); } catch (_) {}
+    return result;
+  } catch (err) {
+    console.warn('[Audio] Conversion WebM→OGG indisponible, envoi sans conversion:', err.message);
+    return null;
+  }
+}
 
 // ── Route PUBLIQUE — sert les fichiers médias (images, audio, vidéo, stickers) ──
 // Doit être AVANT authMiddleware car le navigateur ne peut pas envoyer de JWT dans <img src>
@@ -329,7 +359,21 @@ router.post('/send-media', profileMiddleware, async (req, res) => {
     if (!client) return res.status(503).json({ error: 'WhatsApp non connecté' });
 
     const { MessageMedia } = require('whatsapp-web.js');
-    const media = new MessageMedia(mimeType, data, filename || 'fichier');
+
+    let sendData = data;
+    let sendMime = mimeType;
+    let sendFilename = filename || 'fichier';
+
+    if (messageType === 'ptt' && mimeType && mimeType.includes('webm')) {
+      const converted = await convertWebmToOgg(data);
+      if (converted) {
+        sendData = converted;
+        sendMime = 'audio/ogg; codecs=opus';
+        sendFilename = sendFilename.replace(/\.webm$/, '.ogg');
+      }
+    }
+
+    const media = new MessageMedia(sendMime, sendData, sendFilename);
     const sendOptions = {};
     if (messageType === 'ptt') sendOptions.sendAudioAsVoice = true;
 

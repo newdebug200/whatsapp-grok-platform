@@ -178,8 +178,19 @@ if not exist "node_modules" (
     echo  [OK] node_modules backend deja present.
 )
 
+REM ── Installer les nouvelles dependances si elles manquent ────────────────
+if not exist "node_modules\ffmpeg-static" (
+    echo  [5b] Nouvelle dependance detectee ^(ffmpeg-static^) — installation...
+    call npm install --no-audit --no-fund
+    if %errorlevel% neq 0 (
+        echo  [ATTENTION] npm install a echoue — certaines fonctions audio peuvent ne pas marcher.
+    ) else (
+        echo  [OK] Nouvelles dependances installees.
+    )
+)
+
 REM ── Toujours régénérer le client Prisma (rapide, évite les erreurs) ──────
-echo  [5b] Generation du client Prisma...
+echo  [5c] Generation du client Prisma...
 call npx prisma generate --no-hints >nul 2>&1
 if %errorlevel% neq 0 (
     echo  [ATTENTION] prisma generate a echoue — tentative sans --no-hints...
