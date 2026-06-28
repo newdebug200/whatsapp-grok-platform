@@ -9,9 +9,9 @@ import TagManager from './TagManager';
 import Funnel from './Funnel';
 import './SettingsHub.css';
 
-const TABS = [
+const BOT_TABS = [
   {
-    key: 'config', label: 'Bot Config',
+    key: 'config', label: 'Réglages bot',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 2a2 2 0 012 2 2 2 0 01-2 2 2 2 0 01-2-2 2 2 0 012-2m0 5c.55 0 1 .45 1 1h1a3 3 0 013 3v1a1 1 0 011 1v3a1 1 0 01-1 1v1a3 3 0 01-3 3H9a3 3 0 01-3-3v-1a1 1 0 01-1-1v-3a1 1 0 011-1v-1a3 3 0 013-3h1c0-.55.45-1 1-1zm-3 4a1 1 0 00-1 1v5a1 1 0 001 1h6a1 1 0 001-1v-5a1 1 0 00-1-1H9zm1.5 2a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2zm-4 3h5l-.5 1h-4l-.5-1z"/></svg>
   },
   {
@@ -19,24 +19,27 @@ const TABS = [
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
   },
   {
-    key: 'templates', label: 'Templates',
-    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 002 12a10 10 0 0010 10 10 10 0 0010-10A10 10 0 0012 2z"/></svg>
+    key: 'templates', label: 'Réponses rapides',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
   },
   {
     key: 'tags', label: 'Tags',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
   },
   {
-    key: 'journal', label: 'Journal',
-    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h8v1H8v-1zm0 3h8v1H8v-1zm0-6h5v1H8v-1z"/></svg>
+    key: 'journal', label: 'Alertes',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
   },
   {
-    key: 'funnel', label: 'Entonnoir',
+    key: 'funnel', label: 'Prospects',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
   },
+];
+
+const ACCOUNT_TABS = [
   {
-    key: 'account', label: 'Compte',
-    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.95s-.03-.66-.07-1l2.16-1.65c.19-.15.24-.42.12-.64l-2.05-3.55c-.12-.22-.39-.3-.61-.22l-2.55 1.03c-.52-.4-1.08-.73-1.7-.98l-.38-2.71C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.71c-.62.25-1.18.58-1.7.98L4.88 5.08c-.22-.08-.49 0-.61.22L2.22 8.85c-.13.22-.07.49.12.64l2.16 1.65c-.04.34-.07.67-.07 1s.03.65.07.97l-2.16 1.66c-.19.15-.24.42-.12.64l2.05 3.55c.12.22.39.3.61.22l2.55-1.02c.52.4 1.08.73 1.7.98l.38 2.71c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.71c.62-.25 1.18-.58 1.7-.98l2.55 1.02c.22.08.49 0 .61-.22l2.05-3.55c.12-.22.07-.49-.12-.64l-2.16-1.66z"/></svg>
+    key: 'account', label: 'Mon compte',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
   },
 ];
 
@@ -52,21 +55,26 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
-  const tabs = [...TABS, ...(account?.role === 'admin' ? [ADMIN_TAB] : [])];
+  const accountTabs = [...ACCOUNT_TABS, ...(account?.role === 'admin' ? [ADMIN_TAB] : [])];
+
+  const renderTab = (t) => (
+    <button
+      key={t.key}
+      className={`sh-tab ${tab === t.key ? 'active' : ''}`}
+      onClick={() => setTab(t.key)}
+      title={t.label}
+    >
+      <span className="sh-tab-icon">{t.icon}</span>
+      <span className="sh-tab-label">{t.label}</span>
+    </button>
+  );
 
   return (
     <div className="sh-wrapper">
       <div className="sh-tabs">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            className={`sh-tab ${tab === t.key ? 'active' : ''}`}
-            onClick={() => setTab(t.key)}
-            title={t.label}
-          >
-            <span className="sh-tab-icon">{t.icon}</span>
-          </button>
-        ))}
+        {BOT_TABS.map(renderTab)}
+        <div className="sh-tab-separator" />
+        {accountTabs.map(renderTab)}
       </div>
       <div className="sh-content">
         {tab === 'config' && (
