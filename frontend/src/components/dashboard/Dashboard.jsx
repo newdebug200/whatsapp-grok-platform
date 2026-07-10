@@ -469,13 +469,22 @@ export default function Dashboard() {
 
         <div className="sidebar-content">
           {activePanel === 'home' && (
-            <DashboardHome
-              account={account}
-              waStatus={waStatus}
-              creditBalance={creditBalance}
-              onGoTo={(key) => (key === 'admin' ? goToSettings('admin') : handleNavClick(key))}
-              onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
-            />
+            noProfile ? (
+              <div className="no-profile-msg">
+                <p>Connectez un numéro WhatsApp pour voir votre tableau de bord.</p>
+                <button className="btn-connect" onClick={() => goToSettings('config')}>
+                  Configurer WhatsApp
+                </button>
+              </div>
+            ) : (
+              <DashboardHome
+                account={account}
+                waStatus={waStatus}
+                creditBalance={creditBalance}
+                onGoTo={(key) => (key === 'admin' ? goToSettings('admin') : handleNavClick(key))}
+                onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
+              />
+            )
           )}
           {activePanel === 'funnel' && (
             noProfile
@@ -518,7 +527,6 @@ export default function Dashboard() {
               activeProfile={activeProfile}
               account={account}
               initialTab={settingsInitialTab}
-              onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
             />
           )}
         </div>

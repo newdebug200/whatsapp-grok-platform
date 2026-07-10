@@ -87,19 +87,4 @@ router.put('/contact/:contactId', async (req, res) => {
   }
 });
 
-// GET /api/funnel/stats — count per stage
-router.get('/stats', async (req, res) => {
-  try {
-    const results = await Promise.all(
-      FUNNEL_STAGES.map(stage =>
-        prisma.contact.count({ where: { profile_id: req.profileId, funnel_stage: stage, archived: false } })
-          .then(count => ({ stage, label: STAGE_LABELS[stage], count }))
-      )
-    );
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: 'Erreur lors du chargement des statistiques du funnel' });
-  }
-});
-
 module.exports = router;

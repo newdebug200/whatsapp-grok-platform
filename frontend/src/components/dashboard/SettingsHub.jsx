@@ -46,7 +46,7 @@ const ADMIN_TAB = {
   icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4c1.4 0 2.8 1.1 2.8 2.5v.5h.7c.4 0 .5.1.5.5v4c0 .4-.1.5-.5.5H8.5c-.4 0-.5-.1-.5-.5v-4c0-.4.1-.5.5-.5h.7v-.5C9.2 6.1 10.6 5 12 5zm0 1.2c-.8 0-1.3.6-1.3 1.3v.5h2.6v-.5c0-.7-.5-1.3-1.3-1.3zm0 4.1c-.6 0-1 .4-1 1s.4 1 1 1 1-.4 1-1-.4-1-1-1z"/></svg>
 };
 
-export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, onSelectContact }) {
+export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab }) {
   const [tab, setTab] = useState(initialTab || 'config');
 
   useEffect(() => {
