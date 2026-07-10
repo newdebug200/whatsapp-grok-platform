@@ -160,14 +160,7 @@ class MessageHandler {
         } catch (_) {}
       }
 
-      // ── Sentiment analysis (async, non-blocking) ──
-      const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
-      let sentimentResult = null;
-      if (!message.hasMedia && message.body && apiKey) {
-        sentimentResult = await this._analyzeSentiment(message.body, apiKey).catch(() => null);
-      }
-
-      // ── Save message with unread=true and sentiment ──
+      // ── Save message with unread=true (sentiment is filled in later, only if the bot actually responds) ──
       prisma.message.create({
         data: {
           contact_id: dbContact.id,
@@ -176,7 +169,6 @@ class MessageHandler {
           type: message.type || 'text',
           created_at: new Date(),
           unread: true,
-          sentiment: sentimentResult,
           media_path: mediaPath
         }
       }).catch(() => {});
@@ -191,22 +183,6 @@ class MessageHandler {
 
       // ── Groups: save message but skip AI and triggers ──
       if (isGroup) return;
-
-      // ── Sentiment alert ──
-      if (sentimentResult === 'colere' || sentimentResult === 'negatif') {
-        const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } }).catch(() => null);
-        if (botConfig?.sentiment_alert !== false) {
-          waManager.emitToProfileAccount(profileId, 'sentiment-alert', {
-            profileId,
-            contactId: dbContact.id,
-            contactPhone: phoneNumber,
-            contactName: dbContact.name || phoneNumber,
-            sentiment: sentimentResult,
-            message: messageContent.slice(0, 200)
-          });
-          console.log(`[Sentiment] Alerte ${sentimentResult} pour ${phoneNumber}`);
-        }
-      }
 
       // ── Fetch account role + blocked status ──
       const profile = await prisma.whatsAppProfile.findUnique({
@@ -278,11 +254,9 @@ class MessageHandler {
         return;
       }
 
-      // ── Update AI memory (async, non-blocking) ──
-      if (message.body && apiKey) {
-        this._updateMemory(dbContact, prisma, apiKey, message.body).catch(() => {});
-      }
-
+      // Sentiment analysis and memory update are no longer triggered here.
+      // They now happen inside _processTextMessage, once we've confirmed the
+      // bot is actually going to generate and send a reply (see below).
       const delayMs = (botConfig?.response_delay_seconds ?? 5) * 1000;
       this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs, botConfig);
     } catch (error) {
@@ -406,9 +380,81 @@ class MessageHandler {
         return;
       }
 
+      const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+      if (!apiKey) {
+        waManager.emitToProfileAccount(profileId, 'bot-error', {
+          profileId, contactPhone: contact.phone_number || from,
+          error: "Clé API Groq manquante. Ajoutez GROQ_API_KEY dans votre fichier .env et redémarrez le serveur."
+        });
+        return;
+      }
+
+      // ── Credits check happens BEFORE any Groq call. Sentiment analysis and
+      //    memory update are only worth paying for once we know a reply can
+      //    actually be generated and sent — otherwise they'd be silent API
+      //    calls for a response nobody will see. ──
+      let accountId = null;
+      let creditsEnabled = false;
+      let isAdminAccount = false;
+
+      try {
+        const creditsEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'credits_enabled' } });
+        creditsEnabled = creditsEnabledCfg?.value === 'true';
+
+        const profileRow = await prisma.whatsAppProfile.findUnique({ where: { id: profileId }, select: { account_id: true } });
+        accountId = profileRow?.account_id;
+
+        if (accountId) {
+          const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { credit_balance: true, role: true } });
+          isAdminAccount = accountRow?.role === 'admin';
+          if (creditsEnabled && !isAdminAccount) {
+            const currentBalance = accountRow?.credit_balance ?? 0;
+            if (currentBalance <= 0) {
+              waManager.emitToProfileAccount(profileId, 'bot-error', {
+                profileId, contactPhone: contact.phone_number || from,
+                error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger."
+              });
+              return;
+            }
+          }
+        }
+      } catch (creditCheckErr) {
+        console.error('[Credits] Erreur vérification solde:', creditCheckErr.message);
+      }
+
+      // ── From here on we're committed to generating and sending a reply,
+      //    so sentiment analysis and memory update are now safe to run. ──
+      const sentimentResult = await this._analyzeSentiment(messageText, apiKey).catch(() => null);
+      if (sentimentResult) {
+        prisma.message.findFirst({
+          where: { contact_id: freshContact.id, direction: 'received' },
+          orderBy: { created_at: 'desc' }
+        }).then(lastMsg => {
+          if (lastMsg) {
+            prisma.message.update({ where: { id: lastMsg.id }, data: { sentiment: sentimentResult } }).catch(() => {});
+          }
+        }).catch(() => {});
+
+        if ((sentimentResult === 'colere' || sentimentResult === 'negatif') && botConfig?.sentiment_alert !== false) {
+          waManager.emitToProfileAccount(profileId, 'sentiment-alert', {
+            profileId,
+            contactId: freshContact.id,
+            contactPhone: freshContact.phone_number || from,
+            contactName: freshContact.name || freshContact.phone_number || from,
+            sentiment: sentimentResult,
+            message: messageText.slice(0, 200)
+          });
+          console.log(`[Sentiment] Alerte ${sentimentResult} pour ${freshContact.phone_number || from}`);
+        }
+      }
+
+      this._updateMemory(freshContact, prisma, apiKey, messageText).catch(() => {});
+
       const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
 
-      // ── Load AI memory for this contact ──
+      // ── Load AI memory for this contact (fetched before the update above resolves,
+      //    so this reply still uses the pre-update summary; the refreshed summary
+      //    is used starting with the next message) ──
       const memory = await prisma.contactMemory.findUnique({ where: { contact_id: contact.id } }).catch(() => null);
 
       let recentMessages = waManager.getFromCache(profileId, contact.id);
@@ -421,13 +467,13 @@ class MessageHandler {
         for (const m of recentMessages) waManager.addToCache(profileId, contact.id, m.direction, m.content);
       }
 
-      await this._callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memory?.summary || null);
+      await this._callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memory?.summary || null, { accountId, creditsEnabled });
     } catch (error) {
       console.error('Erreur processTextMessage:', error);
     }
   }
 
-  async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memorySummary) {
+  async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memorySummary, creditInfo = {}) {
     const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
     if (!apiKey) {
       waManager.emitToProfileAccount(profileId, 'bot-error', {
@@ -437,34 +483,7 @@ class MessageHandler {
       return;
     }
 
-    let accountId = null;
-    let creditsEnabled = false;
-    let isAdminAccount = false;
-
-    try {
-      const creditsEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'credits_enabled' } });
-      creditsEnabled = creditsEnabledCfg?.value === 'true';
-
-      const profileRow = await prisma.whatsAppProfile.findUnique({ where: { id: profileId }, select: { account_id: true } });
-      accountId = profileRow?.account_id;
-
-      if (accountId) {
-        const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { credit_balance: true, role: true } });
-        isAdminAccount = accountRow?.role === 'admin';
-        if (creditsEnabled && !isAdminAccount) {
-          const currentBalance = accountRow?.credit_balance ?? 0;
-          if (currentBalance <= 0) {
-            waManager.emitToProfileAccount(profileId, 'bot-error', {
-              profileId, contactPhone: contact.phone_number || from,
-              error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger."
-            });
-            return;
-          }
-        }
-      }
-    } catch (creditCheckErr) {
-      console.error('[Credits] Erreur vérification solde:', creditCheckErr.message);
-    }
+    const { accountId = null, creditsEnabled = false } = creditInfo;
 
     try {
       const systemPrompt = this._buildSystemPrompt(botConfig, faqs, memorySummary);
