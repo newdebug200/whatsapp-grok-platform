@@ -7,14 +7,17 @@ const FUNNEL_STAGES = ['prospect', 'interesse', 'client', 'fidele'];
 const STAGE_LABELS = { prospect: 'Prospect', interesse: 'Intéressé', client: 'Client', fidele: 'Fidèle' };
 const PAGE_SIZE = 30;
 
+// Light, CRM-style palette — this board is embedded directly on the (light)
+// Dashboard home page, so it needs to look like a proper CRM pipeline, not
+// the dark chat-app theme it used to borrow.
 const STAGE_COLORS = {
-  prospect:  { bg: '#1e2a35', border: '#2d3f50', dot: '#8e9baa', label: '#8e9baa' },
-  interesse: { bg: '#1a2a1e', border: '#2d4a35', dot: '#f6c90e', label: '#f6c90e' },
-  client:    { bg: '#1a1e2a', border: '#2d3550', dot: '#25d366', label: '#25d366' },
-  fidele:    { bg: '#2a1a2a', border: '#4a2d4a', dot: '#9b59b6', label: '#9b59b6' },
+  prospect:  { accent: '#8e9baa', tint: '#f4f5f7', header: '#eef0f3' },
+  interesse: { accent: '#e0ab00', tint: '#fdf8e8', header: '#faf0ce' },
+  client:    { accent: '#25d366', tint: '#eafaf1', header: '#d9f5e5' },
+  fidele:    { accent: '#9b59b6', tint: '#f6eefa', header: '#efdcf5' },
 };
 
-const avatarColors = ['#25d366','#128c7e','#075e54','#34b7f1','#667eea','#f6c90e','#fd79a8'];
+const avatarColors = ['#25d366','#128c7e','#075e54','#34b7f1','#667eea','#e0ab00','#fd79a8'];
 const getColor = (id) => avatarColors[(id || 0) % avatarColors.length];
 const getInitial = (c) => (c.name || c.phone_number || '?').charAt(0).toUpperCase();
 
@@ -141,23 +144,34 @@ export default function Funnel({ onSelectContact }) {
 
   const handleDragEnd = () => { setDragging(null); setDragOver(null); };
 
+  const totalContacts = counts?.reduce((s, c) => s + c.count, 0) || 0;
+
   if (countsLoading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary, #8e9baa)' }}>
-      Chargement…
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: '#8696a0', fontSize: '0.85rem' }}>
+      Chargement de l'entonnoir…
     </div>
   );
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border, rgba(255,255,255,0.08))' }}>
-        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #e8eaed)', marginBottom: 2 }}>Entonnoir de contacts</div>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary, #8e9baa)' }}>
-          Glissez les contacts entre les étapes · Cliquez pour ouvrir la conversation
+    <div style={{
+      background: '#fff', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    }}>
+      <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #edf0f2', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+        <div>
+          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111b21' }}>Entonnoir de contacts</div>
+          <div style={{ fontSize: '0.78rem', color: '#667781', marginTop: 2 }}>
+            Glissez les contacts entre les étapes · Cliquez pour ouvrir la conversation
+          </div>
         </div>
-        {error && <div style={{ marginTop: 8, background: '#fdecea', color: '#c0392b', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem' }}>{error}</div>}
+        <div style={{ fontSize: '0.8rem', color: '#667781', fontWeight: 600 }}>{totalContacts} contact{totalContacts === 1 ? '' : 's'}</div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', gap: 0, overflowX: 'auto', overflowY: 'hidden', padding: '12px 8px' }}>
+      {error && (
+        <div style={{ margin: '10px 22px 0', background: '#fdecea', color: '#c0392b', borderRadius: 8, padding: '8px 12px', fontSize: '0.82rem' }}>{error}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 14, overflowX: 'auto', padding: '18px 22px 22px' }}>
         {counts?.map(({ stage, label, count }) => {
           const colors = STAGE_COLORS[stage] || STAGE_COLORS.prospect;
           const isOver = dragOver === stage;
@@ -169,29 +183,32 @@ export default function Funnel({ onSelectContact }) {
               onDrop={(e) => handleDrop(e, stage)}
               onDragLeave={() => setDragOver(null)}
               style={{
-                flex: '1 1 0', minWidth: 200, maxWidth: 320,
+                flex: '1 1 0', minWidth: 240, maxWidth: 340,
                 display: 'flex', flexDirection: 'column',
-                margin: '0 6px',
-                background: isOver ? colors.bg + 'cc' : colors.bg,
-                border: `1.5px solid ${isOver ? colors.dot : colors.border}`,
+                background: isOver ? colors.tint : '#fafbfc',
+                border: `1.5px solid ${isOver ? colors.accent : '#edf0f2'}`,
                 borderRadius: 12,
+                height: 560,
                 transition: 'border-color 0.15s, background 0.15s',
               }}
             >
               {/* Column header */}
-              <div style={{ padding: '10px 14px 8px', borderBottom: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: colors.dot, flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: colors.label, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <div style={{
+                padding: '12px 14px', borderRadius: '12px 12px 0 0',
+                background: colors.header, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+              }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: colors.accent, flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#2b2f33', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   {label}
                 </span>
-                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 600, color: colors.dot, background: colors.dot + '22', borderRadius: 10, padding: '1px 8px' }}>
+                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 700, color: '#fff', background: colors.accent, borderRadius: 10, padding: '2px 9px' }}>
                   {count}
                 </span>
               </div>
 
               {/* Cards */}
               <div
-                style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 8px' }}
+                style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}
                 onScroll={(e) => {
                   const el = e.currentTarget;
                   if (col?.hasMore && !col.loading && el.scrollTop + el.clientHeight > el.scrollHeight - 60) {
@@ -201,17 +218,17 @@ export default function Funnel({ onSelectContact }) {
                 onMouseEnter={() => ensureColumnLoaded(stage)}
               >
                 {!col?.loaded && !col?.loading && (
-                  <div style={{ textAlign: 'center', padding: '24px 8px', color: colors.label + '99', fontSize: '0.8rem' }}>
+                  <div style={{ textAlign: 'center', padding: '28px 8px', color: '#9aa5ad', fontSize: '0.8rem' }}>
                     Survolez pour charger…
                   </div>
                 )}
                 {col?.loading && (!col.contacts || col.contacts.length === 0) && (
-                  <div style={{ textAlign: 'center', padding: '24px 8px', color: colors.label + '99', fontSize: '0.8rem' }}>
+                  <div style={{ textAlign: 'center', padding: '28px 8px', color: '#9aa5ad', fontSize: '0.8rem' }}>
                     Chargement…
                   </div>
                 )}
                 {col?.loaded && count === 0 && (
-                  <div style={{ textAlign: 'center', padding: '24px 8px', color: colors.label + '66', fontSize: '0.8rem', borderRadius: 8, border: `1px dashed ${colors.border}`, marginTop: 4 }}>
+                  <div style={{ textAlign: 'center', padding: '28px 8px', color: '#b3bac0', fontSize: '0.8rem', borderRadius: 8, border: '1px dashed #dfe3e6', marginTop: 4 }}>
                     Glissez un contact ici
                   </div>
                 )}
@@ -227,16 +244,18 @@ export default function Funnel({ onSelectContact }) {
                       onDragEnd={handleDragEnd}
                       onClick={() => onSelectContact && onSelectContact(contact)}
                       style={{
-                        background: 'var(--bg-primary, #111b21)',
-                        border: '1px solid var(--border, rgba(255,255,255,0.08))',
+                        background: '#fff',
+                        border: '1px solid #e9edef',
+                        borderLeft: `3px solid ${colors.accent}`,
                         borderRadius: 8, padding: '10px 12px',
-                        marginBottom: 6, cursor: 'grab',
+                        marginBottom: 8, cursor: 'grab',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                         opacity: isDragging || isMoving ? 0.4 : 1,
                         transition: 'opacity 0.15s, box-shadow 0.15s',
                         userSelect: 'none',
                       }}
-                      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'}
-                      onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+                      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.12)'}
+                      onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: lastMsg ? 6 : 0 }}>
                         <div style={{
@@ -248,11 +267,11 @@ export default function Funnel({ onSelectContact }) {
                           {getInitial(contact)}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary, #e8eaed)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#111b21', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {contact.name || contact.phone_number}
                           </div>
                           {contact.name && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #8e9baa)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: '0.73rem', color: '#8696a0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {contact.phone_number}
                             </div>
                           )}
@@ -264,7 +283,7 @@ export default function Funnel({ onSelectContact }) {
                         )}
                       </div>
                       {lastMsg && (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #8e9baa)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: 36 }}>
+                        <div style={{ fontSize: '0.74rem', color: '#8696a0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: 36 }}>
                           {lastMsg.type === 'image' ? '📷 Photo' :
                            lastMsg.type === 'video' ? '🎥 Vidéo' :
                            lastMsg.type === 'ptt' ? '🎤 Message vocal' :
@@ -276,7 +295,7 @@ export default function Funnel({ onSelectContact }) {
                       )}
 
                       {/* Stage quick-change buttons */}
-                      <div style={{ display: 'flex', gap: 4, marginTop: 8, paddingLeft: 36 }}>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 8, paddingLeft: 36, flexWrap: 'wrap' }}>
                         {FUNNEL_STAGES.filter(s => s !== stage).map(s => {
                           const c = STAGE_COLORS[s];
                           return (
@@ -285,12 +304,12 @@ export default function Funnel({ onSelectContact }) {
                               onClick={(e) => { e.stopPropagation(); moveContact(contact, stage, s); }}
                               title={`Déplacer vers ${STAGE_LABELS[s]}`}
                               style={{
-                                padding: '2px 7px', borderRadius: 10, border: `1px solid ${c.dot}44`,
-                                background: c.dot + '18', color: c.dot, fontSize: '0.68rem', fontWeight: 600,
+                                padding: '2px 7px', borderRadius: 10, border: `1px solid ${c.accent}55`,
+                                background: c.accent + '14', color: c.accent, fontSize: '0.68rem', fontWeight: 600,
                                 cursor: 'pointer', transition: 'background 0.15s'
                               }}
-                              onMouseEnter={ev => ev.currentTarget.style.background = c.dot + '33'}
-                              onMouseLeave={ev => ev.currentTarget.style.background = c.dot + '18'}
+                              onMouseEnter={ev => ev.currentTarget.style.background = c.accent + '28'}
+                              onMouseLeave={ev => ev.currentTarget.style.background = c.accent + '14'}
                             >
                               → {STAGE_LABELS[s]}
                             </button>
@@ -306,8 +325,8 @@ export default function Funnel({ onSelectContact }) {
                     disabled={col.loading}
                     style={{
                       width: '100%', padding: '8px', marginTop: 4, borderRadius: 8,
-                      border: `1px dashed ${colors.border}`, background: 'transparent',
-                      color: colors.label, fontSize: '0.75rem', cursor: 'pointer'
+                      border: '1px dashed #dfe3e6', background: 'transparent',
+                      color: '#667781', fontSize: '0.75rem', cursor: 'pointer'
                     }}
                   >
                     {col.loading ? 'Chargement…' : `Voir plus (${col.contacts.length}/${col.total})`}

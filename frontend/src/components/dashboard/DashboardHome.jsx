@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import Funnel from './Funnel';
 import './DashboardHome.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
-const FUNNEL_COLORS = { prospect: '#8e9baa', interesse: '#f6c90e', client: '#25d366', fidele: '#9b59b6' };
 
 // Full-screen landing page shown right after login, instead of dropping
 // straight into the chat. Gives a "what needs attention" + "how are things
@@ -34,12 +33,10 @@ export default function DashboardHome({
     return () => clearInterval(interval);
   }, [load]);
 
-  const totalFunnel = data ? (data.funnelCounts.reduce((s, c) => s + c.count, 0) || 1) : 1;
   const needsAttention = data && (data.pausedContacts > 0 || data.sentimentAlerts > 0);
 
   const sections = [
     { key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null },
-    { key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊' },
     { key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈' },
     ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣' }] : []),
     { key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️' },
@@ -115,7 +112,7 @@ export default function DashboardHome({
             )}
           </div>
 
-          <div className="dh-grid">
+          <div className="dh-grid dh-grid-single">
             {/* À traiter maintenant */}
             <div className="dh-card dh-card-attention">
               <div className="dh-card-title">
@@ -151,36 +148,14 @@ export default function DashboardHome({
                 </div>
               )}
             </div>
-
-            {/* Entonnoir résumé */}
-            <div className="dh-card">
-              <div className="dh-card-title">
-                Entonnoir de contacts
-                <button className="dh-link" onClick={() => onGoTo('funnel')}>Voir tout →</button>
-              </div>
-              <div className="dh-funnel-bar">
-                {data.funnelCounts.map(c => (
-                  <div
-                    key={c.stage}
-                    className="dh-funnel-seg"
-                    style={{ width: `${(c.count / totalFunnel) * 100}%`, background: FUNNEL_COLORS[c.stage] }}
-                    title={`${c.label}: ${c.count}`}
-                  />
-                ))}
-              </div>
-              <div className="dh-funnel-legend">
-                {data.funnelCounts.map(c => (
-                  <div key={c.stage} className="dh-funnel-legend-item">
-                    <span className="dh-funnel-dot" style={{ background: FUNNEL_COLORS[c.stage] }} />
-                    <span className="dh-funnel-legend-label">{c.label}</span>
-                    <span className="dh-funnel-legend-count">{c.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </>
       )}
+
+      {/* Entonnoir — full CRM board, embedded directly on the dashboard */}
+      <div className="dh-funnel-section">
+        <Funnel onSelectContact={(contact) => onSelectContact && onSelectContact(contact)} />
+      </div>
 
       {/* Section buttons — the actual entry points into the app */}
       <div className="dh-sections-title">Accéder à</div>

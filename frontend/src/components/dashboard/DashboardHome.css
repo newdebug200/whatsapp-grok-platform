@@ -197,11 +197,12 @@ button.dh-kpi:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
   max-width: 1100px;
 }
 
-@media (min-width: 760px) {
-  .dh-grid {
-    grid-template-columns: 1.4fr 1fr;
-    align-items: start;
-  }
+.dh-grid-single {
+  max-width: none;
+}
+
+.dh-funnel-section {
+  padding: 6px 28px 0;
 }
 
 .dh-card {

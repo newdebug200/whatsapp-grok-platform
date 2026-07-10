@@ -9,7 +9,6 @@ import Broadcast from './Broadcast';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import DashboardHome from './DashboardHome';
-import Funnel from './Funnel';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -503,11 +502,6 @@ export default function Dashboard() {
         </div>
 
         <div className="sidebar-content">
-          {activePanel === 'funnel' && (
-            noProfile
-              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
-              : <Funnel onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />
-          )}
           {activePanel === 'chat' && (
             noProfile ? (
               <div className="no-profile-msg">
