@@ -34,6 +34,7 @@ const quickReplyRoutes = require('./routes/quickReplyRoutes');
 const platformConfigRoutes = require('./routes/platformConfigRoutes');
 const statusRoutes = require('./routes/statusRoutes');
 const funnelRoutes = require('./routes/funnelRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -59,6 +60,7 @@ app.use('/api/quick-replies', quickReplyRoutes);
 app.use('/api/platform-config', platformConfigRoutes);
 app.use('/api/statuses', statusRoutes);
 app.use('/api/funnel', funnelRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 

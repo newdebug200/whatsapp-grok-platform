@@ -8,6 +8,8 @@ import Stats from './Stats';
 import Broadcast from './Broadcast';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
+import DashboardHome from './DashboardHome';
+import Funnel from './Funnel';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -36,7 +38,7 @@ export default function Dashboard() {
   const [waStatus, setWaStatus] = useState({ isConnected: false, qrCode: null, status: 'not_initialized' });
   const [selectedContact, setSelectedContact] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [activePanel, setActivePanel] = useState('chat');
+  const [activePanel, setActivePanel] = useState('home');
   const [settingsInitialTab, setSettingsInitialTab] = useState('config');
   const [mobileView, setMobileView] = useState('list');
   const [showMenu, setShowMenu] = useState(false);
@@ -263,8 +265,16 @@ export default function Dashboard() {
 
   const navItems = [
     {
+      key: 'home', label: 'Tableau de bord',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+    },
+    {
       key: 'chat', label: 'Discussions',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    },
+    {
+      key: 'funnel', label: 'Entonnoir',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
     },
     ...(campaignsEnabled ? [{
       key: 'broadcast', label: 'Campagnes',
@@ -458,6 +468,20 @@ export default function Dashboard() {
         </div>
 
         <div className="sidebar-content">
+          {activePanel === 'home' && (
+            <DashboardHome
+              account={account}
+              waStatus={waStatus}
+              creditBalance={creditBalance}
+              onGoTo={(key) => (key === 'admin' ? goToSettings('admin') : handleNavClick(key))}
+              onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
+            />
+          )}
+          {activePanel === 'funnel' && (
+            noProfile
+              ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
+              : <Funnel onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />
+          )}
           {activePanel === 'chat' && (
             noProfile ? (
               <div className="no-profile-msg">

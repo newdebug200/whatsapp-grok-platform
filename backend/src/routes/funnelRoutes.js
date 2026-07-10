@@ -14,26 +14,48 @@ const STAGE_LABELS = {
   fidele: 'Fidèle'
 };
 
-// GET /api/funnel — contacts grouped by stage
+// GET /api/funnel/counts — just the per-stage counts (cheap, loads instantly)
+router.get('/counts', async (req, res) => {
+  try {
+    const results = await Promise.all(
+      FUNNEL_STAGES.map(stage =>
+        prisma.contact.count({ where: { profile_id: req.profileId, funnel_stage: stage, archived: false } })
+          .then(count => ({ stage, label: STAGE_LABELS[stage], count }))
+      )
+    );
+    res.json({ stages: FUNNEL_STAGES, labels: STAGE_LABELS, counts: results });
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors du chargement des compteurs du funnel' });
+  }
+});
+
+// GET /api/funnel?stage=prospect&limit=30&offset=0 — contacts for a single column.
+// Only fetches one stage at a time (with a cap) and selects the minimal fields the
+// Kanban card actually renders, instead of the whole contact + tags graph.
 router.get('/', async (req, res) => {
   try {
-    const contacts = await prisma.contact.findMany({
-      where: { profile_id: req.profileId, archived: false },
-      include: {
-        tags: { include: { tag: true } },
-        messages: { orderBy: { created_at: 'desc' }, take: 1 }
-      },
-      orderBy: [{ name: 'asc' }]
-    });
-
-    const grouped = {};
-    for (const stage of FUNNEL_STAGES) {
-      grouped[stage] = {
-        label: STAGE_LABELS[stage],
-        contacts: contacts.filter(c => (c.funnel_stage || 'prospect') === stage)
-      };
+    const stage = FUNNEL_STAGES.includes(req.query.stage) ? req.query.stage : null;
+    if (!stage) {
+      return res.status(400).json({ error: 'Paramètre "stage" requis. Valeurs acceptées: ' + FUNNEL_STAGES.join(', ') });
     }
-    res.json({ stages: FUNNEL_STAGES, labels: STAGE_LABELS, grouped });
+    const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+    const offset = parseInt(req.query.offset) || 0;
+
+    const [contacts, total] = await Promise.all([
+      prisma.contact.findMany({
+        where: { profile_id: req.profileId, archived: false, funnel_stage: stage },
+        select: {
+          id: true, name: true, phone_number: true, funnel_stage: true, unread_count: true,
+          messages: { orderBy: { created_at: 'desc' }, take: 1, select: { content: true, type: true, created_at: true } }
+        },
+        orderBy: [{ name: 'asc' }],
+        take: limit,
+        skip: offset,
+      }),
+      prisma.contact.count({ where: { profile_id: req.profileId, archived: false, funnel_stage: stage } })
+    ]);
+
+    res.json({ stage, label: STAGE_LABELS[stage], contacts, total, hasMore: offset + contacts.length < total });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du chargement du funnel' });
   }

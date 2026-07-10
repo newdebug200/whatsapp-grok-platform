@@ -6,7 +6,6 @@ import AdminPanel from './AdminPanel';
 import FlagJournal from './FlagJournal';
 import QuickReplyManager from './QuickReplyManager';
 import TagManager from './TagManager';
-import Funnel from './Funnel';
 import './SettingsHub.css';
 
 const BOT_TABS = [
@@ -30,11 +29,10 @@ const BOT_TABS = [
     key: 'journal', label: 'Alertes',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
   },
-  {
-    key: 'funnel', label: 'Prospects',
-    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
-  },
 ];
+// Note: "Prospects" (the funnel/entonnoir) used to live here as a sub-tab under
+// Bot & WhatsApp. It's now a top-level sidebar item (see Dashboard.jsx) for
+// better visibility, since it's a sales/follow-up tool, not a bot config screen.
 
 const ACCOUNT_TABS = [
   {
@@ -89,7 +87,6 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
         {tab === 'templates' && <QuickReplyManager />}
         {tab === 'tags' && <TagManager activeProfile={activeProfile} />}
         {tab === 'journal' && <FlagJournal />}
-        {tab === 'funnel' && <Funnel onSelectContact={onSelectContact} />}
         {tab === 'account' && <Settings />}
         {tab === 'admin' && account?.role === 'admin' && <AdminPanel />}
       </div>
