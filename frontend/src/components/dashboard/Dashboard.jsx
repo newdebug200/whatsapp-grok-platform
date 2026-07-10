@@ -242,6 +242,8 @@ export default function Dashboard() {
     if (key === 'settings') setSettingsInitialTab('account');
   };
 
+  const goHome = () => setActivePanel('home');
+
   const goToSettings = (tab = 'config') => {
     setSettingsInitialTab(tab);
     setActivePanel(tab === 'config' ? 'bot' : 'settings');
@@ -265,16 +267,8 @@ export default function Dashboard() {
 
   const navItems = [
     {
-      key: 'home', label: 'Tableau de bord',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
-    },
-    {
       key: 'chat', label: 'Discussions',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-    },
-    {
-      key: 'funnel', label: 'Entonnoir',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
     },
     ...(campaignsEnabled ? [{
       key: 'broadcast', label: 'Campagnes',
@@ -306,15 +300,56 @@ export default function Dashboard() {
 
   const noProfile = !activeProfile;
 
+  if (activePanel === 'home') {
+    return (
+      <div className="dashboard dashboard-home-fullscreen">
+        <DashboardHome
+          account={account}
+          waStatus={waStatus}
+          creditBalance={creditBalance}
+          isAdmin={isAdmin}
+          campaignsEnabled={campaignsEnabled}
+          unreadCount={unreadCount}
+          onLogout={logout}
+          onGoTo={(key) => (key === 'admin' ? goToSettings('admin') : handleNavClick(key))}
+          onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
+        />
+        {botError && (
+          <div style={{
+            position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
+            background: '#c0392b', color: '#fff', borderRadius: 10,
+            padding: '12px 18px', maxWidth: 340, boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            display: 'flex', alignItems: 'flex-start', gap: 10
+          }}>
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style={{ flexShrink: 0, marginTop: 1 }}>
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 3 }}>Erreur bot IA</div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{botError.error}</div>
+              {botError.contactPhone && (
+                <div style={{ fontSize: '0.78rem', opacity: 0.7, marginTop: 2 }}>Contact : {botError.contactPhone}</div>
+              )}
+            </div>
+            <button
+              onClick={() => setBotError(null)}
+              style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, marginLeft: 4, opacity: 0.8 }}
+            >✕</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard">
       <div className={`sidebar ${mobileView === 'chat' ? 'sidebar-hidden-mobile' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-header-top">
-            <div className="sidebar-logo">
+            <button className="sidebar-logo sidebar-logo-btn" onClick={goHome} title="Retour au tableau de bord">
               <img src="/icons/icon-192.png" alt="Botora" className="logo-icon" />
               <span className="logo-text">Botora</span>
-            </div>
+            </button>
             <div className="sidebar-actions">
               <button
                 className={`sound-toggle-btn ${soundEnabled ? 'on' : 'off'}`}
@@ -468,24 +503,6 @@ export default function Dashboard() {
         </div>
 
         <div className="sidebar-content">
-          {activePanel === 'home' && (
-            noProfile ? (
-              <div className="no-profile-msg">
-                <p>Connectez un numéro WhatsApp pour voir votre tableau de bord.</p>
-                <button className="btn-connect" onClick={() => goToSettings('config')}>
-                  Configurer WhatsApp
-                </button>
-              </div>
-            ) : (
-              <DashboardHome
-                account={account}
-                waStatus={waStatus}
-                creditBalance={creditBalance}
-                onGoTo={(key) => (key === 'admin' ? goToSettings('admin') : handleNavClick(key))}
-                onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
-              />
-            )
-          )}
           {activePanel === 'funnel' && (
             noProfile
               ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />

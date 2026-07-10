@@ -39,6 +39,26 @@
   gap: 8px;
 }
 
+.sidebar-logo-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 8px;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.sidebar-logo-btn:hover {
+  background: rgba(0,0,0,0.06);
+}
+
+/* ===== FULLSCREEN DASHBOARD HOME ===== */
+.dashboard-home-fullscreen {
+  display: block;
+  overflow-y: auto;
+}
+
 .logo-icon {
   width: 36px;
   height: 36px;

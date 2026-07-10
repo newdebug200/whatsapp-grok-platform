@@ -6,12 +6,16 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const FUNNEL_COLORS = { prospect: '#8e9baa', interesse: '#f6c90e', client: '#25d366', fidele: '#9b59b6' };
 
-// Admin landing page shown right after login, instead of dropping straight into
-// the chat. Gives a "what needs attention" + "how are things going" overview,
-// with quick links into the operational screens (chat, funnel, stats).
-export default function DashboardHome({ account, waStatus, creditBalance, onGoTo, onSelectContact }) {
+// Full-screen landing page shown right after login, instead of dropping
+// straight into the chat. Gives a "what needs attention" + "how are things
+// going" overview, with big section buttons to enter the rest of the app.
+export default function DashboardHome({
+  account, waStatus, creditBalance, isAdmin, campaignsEnabled, unreadCount,
+  onGoTo, onSelectContact, onLogout,
+}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const noProfile = !waStatus?.isConnected && waStatus?.status === 'not_initialized';
 
   const load = useCallback(async () => {
     try {
@@ -30,135 +34,167 @@ export default function DashboardHome({ account, waStatus, creditBalance, onGoTo
     return () => clearInterval(interval);
   }, [load]);
 
-  if (loading) {
-    return (
-      <div className="dh-loading">
-        <div className="dh-spinner" />
-        <span>Chargement du tableau de bord…</span>
-      </div>
-    );
-  }
+  const totalFunnel = data ? (data.funnelCounts.reduce((s, c) => s + c.count, 0) || 1) : 1;
+  const needsAttention = data && (data.pausedContacts > 0 || data.sentimentAlerts > 0);
 
-  if (!data) return null;
-
-  const totalFunnel = data.funnelCounts.reduce((s, c) => s + c.count, 0) || 1;
-  const needsAttention = data.pausedContacts > 0 || data.sentimentAlerts > 0;
+  const sections = [
+    { key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null },
+    { key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊' },
+    { key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈' },
+    ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣' }] : []),
+    { key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️' },
+    { key: 'settings', label: 'Paramètres', desc: 'Compte et préférences', emoji: '🔧' },
+    ...(isAdmin ? [{ key: 'admin', label: 'Administration', desc: 'Gestion de la plateforme', emoji: '🛠️' }] : []),
+  ];
 
   return (
     <div className="dh-panel">
       <div className="dh-header">
-        <div>
-          <div className="dh-title">Tableau de bord</div>
-          <div className="dh-subtitle">
-            {account?.name ? `Bonjour ${account.name.split(' ')[0]}` : 'Bienvenue'} — voici l'état de votre compte
-          </div>
+        <div className="dh-brand">
+          <img src="/icons/icon-192.png" alt="Botora" className="dh-logo" />
+          <span className="dh-brand-name">Botora</span>
         </div>
-        <span className={`dh-wa-pill ${waStatus?.isConnected ? 'ok' : 'off'}`}>
-          <span className="dh-wa-dot" />
-          {waStatus?.isConnected ? 'WhatsApp connecté' : 'WhatsApp non connecté'}
-        </span>
+        <div className="dh-header-right">
+          <span className={`dh-wa-pill ${waStatus?.isConnected ? 'ok' : 'off'}`}>
+            <span className="dh-wa-dot" />
+            {waStatus?.isConnected ? 'WhatsApp connecté' : 'WhatsApp non connecté'}
+          </span>
+          <div className="dh-account">
+            <div className="dh-avatar">{account?.name?.charAt(0).toUpperCase()}</div>
+            <div className="dh-account-info">
+              <div className="dh-account-name">{account?.name}</div>
+              {creditBalance !== null && (
+                <div className={`dh-account-credits ${creditBalance <= 0 ? 'empty' : creditBalance < 10 ? 'low' : ''}`}>
+                  {creditBalance.toFixed(2)} crédits
+                </div>
+              )}
+            </div>
+          </div>
+          <button className="dh-logout" onClick={onLogout} title="Déconnexion">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+          </button>
+        </div>
       </div>
 
-      {/* KPI row */}
-      <div className="dh-kpis">
-        <button className="dh-kpi" onClick={() => onGoTo('chat')}>
-          <div className="dh-kpi-value">{data.unreadConversations}</div>
-          <div className="dh-kpi-label">Conversations non lues</div>
-        </button>
-        <div className="dh-kpi">
-          <div className="dh-kpi-value">{data.today.received}</div>
-          <div className="dh-kpi-label">Messages reçus aujourd'hui</div>
-        </div>
-        <div className="dh-kpi">
-          <div className="dh-kpi-value">{data.today.sent}</div>
-          <div className="dh-kpi-label">Réponses envoyées aujourd'hui</div>
-        </div>
-        {creditBalance !== null && (
-          <div className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`}>
-            <div className="dh-kpi-value">{creditBalance.toFixed(2)}</div>
-            <div className="dh-kpi-label">Crédits restants</div>
-          </div>
-        )}
+      <div className="dh-greeting">
+        {account?.name ? `Bonjour ${account.name.split(' ')[0]} 👋` : 'Bienvenue'} — voici l'état de votre compte
       </div>
 
-      <div className="dh-grid">
-        {/* À traiter maintenant */}
-        <div className="dh-card dh-card-attention">
-          <div className="dh-card-title">
-            À traiter maintenant
-            {needsAttention && <span className="dh-badge">{data.sentimentAlerts + data.pausedContacts}</span>}
-          </div>
-          {!needsAttention && (
-            <div className="dh-empty">Rien d'urgent — tout est sous contrôle. ✅</div>
-          )}
-          {data.sentimentAlertsList.length > 0 && (
-            <div className="dh-attention-group">
-              <div className="dh-attention-label">⚠️ Sentiment négatif détecté</div>
-              {data.sentimentAlertsList.map(m => (
-                <button
-                  key={m.id}
-                  className="dh-attention-row"
-                  onClick={() => onSelectContact ? onSelectContact(m.contact) : onGoTo('chat')}
-                >
-                  <span className="dh-attention-name">{m.contact.name || m.contact.phone_number}</span>
-                  <span className="dh-attention-msg">{(m.content || '').slice(0, 60)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {data.pausedContactsList.length > 0 && (
-            <div className="dh-attention-group">
-              <div className="dh-attention-label">⏸️ IA en pause (intervention requise)</div>
-              {data.pausedContactsList.map(c => (
-                <button key={c.id} className="dh-attention-row" onClick={() => onSelectContact ? onSelectContact(c) : onGoTo('chat')}>
-                  <span className="dh-attention-name">{c.name || c.phone_number}</span>
-                </button>
-              ))}
-            </div>
-          )}
+      {loading ? (
+        <div className="dh-loading">
+          <div className="dh-spinner" />
+          <span>Chargement…</span>
         </div>
-
-        {/* Entonnoir résumé */}
-        <div className="dh-card">
-          <div className="dh-card-title">
-            Entonnoir de contacts
-            <button className="dh-link" onClick={() => onGoTo('funnel')}>Voir tout →</button>
-          </div>
-          <div className="dh-funnel-bar">
-            {data.funnelCounts.map(c => (
-              <div
-                key={c.stage}
-                className="dh-funnel-seg"
-                style={{ width: `${(c.count / totalFunnel) * 100}%`, background: FUNNEL_COLORS[c.stage] }}
-                title={`${c.label}: ${c.count}`}
-              />
-            ))}
-          </div>
-          <div className="dh-funnel-legend">
-            {data.funnelCounts.map(c => (
-              <div key={c.stage} className="dh-funnel-legend-item">
-                <span className="dh-funnel-dot" style={{ background: FUNNEL_COLORS[c.stage] }} />
-                <span className="dh-funnel-legend-label">{c.label}</span>
-                <span className="dh-funnel-legend-count">{c.count}</span>
+      ) : !data ? (
+        <div className="dh-empty-overview">
+          {noProfile
+            ? "Connectez un numéro WhatsApp pour voir vos statistiques ici."
+            : "Impossible de charger l'aperçu pour le moment."}
+        </div>
+      ) : (
+        <>
+          {/* KPI row */}
+          <div className="dh-kpis">
+            <button className="dh-kpi" onClick={() => onGoTo('chat')}>
+              <div className="dh-kpi-value">{data.unreadConversations}</div>
+              <div className="dh-kpi-label">Conversations non lues</div>
+            </button>
+            <div className="dh-kpi">
+              <div className="dh-kpi-value">{data.today.received}</div>
+              <div className="dh-kpi-label">Messages reçus aujourd'hui</div>
+            </div>
+            <div className="dh-kpi">
+              <div className="dh-kpi-value">{data.today.sent}</div>
+              <div className="dh-kpi-label">Réponses envoyées aujourd'hui</div>
+            </div>
+            {creditBalance !== null && (
+              <div className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`}>
+                <div className="dh-kpi-value">{creditBalance.toFixed(2)}</div>
+                <div className="dh-kpi-label">Crédits restants</div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Accès rapides */}
-        <div className="dh-card">
-          <div className="dh-card-title">Accès rapides</div>
-          <div className="dh-quicklinks">
-            <button className="dh-quicklink" onClick={() => onGoTo('chat')}>💬 Discussions</button>
-            <button className="dh-quicklink" onClick={() => onGoTo('funnel')}>📊 Entonnoir</button>
-            <button className="dh-quicklink" onClick={() => onGoTo('stats')}>📈 Statistiques</button>
-            <button className="dh-quicklink" onClick={() => onGoTo('broadcast')}>📣 Campagnes</button>
-            <button className="dh-quicklink" onClick={() => onGoTo('bot')}>⚙️ Réglages du bot</button>
-            {account?.role === 'admin' && (
-              <button className="dh-quicklink" onClick={() => onGoTo('admin')}>🛠️ Administration</button>
             )}
           </div>
-        </div>
+
+          <div className="dh-grid">
+            {/* À traiter maintenant */}
+            <div className="dh-card dh-card-attention">
+              <div className="dh-card-title">
+                À traiter maintenant
+                {needsAttention && <span className="dh-badge">{data.sentimentAlerts + data.pausedContacts}</span>}
+              </div>
+              {!needsAttention && (
+                <div className="dh-empty">Rien d'urgent — tout est sous contrôle. ✅</div>
+              )}
+              {data.sentimentAlertsList.length > 0 && (
+                <div className="dh-attention-group">
+                  <div className="dh-attention-label">⚠️ Sentiment négatif détecté</div>
+                  {data.sentimentAlertsList.map(m => (
+                    <button
+                      key={m.id}
+                      className="dh-attention-row"
+                      onClick={() => onSelectContact ? onSelectContact(m.contact) : onGoTo('chat')}
+                    >
+                      <span className="dh-attention-name">{m.contact.name || m.contact.phone_number}</span>
+                      <span className="dh-attention-msg">{(m.content || '').slice(0, 60)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {data.pausedContactsList.length > 0 && (
+                <div className="dh-attention-group">
+                  <div className="dh-attention-label">⏸️ IA en pause (intervention requise)</div>
+                  {data.pausedContactsList.map(c => (
+                    <button key={c.id} className="dh-attention-row" onClick={() => onSelectContact ? onSelectContact(c) : onGoTo('chat')}>
+                      <span className="dh-attention-name">{c.name || c.phone_number}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Entonnoir résumé */}
+            <div className="dh-card">
+              <div className="dh-card-title">
+                Entonnoir de contacts
+                <button className="dh-link" onClick={() => onGoTo('funnel')}>Voir tout →</button>
+              </div>
+              <div className="dh-funnel-bar">
+                {data.funnelCounts.map(c => (
+                  <div
+                    key={c.stage}
+                    className="dh-funnel-seg"
+                    style={{ width: `${(c.count / totalFunnel) * 100}%`, background: FUNNEL_COLORS[c.stage] }}
+                    title={`${c.label}: ${c.count}`}
+                  />
+                ))}
+              </div>
+              <div className="dh-funnel-legend">
+                {data.funnelCounts.map(c => (
+                  <div key={c.stage} className="dh-funnel-legend-item">
+                    <span className="dh-funnel-dot" style={{ background: FUNNEL_COLORS[c.stage] }} />
+                    <span className="dh-funnel-legend-label">{c.label}</span>
+                    <span className="dh-funnel-legend-count">{c.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Section buttons — the actual entry points into the app */}
+      <div className="dh-sections-title">Accéder à</div>
+      <div className="dh-sections-grid">
+        {sections.map(s => (
+          <button key={s.key} className="dh-section-card" onClick={() => onGoTo(s.key)}>
+            <span className="dh-section-emoji">{s.emoji}</span>
+            <span className="dh-section-label">
+              {s.label}
+              {s.badge && <span className="dh-section-badge">{s.badge}</span>}
+            </span>
+            <span className="dh-section-desc">{s.desc}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
