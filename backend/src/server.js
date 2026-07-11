@@ -88,10 +88,21 @@ io.on('connection', (socket) => {
 
   socket.on('connect-whatsapp', (data = {}) => {
     const profileId = data?.profileId ? Number(data.profileId) : null;
-    const current = whatsappManager.getStatus(accountId);
-    if (['connected', 'initializing', 'qr'].includes(current.status)) {
-      socket.emit('status', current);
-      return;
+    if (profileId) {
+      // Reconnexion d'un numéro existant : ne bloquer que si CE profil est déjà actif.
+      const current = whatsappManager.getProfileStatus(profileId);
+      if (['connected', 'initializing', 'qr'].includes(current.status)) {
+        socket.emit('status', { ...current, profileId });
+        return;
+      }
+    } else {
+      // Ajout d'un nouveau numéro : ne bloquer que s'il y a déjà une autre
+      // tentative d'ajout en cours. Un numéro déjà connecté ne doit pas bloquer.
+      const pendingNew = whatsappManager.getPendingNewConnection(accountId);
+      if (pendingNew) {
+        socket.emit('status', pendingNew);
+        return;
+      }
     }
     console.log(`Demande connexion WhatsApp — compte ${accountId}${profileId ? `, profil ${profileId}` : ' (nouveau)'}`);
     whatsappManager.initializeClient(accountId, profileId);

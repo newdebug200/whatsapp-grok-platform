@@ -334,20 +334,17 @@ class WhatsAppManager {
         await this._destroyEntry(existing.key);
       }
     } else {
+      // Ajout d'un nouveau numéro : ne bloquer que s'il y a déjà une tentative
+      // d'ajout en cours (entrée temporaire sans profileId). Un autre numéro déjà
+      // connecté sur ce compte ne doit pas empêcher l'ajout d'un numéro supplémentaire.
       const existingEntries = this._getEntriesForAccount(accountId);
-      const active = existingEntries.find(e =>
-        ['initializing', 'connected', 'qr'].includes(e.entry.status)
+      const pendingNew = existingEntries.find(e =>
+        e.entry.profileId === null && ['initializing', 'connected', 'qr'].includes(e.entry.status)
       );
-      if (active) {
-        if (active.entry.status === 'connected') {
+      if (pendingNew) {
+        if (pendingNew.entry.qrCode) {
           this.io?.to(`account_${accountId}`).emit('status', {
-            isConnected: true, qrCode: null, status: 'connected',
-            profileId: active.entry.profileId, phoneNumber: active.entry.phoneNumber
-          });
-        } else if (active.entry.qrCode) {
-          this.io?.to(`account_${accountId}`).emit('status', {
-            isConnected: false, qrCode: active.entry.qrCode, status: 'qr',
-            profileId: active.entry.profileId
+            isConnected: false, qrCode: pendingNew.entry.qrCode, status: 'qr', profileId: null
           });
         }
         return;
@@ -632,6 +629,21 @@ class WhatsAppManager {
     if (!found) return { isConnected: false, qrCode: null, status: 'not_initialized' };
     const { entry } = found;
     return { isConnected: entry.status === 'connected', qrCode: entry.qrCode, status: entry.status };
+  }
+
+  // Statut d'une éventuelle tentative d'ajout de nouveau numéro déjà en cours
+  // (entrée temporaire, pas encore rattachée à un profileId). Ne tient pas
+  // compte des numéros déjà connectés — ceux-ci ne doivent pas bloquer un ajout.
+  getPendingNewConnection(accountId) {
+    const entries = this._getEntriesForAccount(accountId);
+    const pending = entries.find(e =>
+      e.entry.profileId === null && ['initializing', 'connected', 'qr'].includes(e.entry.status)
+    );
+    if (!pending) return null;
+    return {
+      isConnected: false, qrCode: pending.entry.qrCode,
+      status: pending.entry.status, profileId: null
+    };
   }
 
   getAllStatuses(accountId) {
