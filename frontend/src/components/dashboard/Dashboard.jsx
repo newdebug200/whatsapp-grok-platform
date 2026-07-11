@@ -402,6 +402,18 @@ export default function Dashboard() {
                       <div className="dropdown-flag-warn">⚠️ Solde de crédits épuisé</div>
                     )}
                     <div className="dropdown-divider" />
+                    <button className="dropdown-item" onClick={() => { setShowMenu(false); goHome(); }}>Tableau de bord</button>
+                    {navItems.map(item => (
+                      <button
+                        key={item.key}
+                        className="dropdown-item"
+                        onClick={() => { setShowMenu(false); handleNavClick(item.key); }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                    <button className="dropdown-item" onClick={() => { setShowMenu(false); setActivePanel('funnel'); }}>Entonnoir</button>
+                    <div className="dropdown-divider" />
                     <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
                     {account?.role === 'admin' && (
                       <button className="dropdown-item" onClick={() => goToSettings('admin')}>Administration</button>
