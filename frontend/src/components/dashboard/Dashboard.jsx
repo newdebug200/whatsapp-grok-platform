@@ -15,6 +15,10 @@ import './Dashboard.css';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+const AVATAR_COLORS = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
+const getColor = (id) => AVATAR_COLORS[(id || 0) % AVATAR_COLORS.length];
+const getInitial = (contact) => (contact.name || contact.phone_number || '?').charAt(0).toUpperCase();
+
 function playNotifSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -50,6 +54,12 @@ export default function Dashboard() {
   const [botError, setBotError] = useState(null);
   const [platformConfig, setPlatformConfig] = useState({});
   const [creditBalance, setCreditBalance] = useState(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState('');
+  const [messageMatchIds, setMessageMatchIds] = useState(null);
+  const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
+  const globalSearchTimeout = useRef(null);
+  const searchWrapperRef = useRef(null);
 
   const activePanelRef = useRef(activePanel);
   const selectedContactRef = useRef(selectedContact);
@@ -242,6 +252,59 @@ export default function Dashboard() {
     if (key === 'settings') setSettingsInitialTab('account');
   };
 
+  // Global search: matches contacts already loaded (by name/phone) plus, once
+  // the query is long enough, message content matches from the server.
+  useEffect(() => {
+    if (globalSearchTimeout.current) clearTimeout(globalSearchTimeout.current);
+    const q = globalQuery.trim();
+    if (q.length < 2) { setMessageMatchIds(null); return; }
+    globalSearchTimeout.current = setTimeout(async () => {
+      setGlobalSearchLoading(true);
+      try {
+        const res = await axios.get(`${API_URL}/messages/search`, { params: { q } });
+        setMessageMatchIds(new Set((res.data || []).map(m => m.contact_id ?? m.contactId)));
+      } catch { setMessageMatchIds(null); }
+      finally { setGlobalSearchLoading(false); }
+    }, 350);
+    return () => clearTimeout(globalSearchTimeout.current);
+  }, [globalQuery]);
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const onClickOutside = (e) => {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target)) {
+        setShowSearch(false);
+      }
+    };
+    const onEscape = (e) => { if (e.key === 'Escape') setShowSearch(false); };
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [showSearch]);
+
+  const globalSearchResults = (() => {
+    const q = globalQuery.trim().toLowerCase();
+    if (!q) return [];
+    return contacts
+      .filter(c => (
+        c.name?.toLowerCase().includes(q) ||
+        c.phone_number?.toLowerCase().includes(q) ||
+        messageMatchIds?.has(c.id)
+      ))
+      .slice(0, 8);
+  })();
+
+  const handleGlobalResultClick = (contact) => {
+    handleSelectContact(contact);
+    setActivePanel('chat');
+    setUnreadCount(c => Math.max(0, c - (contact.unread_count || 0)));
+    setShowSearch(false);
+    setGlobalQuery('');
+  };
+
   const goHome = () => setActivePanel('home');
 
   const goToSettings = (tab = 'config') => {
@@ -377,6 +440,42 @@ export default function Dashboard() {
                 className={`wa-status-badge ${waStatus.isConnected ? 'connected' : 'disconnected'}`}
                 title={waStatus.isConnected ? 'WhatsApp connecté' : 'WhatsApp non connecté'}
               >●</div>
+              <div className="menu-wrapper" ref={searchWrapperRef}>
+                <button className="icon-btn" onClick={() => setShowSearch(s => !s)} title="Recherche">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                </button>
+                {showSearch && (
+                  <div className="dropdown-menu search-menu">
+                    <div className="search-input-wrap">
+                      <input
+                        type="text"
+                        autoFocus
+                        className="search-input"
+                        placeholder="Rechercher un contact, un message…"
+                        value={globalQuery}
+                        onChange={(e) => setGlobalQuery(e.target.value)}
+                      />
+                    </div>
+                    {globalQuery.trim().length > 0 && (
+                      <div className="search-results">
+                        {globalSearchLoading && <div className="search-hint">Recherche…</div>}
+                        {!globalSearchLoading && globalSearchResults.length === 0 && (
+                          <div className="search-hint">Aucun résultat</div>
+                        )}
+                        {globalSearchResults.map(c => (
+                          <button key={c.id} className="dropdown-item search-result-item" onClick={() => handleGlobalResultClick(c)}>
+                            <span className="search-result-avatar" style={{ background: getColor(c.id) }}>{getInitial(c)}</span>
+                            <span className="search-result-info">
+                              <span className="search-result-name">{c.name || c.phone_number}</span>
+                              <span className="search-result-phone">{c.phone_number}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="menu-wrapper">
                 <button className="icon-btn" onClick={() => setShowMenu(!showMenu)}>
                   <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
