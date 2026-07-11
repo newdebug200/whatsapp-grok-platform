@@ -3,7 +3,7 @@
   flex-direction: column;
   min-height: 100%;
   width: 100%;
-  background: #f0f2f5;
+  background: var(--bg-secondary, #f0f2f5);
   padding-bottom: 32px;
 }
 
@@ -12,8 +12,8 @@
   align-items: center;
   gap: 16px;
   padding: 16px 28px;
-  background: #fff;
-  border-bottom: 1px solid #e9edef;
+  background: var(--bg-primary, #fff);
+  border-bottom: 1px solid var(--border, #e9edef);
 }
 
 .fp-back {
@@ -22,7 +22,7 @@
   gap: 6px;
   background: none;
   border: none;
-  color: #667781;
+  color: var(--text-secondary, #667781);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -32,7 +32,7 @@
   transition: background 0.15s, color 0.15s;
 }
 
-.fp-back:hover { background: #f0f2f5; color: #111b21; }
+.fp-back:hover { background: var(--bg-hover, #f0f2f5); color: var(--text-primary, #111b21); }
 
 .fp-title {
   display: flex;
@@ -40,7 +40,7 @@
   gap: 8px;
   font-size: 17px;
   font-weight: 700;
-  color: #111b21;
+  color: var(--text-primary, #111b21);
   margin: 0 auto;
 }
 

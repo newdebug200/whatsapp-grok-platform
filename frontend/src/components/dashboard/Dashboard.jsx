@@ -402,6 +402,7 @@ export default function Dashboard() {
                       <div className="dropdown-flag-warn">⚠️ Solde de crédits épuisé</div>
                     )}
                     <div className="dropdown-divider" />
+                    <div className="dropdown-section-label">Navigation</div>
                     <button className="dropdown-item" onClick={() => { setShowMenu(false); goHome(); }}>Tableau de bord</button>
                     {navItems.map(item => (
                       <button
@@ -414,6 +415,7 @@ export default function Dashboard() {
                     ))}
                     <button className="dropdown-item" onClick={() => { setShowMenu(false); setActivePanel('funnel'); }}>Entonnoir</button>
                     <div className="dropdown-divider" />
+                    <div className="dropdown-section-label">Compte</div>
                     <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
                     {account?.role === 'admin' && (
                       <button className="dropdown-item" onClick={() => goToSettings('admin')}>Administration</button>
