@@ -591,7 +591,7 @@ export default function Dashboard() {
                   onClick={() => {
                     setShowProfileMenu(false);
                     goToSettings('config');
-                    handleConnectWhatsApp();
+                    handleConnectWhatsApp(true);
                   }}
                 >
                   <span className="profile-add-icon">+</span>
