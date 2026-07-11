@@ -9,6 +9,7 @@ import Broadcast from './Broadcast';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import DashboardHome from './DashboardHome';
+import FunnelPage from './FunnelPage';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -298,6 +299,17 @@ export default function Dashboard() {
     : 'Aucun profil';
 
   const noProfile = !activeProfile;
+
+  if (activePanel === 'funnel') {
+    return (
+      <div className="dashboard dashboard-home-fullscreen">
+        <FunnelPage
+          onBack={goHome}
+          onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
+        />
+      </div>
+    );
+  }
 
   if (activePanel === 'home') {
     return (

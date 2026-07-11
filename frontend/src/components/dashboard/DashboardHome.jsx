@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import Funnel from './Funnel';
 import './DashboardHome.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+const FUNNEL_COLORS = { prospect: '#8e9baa', interesse: '#e0ab00', client: '#25d366', fidele: '#9b59b6' };
+const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#e0ab00', '#fd79a8'];
+const getColor = (id) => avatarColors[(id || 0) % avatarColors.length];
 
 // Full-screen landing page shown right after login, instead of dropping
 // straight into the chat. Gives a "what needs attention" + "how are things
@@ -34,9 +37,12 @@ export default function DashboardHome({
   }, [load]);
 
   const needsAttention = data && (data.pausedContacts > 0 || data.sentimentAlerts > 0);
+  const totalFunnel = data ? (data.funnelCounts.reduce((s, c) => s + c.count, 0) || 1) : 1;
+  const maxDaily = data ? Math.max(1, ...data.dailyMessages.map(d => d.sent + d.received)) : 1;
 
   const sections = [
     { key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null },
+    { key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊' },
     { key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈' },
     ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣' }] : []),
     { key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️' },
@@ -97,6 +103,10 @@ export default function DashboardHome({
               <div className="dh-kpi-label">Conversations non lues</div>
             </button>
             <div className="dh-kpi">
+              <div className="dh-kpi-value">{data.totalContacts}</div>
+              <div className="dh-kpi-label">Contacts au total</div>
+            </div>
+            <div className="dh-kpi">
               <div className="dh-kpi-value">{data.today.received}</div>
               <div className="dh-kpi-label">Messages reçus aujourd'hui</div>
             </div>
@@ -112,7 +122,7 @@ export default function DashboardHome({
             )}
           </div>
 
-          <div className="dh-grid dh-grid-single">
+          <div className="dh-grid">
             {/* À traiter maintenant */}
             <div className="dh-card dh-card-attention">
               <div className="dh-card-title">
@@ -148,14 +158,82 @@ export default function DashboardHome({
                 </div>
               )}
             </div>
+
+            {/* Entonnoir résumé */}
+            <div className="dh-card">
+              <div className="dh-card-title">
+                Entonnoir de contacts
+                <button className="dh-link" onClick={() => onGoTo('funnel')}>Voir tout →</button>
+              </div>
+              <div className="dh-funnel-bar">
+                {data.funnelCounts.map(c => (
+                  <div
+                    key={c.stage}
+                    className="dh-funnel-seg"
+                    style={{ width: `${(c.count / totalFunnel) * 100}%`, background: FUNNEL_COLORS[c.stage] }}
+                    title={`${c.label}: ${c.count}`}
+                  />
+                ))}
+              </div>
+              <div className="dh-funnel-legend">
+                {data.funnelCounts.map(c => (
+                  <div key={c.stage} className="dh-funnel-legend-item">
+                    <span className="dh-funnel-dot" style={{ background: FUNNEL_COLORS[c.stage] }} />
+                    <span className="dh-funnel-legend-label">{c.label}</span>
+                    <span className="dh-funnel-legend-count">{c.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Activité de la semaine */}
+            <div className="dh-card">
+              <div className="dh-card-title">
+                Activité de la semaine
+                <button className="dh-link" onClick={() => onGoTo('stats')}>Voir tout →</button>
+              </div>
+              <div className="dh-sparkline">
+                {data.dailyMessages.map(d => {
+                  const total = d.sent + d.received;
+                  const sentH = maxDaily ? (d.sent / maxDaily) * 100 : 0;
+                  const recvH = maxDaily ? (d.received / maxDaily) * 100 : 0;
+                  return (
+                    <div key={d.date} className="dh-spark-col" title={`${d.label}: ${total} message${total === 1 ? '' : 's'}`}>
+                      <div className="dh-spark-bars">
+                        <div className="dh-spark-bar sent" style={{ height: `${sentH}%` }} />
+                        <div className="dh-spark-bar recv" style={{ height: `${recvH}%` }} />
+                      </div>
+                      <div className="dh-spark-label">{d.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="dh-sparkline-legend">
+                <span><span className="dh-funnel-dot" style={{ background: '#25d366' }} /> Envoyés</span>
+                <span><span className="dh-funnel-dot" style={{ background: '#8e9baa' }} /> Reçus</span>
+              </div>
+            </div>
+
+            {/* Contacts les plus actifs */}
+            <div className="dh-card">
+              <div className="dh-card-title">Contacts les plus actifs (7 jours)</div>
+              {(!data.topContacts || data.topContacts.length === 0) ? (
+                <div className="dh-empty">Pas encore assez d'activité cette semaine.</div>
+              ) : (
+                data.topContacts.map(c => (
+                  <button key={c.id} className="dh-top-contact-row" onClick={() => onSelectContact ? onSelectContact(c) : onGoTo('chat')}>
+                    <span className="dh-top-contact-avatar" style={{ background: getColor(c.id) }}>
+                      {(c.name || c.phone_number || '?').charAt(0).toUpperCase()}
+                    </span>
+                    <span className="dh-top-contact-name">{c.name || c.phone_number}</span>
+                    <span className="dh-top-contact-count">{c.count} msg</span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </>
       )}
-
-      {/* Entonnoir — full CRM board, embedded directly on the dashboard */}
-      <div className="dh-funnel-section">
-        <Funnel onSelectContact={(contact) => onSelectContact && onSelectContact(contact)} />
-      </div>
 
       {/* Section buttons — the actual entry points into the app */}
       <div className="dh-sections-title">Accéder à</div>
