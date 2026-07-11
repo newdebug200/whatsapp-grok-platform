@@ -56,6 +56,10 @@ export default function Broadcast({ socket, activeProfile }) {
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState(null);
   const [progress, setProgress] = useState({});
+  const [editingDelay, setEditingDelay] = useState(false);
+  const [delayForm, setDelayForm] = useState({ min: 30, max: 90 });
+  const [savingDelay, setSavingDelay] = useState(false);
+  const [delayError, setDelayError] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -310,6 +314,41 @@ export default function Broadcast({ socket, activeProfile }) {
     }
   };
 
+  const handleOpenEditDelay = (campaign, e) => {
+    if (e) e.stopPropagation();
+    setDelayForm({ min: campaign.delay_min_seconds ?? 30, max: campaign.delay_max_seconds ?? 90 });
+    setDelayError('');
+    setEditingDelay(true);
+  };
+
+  const handleCancelEditDelay = (e) => {
+    if (e) e.stopPropagation();
+    setEditingDelay(false);
+    setDelayError('');
+  };
+
+  const handleSaveDelay = async (id, e) => {
+    if (e) e.stopPropagation();
+    if (delayForm.min < 5) return setDelayError('Le délai minimum ne peut pas être inférieur à 5 secondes');
+    if (delayForm.max < delayForm.min) return setDelayError('Le délai maximum doit être supérieur au délai minimum');
+    setSavingDelay(true);
+    setDelayError('');
+    try {
+      const res = await axios.put(`${API_URL}/broadcast/campaigns/${id}/delay`, {
+        delay_min_seconds: delayForm.min,
+        delay_max_seconds: delayForm.max
+      });
+      const { delay_min_seconds, delay_max_seconds } = res.data;
+      setCampaigns(prev => prev.map(c => c.id === id ? { ...c, delay_min_seconds, delay_max_seconds } : c));
+      if (detail?.id === id) setDetail(d => ({ ...d, delay_min_seconds, delay_max_seconds }));
+      setEditingDelay(false);
+    } catch (err) {
+      setDelayError(err.response?.data?.error || 'Erreur lors de la mise à jour du délai');
+    } finally {
+      setSavingDelay(false);
+    }
+  };
+
   const handleDeleteCampaign = async (id, e) => {
     if (e) e.stopPropagation();
     if (!window.confirm('Supprimer cette campagne définitivement ?')) return;
@@ -325,6 +364,7 @@ export default function Broadcast({ socket, activeProfile }) {
 
   const handleOpenDetail = async (campaign) => {
     setError('');
+    setEditingDelay(false);
     try {
       const res = await axios.get(`${API_URL}/broadcast/campaigns/${campaign.id}`);
       setDetail(res.data);
@@ -663,7 +703,7 @@ export default function Broadcast({ socket, activeProfile }) {
     return (
       <div className="bc-panel">
         <div className="bc-toolbar">
-          <button className="bc-back" onClick={() => { setView('list'); setDetail(null); }}>
+          <button className="bc-back" onClick={() => { setView('list'); setDetail(null); setEditingDelay(false); }}>
             <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
             Retour
           </button>
@@ -712,8 +752,41 @@ export default function Broadcast({ socket, activeProfile }) {
             <div className="bc-progress-label">{displayDone} / {total} traités ({displayPct}%)</div>
           </div>
 
-          {detail.delay_min_seconds != null && (
-            <div className="bc-delay-info">Délai : {detail.delay_min_seconds}s – {detail.delay_max_seconds}s entre chaque contact</div>
+          {detail.delay_min_seconds != null && !editingDelay && (
+            <div className="bc-delay-info" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <span>Délai : {detail.delay_min_seconds}s – {detail.delay_max_seconds}s entre chaque contact</span>
+              {currentStatus === 'paused' && (
+                <button className="bc-select-all" onClick={(e) => handleOpenEditDelay(detail, e)}>Modifier</button>
+              )}
+            </div>
+          )}
+
+          {editingDelay && currentStatus === 'paused' && (
+            <div className="bc-delay-info" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {delayError && <div className="bc-error" style={{ margin: 0 }}>{delayError}</div>}
+              <div className="bc-delay-row">
+                <div className="bc-delay-item">
+                  <span className="bc-delay-label">Min</span>
+                  <input className="bc-delay-input" type="number" min="5" max="3600" value={delayForm.min}
+                    onChange={e => setDelayForm(f => ({ ...f, min: Math.max(5, parseInt(e.target.value) || 5) }))} />
+                  <span className="bc-delay-unit">s</span>
+                </div>
+                <span className="bc-delay-arrow">→</span>
+                <div className="bc-delay-item">
+                  <span className="bc-delay-label">Max</span>
+                  <input className="bc-delay-input" type="number" min="5" max="3600" value={delayForm.max}
+                    onChange={e => setDelayForm(f => ({ ...f, max: Math.max(f.min, parseInt(e.target.value) || 5) }))} />
+                  <span className="bc-delay-unit">s</span>
+                </div>
+              </div>
+              {delayForm.min < 20 && <p className="bc-delay-warn">⚠ En dessous de 20s WhatsApp peut détecter l'automatisation.</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="bc-btn-primary bc-btn-sm" disabled={savingDelay} onClick={(e) => handleSaveDelay(detail.id, e)}>
+                  {savingDelay ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+                <button className="bc-btn-secondary" style={{ padding: '5px 10px', fontSize: '0.78rem' }} onClick={handleCancelEditDelay}>Annuler</button>
+              </div>
+            </div>
           )}
 
           <div className="bc-detail-actions">

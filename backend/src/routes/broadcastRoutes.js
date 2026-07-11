@@ -480,6 +480,30 @@ router.post('/campaigns/:id/stop', async (req, res) => {
   }
 });
 
+// PUT /api/broadcast/campaigns/:id/delay
+router.put('/campaigns/:id/delay', async (req, res) => {
+  try {
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: parseInt(req.params.id), profile_id: req.profileId }
+    });
+    if (!campaign) return res.status(404).json({ error: 'Campagne introuvable' });
+    if (campaign.status !== 'paused')
+      return res.status(400).json({ error: 'Le délai ne peut être modifié que lorsque la campagne est en pause' });
+
+    const delayMin = Math.max(5, parseInt(req.body.delay_min_seconds) || 20);
+    const delayMax = Math.max(delayMin, parseInt(req.body.delay_max_seconds) || 60);
+
+    const updated = await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { delay_min_seconds: delayMin, delay_max_seconds: delayMax }
+    });
+    res.json({ success: true, delay_min_seconds: updated.delay_min_seconds, delay_max_seconds: updated.delay_max_seconds });
+  } catch (error) {
+    console.error('Erreur update delay campaign:', error);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du délai' });
+  }
+});
+
 // DELETE /api/broadcast/campaigns/:id
 router.delete('/campaigns/:id', async (req, res) => {
   try {
