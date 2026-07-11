@@ -19,6 +19,26 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimeout = useRef(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportContacts = async () => {
+    setExporting(true);
+    try {
+      const res = await axios.get(`${API_URL}/messages/contacts/export.csv`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Erreur export CSV:', err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
@@ -334,6 +354,20 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
           {searchLoading && <span style={{ fontSize: '0.75rem', color: '#25d366', marginRight: 4 }}>…</span>}
           {search && <button className="search-clear" onClick={() => { setSearch(''); setShowOlderConversations(false); setSearchResults(null); }}>✕</button>}
         </div>
+        <button
+          className="export-contacts-btn"
+          onClick={handleExportContacts}
+          disabled={exporting}
+          title="Exporter les contacts en CSV"
+        >
+          {exporting ? (
+            <span style={{ fontSize: '0.75rem' }}>…</span>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* Tab bar — style WhatsApp Web */}

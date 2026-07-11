@@ -584,7 +584,29 @@
   padding: 8px 12px;
   background: #fff;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+
+.search-container .search-input-wrapper { flex: 1; }
+
+.export-contacts-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  background: #f0f2f5;
+  color: #667781;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.export-contacts-btn:hover { background: #e0f7e9; color: #075e54; }
+.export-contacts-btn:disabled { cursor: default; opacity: 0.6; }
 
 .search-input-wrapper {
   display: flex;
@@ -1898,6 +1920,8 @@
 [data-theme="dark"] .search-input { background: transparent; color: var(--text-primary, #e9edef); }
 [data-theme="dark"] .search-input::placeholder { color: var(--text-muted, #667781); }
 [data-theme="dark"] .search-icon { color: var(--text-muted, #667781); }
+[data-theme="dark"] .export-contacts-btn { background: var(--bg-input, #2a3942); color: var(--text-secondary, #8696a0); }
+[data-theme="dark"] .export-contacts-btn:hover { background: rgba(37,211,102,0.16); color: #6fe3a0; }
 [data-theme="dark"] .contact-item { border-bottom-color: var(--border, #2a3942); }
 [data-theme="dark"] .contact-item:hover { background: var(--bg-hover, #2a3942); }
 [data-theme="dark"] .contact-item.selected { background: var(--bg-hover, #2a3942); }

@@ -84,6 +84,43 @@ router.get('/contacts', profileMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/messages/contacts/export.csv — download all contacts for this profile as CSV
+function csvEscape(value) {
+  const str = value === null || value === undefined ? '' : String(value);
+  if (/[",\n;]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  return str;
+}
+
+router.get('/contacts/export.csv', profileMiddleware, async (req, res) => {
+  try {
+    const contacts = await prisma.contact.findMany({
+      where: { profile_id: req.profileId },
+      include: { tags: { include: { tag: true } } },
+      orderBy: [{ name: 'asc' }, { created_at: 'desc' }]
+    });
+
+    const header = ['Nom', 'Téléphone', 'Étape entonnoir', 'Tags', 'Favori', 'Archivé', 'IA en pause', 'Créé le'];
+    const rows = contacts.map(c => [
+      c.name || '',
+      c.phone_number || '',
+      c.funnel_stage || '',
+      (c.tags || []).map(ct => ct.tag?.name).filter(Boolean).join(', '),
+      c.is_favorite ? 'Oui' : 'Non',
+      c.archived ? 'Oui' : 'Non',
+      c.ia_paused ? 'Oui' : 'Non',
+      c.created_at ? new Date(c.created_at).toISOString() : ''
+    ]);
+
+    const csv = '\uFEFF' + [header, ...rows].map(r => r.map(csvEscape).join(';')).join('\r\n');
+    const filename = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur lors de l\'export des contacts' });
+  }
+});
+
 // GET /api/messages/conversations?filter=all|unread|favorites|groups|archived
 router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
