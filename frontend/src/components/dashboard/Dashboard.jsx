@@ -258,15 +258,19 @@ export default function Dashboard() {
     if (globalSearchTimeout.current) clearTimeout(globalSearchTimeout.current);
     const q = globalQuery.trim();
     if (q.length < 2) { setMessageMatchIds(null); return; }
+    const controller = new AbortController();
     globalSearchTimeout.current = setTimeout(async () => {
       setGlobalSearchLoading(true);
       try {
-        const res = await axios.get(`${API_URL}/messages/search`, { params: { q } });
+        const res = await axios.get(`${API_URL}/messages/search`, { params: { q }, signal: controller.signal });
         setMessageMatchIds(new Set((res.data || []).map(m => m.contact_id ?? m.contactId)));
-      } catch { setMessageMatchIds(null); }
-      finally { setGlobalSearchLoading(false); }
+      } catch (err) {
+        if (!axios.isCancel(err) && err.code !== 'ERR_CANCELED') setMessageMatchIds(null);
+      } finally {
+        if (!controller.signal.aborted) setGlobalSearchLoading(false);
+      }
     }, 350);
-    return () => clearTimeout(globalSearchTimeout.current);
+    return () => { clearTimeout(globalSearchTimeout.current); controller.abort(); };
   }, [globalQuery]);
 
   useEffect(() => {

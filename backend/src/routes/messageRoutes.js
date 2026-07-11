@@ -86,7 +86,10 @@ router.get('/contacts', profileMiddleware, async (req, res) => {
 
 // GET /api/messages/contacts/export.csv — download all contacts for this profile as CSV
 function csvEscape(value) {
-  const str = value === null || value === undefined ? '' : String(value);
+  let str = value === null || value === undefined ? '' : String(value);
+  // Neutralize spreadsheet formula injection (=, +, -, @, tab, CR) by prefixing
+  // with a single quote — Excel/Sheets then treat the cell as plain text.
+  if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`;
   if (/[",\n;]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
   return str;
 }
