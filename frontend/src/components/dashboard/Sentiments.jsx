@@ -4,7 +4,11 @@ import './Sentiments.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-const SENTIMENT_LABELS = { colere: 'Colère', negatif: 'Négatif' };
+const SENTIMENT_LABELS = {
+  positif: 'Positif', neutre: 'Neutre', negatif: 'Négatif', colere: 'Colère',
+  satisfait: 'Satisfait', frustre: 'Frustré', inquiet: 'Inquiet', confus: 'Confus',
+  reconnaissant: 'Reconnaissant', urgent: 'Urgent'
+};
 
 export default function Sentiments({ onSelectContact }) {
   const [filter, setFilter] = useState('negative');
@@ -41,15 +45,17 @@ export default function Sentiments({ onSelectContact }) {
       </header>
 
       <div className="sentiments-stats">
-        <div className="sentiment-stat sentiment-stat-total"><span>Total à traiter</span><strong>{counts.all}</strong><small>Alertes actives</small></div>
-        <div className="sentiment-stat sentiment-stat-angry"><span>Colère</span><strong>{counts.angry}</strong><small>Intervention prioritaire</small></div>
-        <div className="sentiment-stat sentiment-stat-negative"><span>Négatif</span><strong>{counts.negative}</strong><small>Réponse à surveiller</small></div>
+        <div className="sentiment-stat sentiment-stat-total"><span>Total analysé</span><strong>{counts.all || 0}</strong><small>Messages classés</small></div>
+        <div className="sentiment-stat sentiment-stat-angry"><span>Colère</span><strong>{counts.colere || 0}</strong><small>Intervention prioritaire</small></div>
+        <div className="sentiment-stat sentiment-stat-negative"><span>Frustré</span><strong>{counts.frustre || 0}</strong><small>À surveiller</small></div>
+        <div className="sentiment-stat sentiment-stat-worried"><span>Inquiet</span><strong>{counts.inquiet || 0}</strong><small>Rassurer le client</small></div>
+        <div className="sentiment-stat sentiment-stat-urgent"><span>Urgent</span><strong>{counts.urgent || 0}</strong><small>Action rapide</small></div>
       </div>
 
       <div className="sentiments-toolbar">
         <div><h2>À traiter maintenant</h2><p>Les messages non lus classés par sentiment négatif.</p></div>
         <div className="sentiments-filters" role="group" aria-label="Filtrer les sentiments">
-          {[['negative', 'Tous les négatifs'], ['angry', 'Colère'], ['all', 'Tous']].map(([key, label]) => (
+          {[['negative', 'Prioritaires'], ['angry', 'Colère'], ['frustrated', 'Frustrés'], ['worried', 'Inquiets'], ['confused', 'Confus'], ['urgent', 'Urgents'], ['all', 'Tous']].map(([key, label]) => (
             <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}</button>
           ))}
         </div>

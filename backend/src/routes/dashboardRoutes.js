@@ -13,7 +13,8 @@ const STAGE_LABELS = {
   client: 'Client',
   fidele: 'Fidèle'
 };
-const NEGATIVE_SENTIMENTS = ['colere', 'negatif'];
+const NEGATIVE_SENTIMENTS = ['colere', 'negatif', 'frustre', 'inquiet', 'confus', 'urgent'];
+const SENTIMENT_CATEGORIES = ['positif', 'neutre', 'negatif', 'colere', 'satisfait', 'frustre', 'inquiet', 'confus', 'reconnaissant', 'urgent'];
 
 // GET /api/dashboard/overview — lightweight aggregate for the admin dashboard home.
 // Only counts + small "top N" lists are returned (no full contact/message payloads),
@@ -148,10 +149,19 @@ router.get('/overview', async (req, res) => {
 router.get('/sentiments', async (req, res) => {
   try {
     const profileId = req.profileId;
-    const filter = req.query.filter === 'all' ? undefined : (req.query.filter || 'negative');
+    const requestedFilter = req.query.filter || 'negative';
+    const filterSentiments = {
+      negative: NEGATIVE_SENTIMENTS,
+      angry: ['colere'],
+      frustrated: ['frustre'],
+      worried: ['inquiet'],
+      confused: ['confus'],
+      urgent: ['urgent'],
+    };
+    const selectedSentiments = requestedFilter === 'all' ? SENTIMENT_CATEGORIES : (filterSentiments[requestedFilter] || NEGATIVE_SENTIMENTS);
     const where = {
       contact: { profile_id: profileId, archived: false },
-      ...(filter === 'all' ? {} : { sentiment: filter === 'angry' ? 'colere' : { in: NEGATIVE_SENTIMENTS } }),
+      sentiment: { in: selectedSentiments },
       ...(req.query.unread !== 'false' ? { unread: true } : {}),
     };
     const [messages, counts] = await Promise.all([
@@ -166,12 +176,13 @@ router.get('/sentiments', async (req, res) => {
       }),
       prisma.message.groupBy({
         by: ['sentiment'],
-        where: { contact: { profile_id: profileId, archived: false }, sentiment: { in: NEGATIVE_SENTIMENTS } },
+        where: { contact: { profile_id: profileId, archived: false }, sentiment: { in: SENTIMENT_CATEGORIES } },
         _count: { _all: true },
       }),
     ]);
     const countMap = Object.fromEntries(counts.map(item => [item.sentiment, item._count._all]));
-    res.json({ messages, counts: { all: (countMap.colere || 0) + (countMap.negatif || 0), angry: countMap.colere || 0, negative: countMap.negatif || 0 } });
+    const categoryCounts = Object.fromEntries(SENTIMENT_CATEGORIES.map(category => [category, countMap[category] || 0]));
+    res.json({ messages, counts: { ...categoryCounts, all: SENTIMENT_CATEGORIES.reduce((sum, category) => sum + categoryCounts[category], 0), priority: NEGATIVE_SENTIMENTS.reduce((sum, category) => sum + categoryCounts[category], 0) } });
   } catch (error) {
     console.error('Erreur GET dashboard sentiments:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des sentiments' });

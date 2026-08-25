@@ -43,7 +43,7 @@ class MessageHandler {
           messages: [
             {
               role: 'system',
-              content: 'Tu es un analyseur de sentiment. Réponds UNIQUEMENT par un seul mot parmi: positif, neutre, negatif, colere. Pas d\'explication.'
+              content: 'Tu es un analyseur de sentiment client. Réponds UNIQUEMENT par un seul mot parmi: positif, neutre, negatif, colere, satisfait, frustre, inquiet, confus, reconnaissant, urgent. Utilise urgent uniquement si une action rapide est nécessaire. Pas d\'explication.'
             },
             { role: 'user', content: `Quel est le sentiment de ce message WhatsApp ? "${text.slice(0, 300)}"` }
           ],
@@ -53,9 +53,16 @@ class MessageHandler {
         { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 8000 }
       );
       const raw = resp.data.choices[0].message.content.trim().toLowerCase();
-      if (['positif', 'neutre', 'negatif', 'colere'].includes(raw)) return raw;
+      const allowed = ['positif', 'neutre', 'negatif', 'colere', 'satisfait', 'frustre', 'inquiet', 'confus', 'reconnaissant', 'urgent'];
+      if (allowed.includes(raw)) return raw;
       if (raw.includes('col')) return 'colere';
-      if (raw.includes('neg') || raw.includes('neg')) return 'negatif';
+      if (raw.includes('neg')) return 'negatif';
+      if (raw.includes('satisf') || raw.includes('content')) return 'satisfait';
+      if (raw.includes('frustr')) return 'frustre';
+      if (raw.includes('inqui') || raw.includes('préoccup')) return 'inquiet';
+      if (raw.includes('confus') || raw.includes('incompr')) return 'confus';
+      if (raw.includes('remerci') || raw.includes('reconna')) return 'reconnaissant';
+      if (raw.includes('urgent')) return 'urgent';
       if (raw.includes('pos')) return 'positif';
       return 'neutre';
     } catch (_) {
