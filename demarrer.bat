@@ -189,6 +189,22 @@ if not exist "node_modules\ffmpeg-static" (
     )
 )
 
+REM ── Vérifier le SDK FedaPay ajouté pour les paiements et webhooks ─────────
+if not exist "node_modules\fedapay" (
+    echo  [5b] SDK FedaPay absent — installation automatique...
+    call npm install fedapay --save --no-audit --no-fund
+    if %errorlevel% neq 0 (
+        echo  [ERREUR] Installation du SDK FedaPay impossible.
+        echo  Verifiez votre connexion Internet puis relancez demarrer.bat.
+        cd /d "%ROOT%"
+        pause & exit /b 1
+    ) else (
+        echo  [OK] SDK FedaPay installe.
+    )
+) else (
+    echo  [OK] SDK FedaPay deja present.
+)
+
 REM ── Toujours régénérer le client Prisma (rapide, évite les erreurs) ──────
 echo  [5c] Generation du client Prisma...
 call npx prisma generate --no-hints >nul 2>&1
@@ -263,6 +279,7 @@ REM ═════════════════════════�
 REM  ÉTAPE 8 — Démarrage des serveurs
 REM ══════════════════════════════════════════════════════════════════════════
 echo  [8/8] Demarrage des serveurs...
+echo  Le backend et le frontend seront ouverts dans des fenetres separees.
 echo.
 
 REM ── Backend ───────────────────────────────────────────────────────────────
