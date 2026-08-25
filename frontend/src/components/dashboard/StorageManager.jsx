@@ -10,7 +10,7 @@ const formatBytes = (bytes = 0) => {
   return `${(bytes / 1024 ** 3).toFixed(2)} Go`;
 };
 
-export default function StorageManager({ isAdmin = false }) {
+export default function StorageManager({ isAdmin = false, noProfile = false, onGoConfig }) {
   const [storage, setStorage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState('');
@@ -23,7 +23,17 @@ export default function StorageManager({ isAdmin = false }) {
     catch (_) { setError('Impossible de calculer le stockage local.'); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!noProfile) load(); else setLoading(false); }, [load, noProfile]);
+
+  if (noProfile) return (
+    <section className="storage-manager no-profile-storage">
+      <div className="no-profile-panel-icon">◌</div>
+      <span className="no-profile-panel-eyebrow">Stockage indisponible</span>
+      <h1>Aucun profil WhatsApp n’est encore configuré</h1>
+      <p>Les données locales et les outils de nettoyage seront disponibles après la connexion d’un profil WhatsApp.</p>
+      {onGoConfig && <button className="no-profile-panel-action" onClick={onGoConfig}>Configurer WhatsApp</button>}
+    </section>
+  );
 
   const cleanup = async (kind, label) => {
     if (!window.confirm(`Confirmer la suppression de ${label} ? Cette action est irréversible.`)) return;
