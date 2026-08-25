@@ -58,11 +58,16 @@ export default function AuthPage() {
           <div className="auth-logo">
             <img src="/icons/icon-192.png" alt="Botora" className="auth-logo-img" />
           </div>
+          <p className="auth-kicker">PLATEFORME INTELLIGENTE</p>
           <h1 className="auth-title">Botora</h1>
-          <p className="auth-subtitle">Assistant WhatsApp intelligent</p>
+          <p className="auth-subtitle">L’intelligence de vos conversations WhatsApp</p>
         </div>
 
         <div className="auth-card">
+          <div className="auth-card-heading">
+            <h2>{mode === 'login' ? 'Ravi de vous revoir' : 'Commencez avec Botora'}</h2>
+            <p>{mode === 'login' ? 'Accédez à votre espace de travail.' : 'Créez votre espace en quelques secondes.'}</p>
+          </div>
           <div className="auth-tabs">
             <button
               className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
@@ -81,8 +86,9 @@ export default function AuthPage() {
           <form className="auth-form" onSubmit={handleSubmit}>
             {mode === 'register' && (
               <div className="form-group">
-                <label>Nom complet</label>
+                <label htmlFor="auth-name">Nom complet</label>
                 <input
+                  id="auth-name"
                   type="text"
                   name="name"
                   value={form.name}
@@ -94,8 +100,9 @@ export default function AuthPage() {
             )}
 
             <div className="form-group">
-              <label>Email</label>
+              <label htmlFor="auth-email">Adresse email</label>
               <input
+                id="auth-email"
                 type="email"
                 name="email"
                 value={form.email}
@@ -106,8 +113,9 @@ export default function AuthPage() {
             </div>
 
             <div className="form-group">
-              <label>Mot de passe</label>
+              <label htmlFor="auth-password">Mot de passe</label>
               <input
+                id="auth-password"
                 type="password"
                 name="password"
                 value={form.password}
@@ -119,6 +127,7 @@ export default function AuthPage() {
 
             {error && <div className="auth-error">{error}</div>}
 
+            {mode === 'register' && <p className="auth-helper">Votre mot de passe doit contenir au moins 8 caractères.</p>}
             <button type="submit" className="auth-submit" disabled={loading}>
               {loading
                 ? 'Chargement...'
