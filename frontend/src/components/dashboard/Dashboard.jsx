@@ -726,14 +726,23 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className={`main-area ${mobileView === 'list' ? 'main-hidden-mobile' : ''}`}>
-        <ChatWindow
-          contact={selectedContact}
-          socket={socket}
-          waStatus={waStatus}
-          onBack={handleBack}
-        />
-      </div>
+      <main className={`main-area feature-main-area ${mobileView === 'list' ? 'main-hidden-mobile' : ''}`}>
+        {activePanel === 'chat' ? (
+          <ChatWindow
+            contact={selectedContact}
+            socket={socket}
+            waStatus={waStatus}
+            onBack={handleBack}
+          />
+        ) : (
+          <div className="feature-page-shell">
+            {activePanel === 'funnel' && <FunnelPage onBack={goHome} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
+            {activePanel === 'stats' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
+            {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
+            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} />}
+          </div>
+        )}
+      </main>
 
       {(showMenu || showProfileMenu) && (
         <div className="overlay" onClick={() => { setShowMenu(false); setShowProfileMenu(false); }} />

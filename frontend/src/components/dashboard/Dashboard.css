@@ -2124,3 +2124,11 @@
 [data-theme="dark"] .app-navigation-brand { color: #f1f5f6; }
 [data-theme="dark"] .app-navigation-profile, [data-theme="dark"] .app-navigation-link.active { background: #233138; }
 [data-theme="dark"] .app-navigation-link, [data-theme="dark"] .app-navigation-sub-link, [data-theme="dark"] .app-navigation-footer button { color: #aebac1; }
+
+/* ===== Right-side feature workspace ===== */
+.feature-main-area { min-width: 0; background: #f5f7fa; }
+.feature-page-shell { flex: 1; min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; background: #f5f7fa; }
+.feature-page-shell > * { flex: 1; min-width: 0; }
+.feature-page-shell .sh-wrapper, .feature-page-shell .funnel-page, .feature-page-shell .broadcast-page, .feature-page-shell .stats-page { width: 100%; max-width: 1440px; margin: 0 auto; }
+@media (max-width: 560px) { .app-navigation + .sidebar + .main-area { min-width: 0; } .feature-page-shell { overflow-x: hidden; } }
+[data-theme="dark"] .feature-main-area, [data-theme="dark"] .feature-page-shell { background: #111b21; }
