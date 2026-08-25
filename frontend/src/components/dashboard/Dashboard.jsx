@@ -412,9 +412,51 @@ export default function Dashboard() {
     );
   }
 
+  const appNavItems = [
+    ...navItems,
+    { key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }
+  ];
+  const appSettingsItems = [
+    ['config', 'Réglages du bot'], ['faq', 'FAQ'], ['templates', 'Réponses rapides'],
+    ['tags', 'Tags'], ['journal', 'Alertes'], ['account', 'Mon compte'],
+    ...(isAdmin ? [['admin', 'Administration']] : [])
+  ];
+
   return (
     <div className="dashboard">
-      <div className={`sidebar ${mobileView === 'chat' ? 'sidebar-hidden-mobile' : ''}`}>
+      {activePanel !== 'chat' && (
+        <aside className="app-navigation" aria-label="Navigation principale">
+          <button className="app-navigation-brand" onClick={goHome} title="Retour au tableau de bord">
+            <img src="/icons/icon-192.png" alt="Botora" />
+            <span>Botora</span>
+          </button>
+          <div className="app-navigation-profile">
+            <span className={`app-navigation-status ${waStatus.isConnected ? 'connected' : ''}`} />
+            <span>{profileLabel}</span>
+          </div>
+          <div className="app-navigation-links">
+            {appNavItems.map(item => (
+              <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => item.key === 'funnel' ? setActivePanel('funnel') : handleNavClick(item.key)}>
+                <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
+                {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
+              </button>
+            ))}
+          </div>
+          <div className="app-navigation-group">
+            <div className="app-navigation-heading">Paramètres</div>
+            {appSettingsItems.map(([tab, label]) => (
+              <button key={tab} className="app-navigation-sub-link" onClick={() => goToSettings(tab)}>
+                <span className="app-navigation-sub-dot" />{label}
+              </button>
+            ))}
+          </div>
+          <div className="app-navigation-footer">
+            <button onClick={goHome}>← Tableau de bord</button>
+            <button className="app-navigation-logout" onClick={logout}>Déconnexion</button>
+          </div>
+        </aside>
+      )}
+      <div className={`sidebar ${activePanel !== 'chat' ? 'sidebar-context-hidden' : ''} ${mobileView === 'chat' ? 'sidebar-hidden-mobile' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <button className="sidebar-logo sidebar-logo-btn" onClick={goHome} title="Retour au tableau de bord">
