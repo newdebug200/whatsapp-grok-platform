@@ -2120,7 +2120,17 @@
 .app-navigation-footer { display: flex; flex-direction: column; gap: 5px; margin-top: auto; padding-top: 18px; }
 .app-navigation-footer button { border: 0; background: transparent; padding: 8px 12px; color: #6a7785; font: inherit; font-size: 12px; text-align: left; cursor: pointer; border-radius: 8px; }
 .app-navigation-footer button:hover { background: rgba(255,255,255,.72); color: #128c7e; }
-.app-navigation-footer .app-navigation-logout { color: #c0392b; }
+.app-navigation-footer .app-navigation-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  color: #d64545;
+}
+.app-navigation-logout-icon { width: 18px; height: 18px; flex: 0 0 18px; }
+.app-navigation-footer .app-navigation-logout:hover { color: #b42323; background: rgba(214,69,69,.1); }
+[data-theme="dark"] .app-navigation-footer .app-navigation-logout { color: #ff8a80; }
+[data-theme="dark"] .app-navigation-footer .app-navigation-logout:hover { color: #ffb4ae; background: rgba(255,138,128,.12); }
 .sidebar-context-hidden { display: none; }
 .app-navigation + .sidebar + .main-area, .app-navigation + .sidebar + .main-area { flex: 1; }
 @media (max-width: 760px) { .app-navigation { width: 208px; min-width: 208px; padding-left: 10px; padding-right: 10px; } .app-navigation-brand { font-size: 18px; } }
@@ -2205,7 +2215,18 @@
 .app-navigation-collapsed .app-navigation-link,
 .app-navigation-collapsed .app-navigation-sub-link { justify-content: center; padding-left: 8px; padding-right: 8px; }
 .app-navigation-collapsed .app-navigation-footer { align-items: center; width: 100%; }
-.app-navigation-collapsed .app-navigation-footer .app-navigation-logout { width: 38px; overflow: hidden; white-space: nowrap; text-indent: -9999px; }
+.app-navigation-collapsed .app-navigation-footer .app-navigation-logout {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0;
+  justify-content: center;
+  text-indent: 0;
+}
+.app-navigation-collapsed .app-navigation-footer .app-navigation-logout span { display: none; }
+.app-navigation-collapsed .app-navigation-footer .app-navigation-logout-icon { width: 19px; height: 19px; }
 
 @media (max-width: 900px) {
   .app-navigation { flex-basis: 220px; width: 220px; min-width: 220px; }

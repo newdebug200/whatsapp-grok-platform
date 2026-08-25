@@ -473,7 +473,14 @@ export default function Dashboard() {
           </div>
           <div className="app-navigation-footer">
             <button onClick={goHome}>← Tableau de bord</button>
-            <button className="app-navigation-logout" onClick={logout}>Déconnexion</button>
+            <button className="app-navigation-logout" onClick={logout} title="Déconnexion" aria-label="Déconnexion">
+              <svg className="app-navigation-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+                <path d="M21 19V5a2 2 0 0 0-2-2h-4" />
+              </svg>
+              <span>Déconnexion</span>
+            </button>
           </div>
         </aside>
       )}
