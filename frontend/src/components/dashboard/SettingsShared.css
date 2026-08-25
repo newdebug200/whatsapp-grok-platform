@@ -1,0 +1,120 @@
+/* Shared settings workspace — keeps legacy settings pages aligned with the current shell. */
+.sh-content > .panel-content,
+.sh-content > .tm-panel,
+.sh-content > .settings-panel,
+.sh-content > .storage-manager,
+.sh-content > .admin-cfg-section,
+.sh-content > .admin-credits-section,
+.sh-content > .admin-verif-section,
+.sh-content > .admin-dressur-section {
+  width: min(100%, 1120px);
+  max-width: 1120px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.sh-content > .panel-content,
+.sh-content > .tm-panel,
+.sh-content > .settings-panel {
+  padding: clamp(22px, 3vw, 42px) clamp(18px, 4vw, 56px) 48px;
+}
+
+.sh-content .panel-content > h1,
+.sh-content .panel-content > h2,
+.sh-content .tm-panel > h1,
+.sh-content .tm-panel > h2,
+.sh-content .settings-header {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.sh-content .panel-content > p,
+.sh-content .tm-panel > p {
+  max-width: 720px;
+  margin-top: 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.sh-content .settings-section,
+.sh-content .faq-section,
+.sh-content .quick-reply-section,
+.sh-content .config-section,
+.sh-content .admin-cfg-section,
+.sh-content .admin-credits-section,
+.sh-content .admin-verif-section,
+.sh-content .admin-dressur-section,
+.sh-content .storage-card {
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(15, 35, 45, 0.07);
+}
+
+.sh-content input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.sh-content textarea,
+.sh-content select {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.sh-content .settings-row,
+.sh-content .faq-row,
+.sh-content .quick-reply-row,
+.sh-content .tm-row {
+  min-height: 54px;
+}
+
+.sh-content button:focus-visible,
+.sh-content input:focus-visible,
+.sh-content textarea:focus-visible,
+.sh-content select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .sh-content > .panel-content,
+  .sh-content > .tm-panel,
+  .sh-content > .settings-panel {
+    padding: 22px 16px 34px;
+  }
+
+  .sh-content .settings-row,
+  .sh-content .faq-row,
+  .sh-content .quick-reply-row,
+  .sh-content .tm-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sh-content .settings-row > :last-child,
+  .sh-content .faq-row > :last-child,
+  .sh-content .quick-reply-row > :last-child,
+  .sh-content .tm-row > :last-child {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .sh-content > .panel-content,
+  .sh-content > .tm-panel,
+  .sh-content > .settings-panel {
+    padding: 18px 12px 28px;
+  }
+
+  .sh-content .settings-section,
+  .sh-content .faq-section,
+  .sh-content .quick-reply-section,
+  .sh-content .config-section,
+  .sh-content .admin-cfg-section,
+  .sh-content .admin-credits-section,
+  .sh-content .admin-verif-section,
+  .sh-content .admin-dressur-section {
+    border-radius: 14px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

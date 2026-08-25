@@ -8,6 +8,7 @@ import StorageManager from './StorageManager';
 import QuickReplyManager from './QuickReplyManager';
 import TagManager from './TagManager';
 import './SettingsHub.css';
+import './SettingsShared.css';
 
 const BOT_TABS = [
   {
