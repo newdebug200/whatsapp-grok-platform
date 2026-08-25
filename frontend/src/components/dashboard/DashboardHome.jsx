@@ -50,6 +50,16 @@ export default function DashboardHome({
     ...(isAdmin ? [{ key: 'admin', label: 'Administration', desc: 'Gestion de la plateforme', emoji: '🛠️', color: '#9b59b6' }] : []),
   ];
 
+  const settingsSections = [
+    { key: 'settings-config', tab: 'config', label: 'Réglages du bot', desc: 'IA, comportement et connexion WhatsApp', emoji: '🤖', color: '#128c7e' },
+    { key: 'settings-faq', tab: 'faq', label: 'FAQ', desc: 'Questions et réponses automatiques', emoji: '❓', color: '#667eea' },
+    { key: 'settings-templates', tab: 'templates', label: 'Réponses rapides', desc: 'Messages prêts à envoyer', emoji: '💬', color: '#34b7f1' },
+    { key: 'settings-tags', tab: 'tags', label: 'Tags', desc: 'Organiser et segmenter vos contacts', emoji: '🏷️', color: '#f39c12' },
+    { key: 'settings-journal', tab: 'journal', label: 'Alertes', desc: 'Journal des alertes et sentiments', emoji: '🔔', color: '#e74c3c' },
+    { key: 'settings-account', tab: 'account', label: 'Mon compte', desc: 'Profil, sécurité et préférences', emoji: '👤', color: '#8e9baa' },
+    ...(isAdmin ? [{ key: 'settings-admin', tab: 'admin', label: 'Administration', desc: 'Utilisateurs et configuration plateforme', emoji: '🛠️', color: '#9b59b6' }] : []),
+  ];
+
   return (
     <div className="dh-panel">
       <div className="dh-header">
@@ -250,6 +260,23 @@ export default function DashboardHome({
             <span className="dh-section-label">{s.label}{s.badge && <span className="dh-section-badge">{s.badge}</span>}</span>
             <span className="dh-section-desc">{s.desc}</span>
             <span className="dh-section-open">Ouvrir <span aria-hidden="true">→</span></span>
+          </button>
+        ))}
+      </div>
+
+      <div className="dh-settings-heading">
+        <div>
+          <div className="dh-sections-title">Paramètres détaillés</div>
+          <div className="dh-sections-subtitle">Chaque espace de configuration est accessible directement depuis cet accueil.</div>
+        </div>
+        <span className="dh-settings-pill">{settingsSections.length} réglages</span>
+      </div>
+      <div className="dh-settings-grid">
+        {settingsSections.map(s => (
+          <button key={s.key} className="dh-settings-card" onClick={() => onGoTo(s.key)} style={{ '--dh-card-color': s.color }}>
+            <span className="dh-settings-icon">{s.emoji}</span>
+            <span className="dh-settings-copy"><strong>{s.label}</strong><small>{s.desc}</small></span>
+            <span className="dh-settings-arrow" aria-hidden="true">→</span>
           </button>
         ))}
       </div>

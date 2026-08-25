@@ -389,7 +389,11 @@ export default function Dashboard() {
           campaignsEnabled={campaignsEnabled}
           unreadCount={unreadCount}
           onLogout={logout}
-          onGoTo={(key) => (key === 'admin' ? goToSettings('admin') : handleNavClick(key))}
+          onGoTo={(key) => {
+            if (key.startsWith('settings-')) return goToSettings(key.replace('settings-', ''));
+            if (key === 'admin') return goToSettings('admin');
+            return handleNavClick(key);
+          }}
           onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
         />
         {botError && (

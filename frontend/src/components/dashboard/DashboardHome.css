@@ -566,3 +566,21 @@ button.dh-kpi:hover { box-shadow: 0 2px 8px var(--shadow, rgba(0,0,0,0.14)); }
 
 [data-theme="dark"] .dh-sections-subtitle,
 [data-theme="dark"] .dh-sections-count { color: var(--text-secondary, #aebac1); }
+
+/* ===== Detailed settings shortcuts ===== */
+.dh-settings-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; max-width: 1100px; padding: 24px 28px 10px; }
+.dh-settings-heading .dh-sections-title { padding: 0; }
+.dh-settings-pill { border: 1px solid var(--border, #e9edef); border-radius: 999px; padding: 5px 10px; color: var(--text-secondary, #667781); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.dh-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 10px; padding: 0 28px; max-width: 1100px; }
+.dh-settings-card { position: relative; display: flex; align-items: center; gap: 11px; width: 100%; min-height: 72px; padding: 12px 14px; overflow: hidden; text-align: left; font-family: inherit; background: var(--bg-primary, #fff); border: 1px solid transparent; border-radius: 12px; box-shadow: 0 1px 5px var(--shadow, rgba(0,0,0,.07)); cursor: pointer; transition: transform 180ms cubic-bezier(.23,1,.32,1), box-shadow 180ms, border-color 180ms; }
+.dh-settings-card::before { content: ''; width: 3px; height: 100%; position: absolute; left: 0; top: 0; background: var(--dh-card-color, #25d366); }
+.dh-settings-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--dh-card-color, #25d366) 30%, transparent); box-shadow: 0 6px 16px var(--shadow, rgba(0,0,0,.12)); }
+.dh-settings-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--dh-card-color, #25d366) 35%, transparent); outline-offset: 2px; }
+.dh-settings-icon { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; font-size: 18px; background: color-mix(in srgb, var(--dh-card-color, #25d366) 13%, transparent); }
+.dh-settings-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dh-settings-copy strong { color: var(--text-primary, #111b21); font-size: 13px; }
+.dh-settings-copy small { overflow: hidden; color: var(--text-secondary, #667781); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.dh-settings-arrow { margin-left: auto; color: var(--dh-card-color, #25d366); font-size: 18px; font-weight: 700; transition: transform 180ms; }
+.dh-settings-card:hover .dh-settings-arrow { transform: translateX(3px); }
+@media (max-width: 600px) { .dh-settings-heading { align-items: flex-start; padding-left: 16px; padding-right: 16px; } .dh-settings-grid { grid-template-columns: 1fr; padding: 0 16px; } }
+@media (prefers-reduced-motion: reduce) { .dh-settings-card, .dh-settings-arrow { transition: none; } }
