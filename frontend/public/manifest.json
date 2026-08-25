@@ -2,12 +2,12 @@
   "name": "Botora - Assistant WhatsApp IA",
   "short_name": "Botora",
   "description": "Plateforme multi-utilisateurs WhatsApp avec intelligence artificielle Groq",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#075e54",
-  "theme_color": "#075e54",
+  "theme_color": "#128c7e",
   "orientation": "any",
   "lang": "fr",
   "dir": "ltr",
@@ -74,6 +74,20 @@
       "short_name": "Chat",
       "description": "Voir les conversations WhatsApp",
       "url": "/?panel=chat",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Campagnes",
+      "short_name": "Campagnes",
+      "description": "Gérer les campagnes WhatsApp",
+      "url": "/?panel=broadcast",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Sentiments clients",
+      "short_name": "Sentiments",
+      "description": "Traiter les alertes clients",
+      "url": "/?panel=sentiments",
       "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     },
     {

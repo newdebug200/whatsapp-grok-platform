@@ -16,6 +16,8 @@ if ('serviceWorker' in navigator) {
       .register('/sw.js', { scope: '/' })
       .then((registration) => {
         console.log('[PWA] Service Worker enregistré:', registration.scope);
+        // Ask the browser to check the deployed version instead of waiting for its normal interval.
+        registration.update().catch(() => {});
 
         // Check for updates
         registration.addEventListener('updatefound', () => {
