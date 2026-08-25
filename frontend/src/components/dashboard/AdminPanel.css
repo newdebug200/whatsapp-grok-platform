@@ -1269,3 +1269,26 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+
+/* Compatibilité thème sombre */
+[data-theme="dark"] .admin-action-msg.success { background: rgba(37,211,102,.14); color: #8be5ae; border-color: rgba(37,211,102,.28); }
+[data-theme="dark"] .admin-action-msg.error { background: rgba(231,76,60,.14); color: #ff8a80; border-color: rgba(231,76,60,.28); }
+[data-theme="dark"] .admin-row-self { background: rgba(108,92,231,.16) !important; }
+[data-theme="dark"] .admin-role-badge.user { background: var(--bg-hover); color: var(--text-secondary); }
+[data-theme="dark"] .admin-btn-role:hover { background: var(--bg-hover); }
+[data-theme="dark"] .admin-confirm-modal { background: var(--bg-card); }
+[data-theme="dark"] .admin-confirm-title { color: var(--text-primary); }
+[data-theme="dark"] .admin-confirm-desc,
+[data-theme="dark"] .admin-confirm-cancel { color: var(--text-secondary); }
+[data-theme="dark"] .admin-confirm-cancel { border-color: var(--border); }
+[data-theme="dark"] .admin-confirm-cancel:hover { background: var(--bg-hover); }
+[data-theme="dark"] .admin-verif-select,
+[data-theme="dark"] .admin-verif-input,
+[data-theme="dark"] .admin-verif-item { background: var(--bg-card); color: var(--text-primary); border-color: var(--border); }
+[data-theme="dark"] .admin-verif-item-text { color: var(--text-primary); }
+[data-theme="dark"] .admin-verif-msg.success { background: rgba(37,211,102,.14); color: #8be5ae; }
+[data-theme="dark"] .admin-verif-msg.error { background: rgba(231,76,60,.14); color: #ff8a80; }
+[data-theme="dark"] .admin-dressur-item,
+[data-theme="dark"] .admin-dressur-list-section,
+[data-theme="dark"] .admin-cfg-section,
+[data-theme="dark"] .admin-credits-section { background: var(--bg-card); border-color: var(--border); }

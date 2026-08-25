@@ -228,3 +228,15 @@
   color: var(--text-secondary, #aab8c2);
   padding: 8px 0 4px;
 }
+
+/* Compatibilité thème sombre */
+[data-theme="dark"] .settings-section { box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+[data-theme="dark"] .theme-option.active { color: #6ee7a0; }
+[data-theme="dark"] .toggle-pill { background: #52616b; }
+[data-theme="dark"] .toggle-pill-knob { background: #e9edef; }
+[data-theme="dark"] .settings-badge.active { background: rgba(37,211,102,.14); color: #6ee7a0; }
+[data-theme="dark"] .settings-badge.denied { background: rgba(231,76,60,.14); color: #ff8a80; }
+[data-theme="dark"] .settings-action-btn { background: var(--accent-dark); }
+[data-theme="dark"] .settings-action-btn:hover { background: #008f76; }
+[data-theme="dark"] .settings-logout-btn { background: rgba(231,76,60,.14); color: #ff8a80; }
+[data-theme="dark"] .settings-logout-btn:hover { background: rgba(231,76,60,.22); }

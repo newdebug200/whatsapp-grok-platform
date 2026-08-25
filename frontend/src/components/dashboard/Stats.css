@@ -438,3 +438,28 @@
   .period-tab { flex: 1; }
   .stats-summary-row { flex-wrap: wrap; gap: 10px 16px; }
 }
+
+/* Compatibilité thème sombre */
+[data-theme="dark"] .stats-panel { background: linear-gradient(180deg, var(--bg-secondary), var(--bg-secondary)); }
+[data-theme="dark"] .stats-loading { color: var(--text-secondary); }
+[data-theme="dark"] .stats-spinner { border-color: var(--border); border-top-color: var(--accent); }
+[data-theme="dark"] .stats-refresh { background: var(--bg-card); color: var(--text-secondary); border-color: var(--border); }
+[data-theme="dark"] .stats-refresh:hover { background: var(--bg-hover); color: var(--accent); }
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .stats-section { background: var(--bg-card); border-color: var(--border); box-shadow: 0 10px 26px rgba(0,0,0,.2); }
+[data-theme="dark"] .stat-card-value,
+[data-theme="dark"] .stats-section-title,
+[data-theme="dark"] .summary-val,
+[data-theme="dark"] .top-contact-name { color: var(--text-primary); }
+[data-theme="dark"] .stat-card-label,
+[data-theme="dark"] .summary-label,
+[data-theme="dark"] .chart-legend,
+[data-theme="dark"] .chart-total,
+[data-theme="dark"] .top-contact-phone { color: var(--text-secondary); }
+[data-theme="dark"] .stats-period-tabs { background: var(--bg-secondary); }
+[data-theme="dark"] .period-tab { color: var(--text-secondary); }
+[data-theme="dark"] .period-tab.active { background: var(--bg-card); color: var(--accent); }
+[data-theme="dark"] .chart-label,
+[data-theme="dark"] .top-contact-rank { color: var(--text-muted); }
+[data-theme="dark"] .chart-col.today .chart-label { color: var(--accent); }
+[data-theme="dark"] .top-contact-count { background: rgba(37,211,102,.14); color: #6ee7a0; }

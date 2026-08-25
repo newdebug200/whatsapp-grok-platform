@@ -6,6 +6,7 @@
   --bg-input: #f0f2f5;
   --bg-message-sent: #d9fdd3;
   --bg-message-received: #ffffff;
+  --bg-card: #ffffff;
   --border: #e9edef;
   --text-primary: #111b21;
   --text-secondary: #667781;
@@ -27,6 +28,7 @@
   --bg-input: #2a3942;
   --bg-message-sent: #005c4b;
   --bg-message-received: #202c33;
+  --bg-card: #1f2c34;
   --border: #2a3942;
   --text-primary: #e9edef;
   --text-secondary: #8696a0;
