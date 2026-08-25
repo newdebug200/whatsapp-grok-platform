@@ -143,14 +143,14 @@ function PlatformConfigSection() {
       {config.credits_enabled === 'true' && (
         <div className="admin-cfg-credit-settings">
           <div className="admin-cfg-credit-row">
-            <label className="admin-cfg-credit-label">Crédits par 1 000 tokens</label>
+            <label className="admin-cfg-credit-label">Crédits par 1 000 tokens <small>(1 crédit = 100 000 tokens)</small></label>
             <div className="admin-cfg-credit-input-row">
               <input
                 type="number"
                 min="0"
-                step="0.1"
+                step="0.0001"
                 className="admin-cfg-credit-input"
-                value={config.credit_per_1000_tokens ?? '1'}
+                value={config.credit_per_1000_tokens ?? '0.01'}
                 onChange={handleCreditRateChange}
               />
               <button
@@ -161,6 +161,10 @@ function PlatformConfigSection() {
                 {saving ? '…' : 'Sauvegarder'}
               </button>
             </div>
+          </div>
+          <div className="admin-cfg-credit-summary">
+            <strong>Référence commerciale</strong>
+            <span>1 crédit = 100 000 tokens · coût estimé 60 F CFA · valeur Botora 120 F CFA</span>
           </div>
           <div className="admin-cfg-credit-row">
             <label className="admin-cfg-credit-label">Crédits offerts à l'inscription</label>

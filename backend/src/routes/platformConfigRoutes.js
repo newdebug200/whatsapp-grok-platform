@@ -12,7 +12,7 @@ router.get('/', authMiddleware, async (req, res) => {
       faq_enabled: 'true', quick_replies_enabled: 'true', funnel_enabled: 'true',
       sentiments_enabled: 'true', sensitive_keywords_enabled: 'true', campaigns_enabled: 'true',
       stats_enabled: 'true', maintenance_enabled: 'false', verification_triggers_enabled: 'true',
-      credits_enabled: 'true'
+      credits_enabled: 'true', credit_per_1000_tokens: '0.01', tokens_per_credit: '100000', credit_value_xof: '120', credit_cost_xof: '60'
     };
     for (const row of rows) config[row.key] = row.value;
     res.json(config);

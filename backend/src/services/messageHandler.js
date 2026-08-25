@@ -39,7 +39,7 @@ class MessageHandler {
       const resp = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
           messages: [
             {
               role: 'system',
@@ -82,7 +82,7 @@ class MessageHandler {
       const resp = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
           messages: [
             { role: 'system', content: 'Tu es un assistant qui résume les interactions client de manière concise.' },
             { role: 'user', content: prompt }
@@ -507,7 +507,7 @@ class MessageHandler {
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
           messages: [{ role: 'system', content: systemPrompt }, ...historyMessages, { role: 'user', content: messageText }],
           temperature: 0.2,
           max_tokens: 400
@@ -528,7 +528,7 @@ class MessageHandler {
       if (creditsEnabled && accountId && totalTokens > 0) {
         try {
           const creditRateCfg = await prisma.platformConfig.findUnique({ where: { key: 'credit_per_1000_tokens' } });
-          const creditRate = parseFloat(creditRateCfg?.value || '1');
+          const creditRate = parseFloat(creditRateCfg?.value || '0.01');
           const creditsToDeduct = parseFloat(((totalTokens / 1000) * creditRate).toFixed(4));
           await prisma.$transaction([
             prisma.account.update({ where: { id: accountId }, data: { credit_balance: { decrement: creditsToDeduct } } }),
