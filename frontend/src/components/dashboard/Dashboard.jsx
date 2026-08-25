@@ -336,27 +336,33 @@ export default function Dashboard() {
   };
 
   const isAdmin = account?.role === 'admin';
-  const campaignsEnabled = isAdmin || platformConfig.campaigns_enabled !== 'false';
-  const creditsEnabled = platformConfig.credits_enabled === 'true';
-  const iaGlobalEnabled = isAdmin || platformConfig.ia_enabled_global !== 'false';
+  const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
+  const discussionsEnabled = featureEnabled('whatsapp_discussions_enabled');
+  const campaignsEnabled = featureEnabled('campaigns_enabled');
+  const creditsEnabled = featureEnabled('credits_enabled');
+  const iaGlobalEnabled = featureEnabled('ia_enabled_global');
+  const funnelEnabled = featureEnabled('funnel_enabled');
+  const sentimentsEnabled = featureEnabled('sentiments_enabled');
+  const statsEnabled = featureEnabled('stats_enabled');
+  const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
 
   const navItems = [
-    {
+    ...(discussionsEnabled ? [{
       key: 'chat', label: 'Discussions',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1.9-2-2-2z"/></svg>
-    },
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l-4 4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    }] : []),
     ...(campaignsEnabled ? [{
       key: 'broadcast', label: 'Campagnes',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     }] : []),
-    {
+    ...(statsEnabled ? [{
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
-    },
-    {
+    }] : []),
+    ...(sentimentsEnabled ? [{
       key: 'sentiments', label: 'Sentiments clients',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-4 9a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 8 11zm4 7a6 6 0 0 1-5.19-3h2.3a3.75 3.75 0 0 0 5.78 0h2.3A6 6 0 0 1 12 18zm4-7a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 16 11z"/></svg>
-    },
+    }] : []),
   ];
 
   const toggleSound = () => {
@@ -381,6 +387,7 @@ export default function Dashboard() {
           isAdmin={isAdmin}
           campaignsEnabled={campaignsEnabled}
           unreadCount={unreadCount}
+          platformConfig={platformConfig}
           onLogout={logout}
           onGoTo={(key) => {
             if (key.startsWith('settings-')) return goToSettings(key.replace('settings-', ''));
@@ -418,7 +425,7 @@ export default function Dashboard() {
 
   const appNavItems = [
     ...navItems,
-    { key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> },
+    ...(funnelEnabled ? [{ key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }] : []),
     { key: 'subscriptions', label: 'Abonnements', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> }
   ];
   return (
@@ -740,6 +747,7 @@ export default function Dashboard() {
               initialTab={settingsInitialTab}
               noProfile={noProfile}
               onGoConfig={() => goToSettings('config')}
+              platformConfig={platformConfig}
             />
           )}
         </div>
@@ -757,11 +765,11 @@ export default function Dashboard() {
           <div className="feature-page-shell">
             {activePanel === 'admin' && isAdmin && <AdminHub account={account} onBack={goHome} />}
             {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
-            {activePanel === 'funnel' && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
-            {activePanel === 'stats' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
-            {activePanel === 'sentiments' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
+            {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
+            {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
+            {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
             {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
-            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} noProfile={noProfile} onGoConfig={() => goToSettings('config')} />}
+            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} noProfile={noProfile} onGoConfig={() => goToSettings('config')} platformConfig={platformConfig} />}
           </div>
         )}
       </main>

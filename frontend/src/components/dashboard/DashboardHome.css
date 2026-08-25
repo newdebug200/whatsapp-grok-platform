@@ -611,3 +611,5 @@ button.dh-kpi:hover { box-shadow: 0 2px 8px var(--shadow, rgba(0,0,0,0.14)); }
   .dh-kpi { padding: 13px 11px; }
   .dh-kpi-value { font-size: 22px; }
 }
+
+.dh-maintenance-banner{display:flex;align-items:flex-start;gap:10px;width:min(1120px,calc(100% - 48px));box-sizing:border-box;margin:18px auto 0;padding:14px 17px;border:1px solid rgba(228,119,56,.28);border-radius:12px;background:linear-gradient(135deg,rgba(255,248,236,.96),rgba(255,243,225,.96));color:#6a481f;box-shadow:0 7px 18px rgba(110,70,20,.07);font-size:13px;line-height:1.45}.dh-maintenance-banner strong{flex:0 0 auto;color:#a45a1d}.dh-maintenance-banner span{color:#735a38}@media(max-width:600px){.dh-maintenance-banner{width:calc(100% - 32px);margin-top:14px;padding:13px 14px;font-size:12px;flex-direction:column;gap:3px}}[data-theme="dark"] .dh-maintenance-banner{border-color:rgba(245,181,92,.28);background:linear-gradient(135deg,#32291f,#2a241e);color:#ffe0ad;box-shadow:none}[data-theme="dark"] .dh-maintenance-banner strong{color:#ffc777}[data-theme="dark"] .dh-maintenance-banner span{color:#dfc59d}

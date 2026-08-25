@@ -41,7 +41,9 @@ function PlatformConfigSection() {
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
   const handleToggle = async (key) => {
-    const newVal = config[key] === 'true' ? 'false' : 'true';
+    const flag = flags.find(item => item.key === key);
+    const currentValue = config[key] === undefined ? (flag?.default ?? true) : config[key] === 'true';
+    const newVal = currentValue ? 'false' : 'true';
     const optimistic = { ...config, [key]: newVal };
     setConfig(optimistic);
     try {
@@ -87,11 +89,19 @@ function PlatformConfigSection() {
   if (!config) return <div className="admin-cfg-loading">Chargement…</div>;
 
   const flags = [
-    { key: 'ia_enabled_global', label: 'Bot IA global', desc: "Active/désactive le bot IA pour toute la plateforme" },
-    { key: 'campaigns_enabled', label: 'Campagnes (broadcasts)', desc: "Active/désactive les campagnes marketing pour tous les utilisateurs" },
-    { key: 'sensitive_keywords_enabled', label: 'Mots-clés sensibles', desc: "Active/désactive la détection de mots-clés sensibles" },
-    { key: 'verification_triggers_enabled', label: 'Triggers de vérification', desc: "Active/désactive la vérification WhatsApp via triggers" },
-    { key: 'credits_enabled', label: 'Système de crédits', desc: "Active la facturation à la consommation (tokens → crédits)" },
+    { key: 'whatsapp_discussions_enabled', label: 'Discussions WhatsApp', desc: 'Affiche ou masque la messagerie WhatsApp pour les utilisateurs', default: true },
+    { key: 'ia_enabled_global', label: 'Bot IA', desc: 'Active ou désactive le bot IA pour toute la plateforme', default: true },
+    { key: 'auto_replies_enabled', label: 'Réponses automatiques', desc: 'Autorise les réponses automatiques du bot', default: true },
+    { key: 'faq_enabled', label: 'FAQ automatique', desc: 'Affiche ou masque la gestion des FAQ automatiques', default: true },
+    { key: 'quick_replies_enabled', label: 'Réponses rapides', desc: 'Affiche ou masque les modèles de réponses rapides', default: true },
+    { key: 'funnel_enabled', label: 'Entonnoir de contacts', desc: 'Affiche ou masque le suivi des prospects', default: true },
+    { key: 'sentiments_enabled', label: 'Traitement des sentiments', desc: 'Active ou désactive l’analyse des sentiments clients', default: true },
+    { key: 'sensitive_keywords_enabled', label: 'Alertes et mots-clés sensibles', desc: 'Active ou désactive la détection et le journal des alertes', default: true },
+    { key: 'campaigns_enabled', label: 'Campagnes groupées', desc: 'Active ou désactive les campagnes marketing', default: true },
+    { key: 'stats_enabled', label: 'Statistiques', desc: 'Affiche ou masque les statistiques aux utilisateurs', default: true },
+    { key: 'maintenance_enabled', label: 'Mode maintenance', desc: 'Affiche un état de maintenance global aux utilisateurs', default: false },
+    { key: 'verification_triggers_enabled', label: 'Triggers de vérification', desc: 'Active ou désactive la vérification WhatsApp via triggers', default: true },
+    { key: 'credits_enabled', label: 'Système de crédits', desc: 'Active la facturation à la consommation', default: true },
   ];
 
   return (
@@ -118,13 +128,13 @@ function PlatformConfigSection() {
             <label className="admin-cfg-toggle">
               <input
                 type="checkbox"
-                checked={config[f.key] === 'true'}
+                checked={config[f.key] === undefined ? (f.default ?? true) : config[f.key] === 'true'}
                 onChange={() => handleToggle(f.key)}
               />
               <span className="admin-cfg-toggle-track">
                 <span className="admin-cfg-toggle-thumb" />
               </span>
-              <span className="admin-cfg-toggle-state">{config[f.key] === 'true' ? 'Actif' : 'Inactif'}</span>
+              <span className="admin-cfg-toggle-state">{(config[f.key] === undefined ? (f.default ?? true) : config[f.key] === 'true') ? 'Actif' : 'Inactif'}</span>
             </label>
           </div>
         ))}

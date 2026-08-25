@@ -244,6 +244,10 @@ class MessageHandler {
       }
 
       if (skipAI) return;
+      if (!isAdminAccount) {
+        const autoRepliesCfg = await prisma.platformConfig.findUnique({ where: { key: 'auto_replies_enabled' } });
+        if (autoRepliesCfg && autoRepliesCfg.value === 'false') return;
+      }
 
       const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
 

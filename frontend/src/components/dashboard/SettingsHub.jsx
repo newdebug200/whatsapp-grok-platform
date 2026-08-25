@@ -46,7 +46,7 @@ const ACCOUNT_TABS = [
   },
 ];
 
-export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, noProfile, onGoConfig }) {
+export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, noProfile, onGoConfig, platformConfig = {} }) {
   const [tab, setTab] = useState(initialTab || 'config');
 
   useEffect(() => {
@@ -54,6 +54,11 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
   }, [initialTab]);
 
   const accountTabs = ACCOUNT_TABS;
+  const featureEnabled = (key) => account?.role === 'admin' || platformConfig[key] !== 'false';
+  const visibleBotTabs = BOT_TABS.filter(tab => ({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key] ? featureEnabled(({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key])) : true));
+  useEffect(() => {
+    if (tab !== 'account' && !visibleBotTabs.some(item => item.key === tab)) setTab('account');
+  }, [tab, visibleBotTabs]);
 
   const renderTab = (t) => (
     <button
@@ -70,7 +75,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
   return (
     <div className="sh-wrapper">
       <div className="sh-tabs">
-        {BOT_TABS.map(renderTab)}
+        {visibleBotTabs.map(renderTab)}
         <div className="sh-tab-separator" />
         {accountTabs.map(renderTab)}
       </div>

@@ -7,7 +7,13 @@ const { authMiddleware } = require('../middleware/auth');
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const rows = await prisma.platformConfig.findMany();
-    const config = {};
+    const config = {
+      whatsapp_discussions_enabled: 'true', ia_enabled_global: 'true', auto_replies_enabled: 'true',
+      faq_enabled: 'true', quick_replies_enabled: 'true', funnel_enabled: 'true',
+      sentiments_enabled: 'true', sensitive_keywords_enabled: 'true', campaigns_enabled: 'true',
+      stats_enabled: 'true', maintenance_enabled: 'false', verification_triggers_enabled: 'true',
+      credits_enabled: 'true'
+    };
     for (const row of rows) config[row.key] = row.value;
     res.json(config);
   } catch (error) {
