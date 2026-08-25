@@ -437,7 +437,7 @@ export default function Dashboard() {
             <div className="app-navigation-heading">Paramètres</div>
             {[
               ['config', 'Réglages du bot'], ['faq', 'FAQ'], ['templates', 'Réponses rapides'],
-              ['tags', 'Tags'], ['journal', 'Alertes'], ['account', 'Mon compte'],
+              ['tags', 'Tags'], ['journal', 'Alertes'], ['storage', 'Données & stockage'], ['account', 'Mon compte'],
               ...(isAdmin ? [['admin', 'Administration']] : [])
             ].map(([tab, label]) => (
               <button key={tab} className="app-navigation-sub-link" onClick={() => goToSettings(tab)}>

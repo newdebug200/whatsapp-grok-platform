@@ -4,6 +4,7 @@ import FAQManager from './FAQManager';
 import Settings from './Settings';
 import AdminPanel from './AdminPanel';
 import FlagJournal from './FlagJournal';
+import StorageManager from './StorageManager';
 import QuickReplyManager from './QuickReplyManager';
 import TagManager from './TagManager';
 import './SettingsHub.css';
@@ -28,6 +29,10 @@ const BOT_TABS = [
   {
     key: 'journal', label: 'Alertes',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+  },
+  {
+    key: 'storage', label: 'Données & stockage',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
   },
 ];
 // Note: "Prospects" (the funnel/entonnoir) used to live here as a sub-tab under
@@ -87,6 +92,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
         {tab === 'templates' && <QuickReplyManager />}
         {tab === 'tags' && <TagManager activeProfile={activeProfile} />}
         {tab === 'journal' && <FlagJournal />}
+        {tab === 'storage' && <StorageManager />}
         {tab === 'account' && <Settings />}
         {tab === 'admin' && account?.role === 'admin' && <AdminPanel />}
       </div>

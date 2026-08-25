@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
@@ -186,6 +188,69 @@ router.get('/sentiments', async (req, res) => {
   } catch (error) {
     console.error('Erreur GET dashboard sentiments:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des sentiments' });
+  }
+});
+
+const uploadsDirectory = path.join(__dirname, '../../uploads');
+const getFileSize = (filename) => {
+  try { return fs.statSync(path.join(uploadsDirectory, path.basename(filename))).size; } catch (_) { return 0; }
+};
+
+// GET /api/dashboard/storage — storage items that can be cleaned for the active profile.
+router.get('/storage', async (req, res) => {
+  try {
+    const profileId = req.profileId;
+    const [messageMedia, campaignMedia, queueCount, archivedMessages] = await Promise.all([
+      prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
+      prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
+      prisma.dressurQueueItem.count({ where: { profile_id: profileId } }),
+      prisma.message.count({ where: { contact: { profile_id: profileId, archived: true } } }),
+    ]);
+    const mediaFiles = [...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean);
+    const uniqueMedia = [...new Set(mediaFiles)];
+    res.json({
+      media: { files: uniqueMedia.length, bytes: uniqueMedia.reduce((sum, filename) => sum + getFileSize(filename), 0) },
+      localQueue: { items: queueCount },
+      archivedMessages: { items: archivedMessages },
+    });
+  } catch (error) {
+    console.error('Erreur GET dashboard storage:', error);
+    res.status(500).json({ error: 'Erreur lors du calcul du stockage' });
+  }
+});
+
+// DELETE /api/dashboard/storage/:kind — destructive cleanup, scoped to the active profile.
+router.delete('/storage/:kind', async (req, res) => {
+  try {
+    const profileId = req.profileId;
+    const { kind } = req.params;
+    if (kind === 'media') {
+      const [messageMedia, campaignMedia] = await Promise.all([
+        prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
+        prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
+      ]);
+      const filenames = [...new Set([...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean))];
+      for (const filename of filenames) {
+        try { fs.unlinkSync(path.join(uploadsDirectory, path.basename(filename))); } catch (_) {}
+      }
+      await Promise.all([
+        prisma.message.updateMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, data: { media_path: null } }),
+        prisma.campaignMessage.updateMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, data: { media_path: null } }),
+      ]);
+      return res.json({ ok: true, deleted: filenames.length });
+    }
+    if (kind === 'local-queue') {
+      const result = await prisma.dressurQueueItem.deleteMany({ where: { profile_id: profileId } });
+      return res.json({ ok: true, deleted: result.count });
+    }
+    if (kind === 'archived-messages') {
+      const result = await prisma.message.deleteMany({ where: { contact: { profile_id: profileId, archived: true } } });
+      return res.json({ ok: true, deleted: result.count });
+    }
+    return res.status(400).json({ error: 'Type de nettoyage inconnu' });
+  } catch (error) {
+    console.error('Erreur DELETE dashboard storage:', error);
+    res.status(500).json({ error: 'Erreur lors du nettoyage' });
   }
 });
 
