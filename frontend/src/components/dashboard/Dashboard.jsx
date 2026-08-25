@@ -9,6 +9,7 @@ import Broadcast from './Broadcast';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import AdminHub from './AdminHub';
+import { AboutPage, HowItWorksPage } from './InfoPages';
 import DashboardHome from './DashboardHome';
 import FunnelPage from './FunnelPage';
 import SubscriptionPlans from './SubscriptionPlans';
@@ -764,6 +765,8 @@ export default function Dashboard() {
         ) : (
           <div className="feature-page-shell">
             {activePanel === 'admin' && isAdmin && <AdminHub account={account} onBack={goHome} />}
+            {activePanel === 'about' && <AboutPage onBack={goHome} />}
+            {activePanel === 'how-it-works' && <HowItWorksPage onBack={goHome} />}
             {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
             {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}

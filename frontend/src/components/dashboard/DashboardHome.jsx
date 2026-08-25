@@ -286,6 +286,12 @@ export default function DashboardHome({
           </button>
         ))}
       </div>
+
+      <div className="dh-info-heading"><div><div className="dh-sections-title">Découvrir Botora</div><div className="dh-sections-subtitle">Comprenez la plateforme et démarrez sereinement.</div></div><span className="dh-settings-pill">Guides</span></div>
+      <div className="dh-info-grid">
+        <button className="dh-info-card" onClick={() => onGoTo('about')}><span className="dh-info-icon">✦</span><span><strong>À propos</strong><small>L’esprit et la mission de Botora</small></span><span className="dh-settings-arrow">→</span></button>
+        <button className="dh-info-card" onClick={() => onGoTo('how-it-works')}><span className="dh-info-icon">?</span><span><strong>Comment ça marche ?</strong><small>Le guide en quatre étapes</small></span><span className="dh-settings-arrow">→</span></button>
+      </div>
     </div>
   );
 }
