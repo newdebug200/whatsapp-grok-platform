@@ -570,20 +570,19 @@ router.post('/dressur-queue/start', async (req, res) => {
 
           let sent = false;
           let lastError = null;
-          for (const candidate of candidates) {
-            try {
-              await whatsappManager.sendMessage(dressurJob.profileId, candidate, message);
-              sent = true;
-              break;
-            } catch (err) {
-              lastError = err;
-              // WhatsApp Web peut livrer le message puis remonter une erreur de
-              // synchronisation. Vérifier le chat avant de déclarer un échec.
-              if (await confirmDressurDelivery(dressurJob.profileId, candidate, message)) {
-                sent = true;
-                break;
-              }
-            }
+          // Un seul transport et un seul identifiant sont tentés par numéro.
+          // Retenter avec un autre identifiant après une erreur peut créer un
+          // doublon si WhatsApp a déjà accepté le premier message.
+          const candidate = candidates[0];
+          if (!candidate) throw new Error('Identifiant WhatsApp introuvable');
+          try {
+            await whatsappManager.sendMessage(dressurJob.profileId, candidate, message);
+            sent = true;
+          } catch (err) {
+            lastError = err;
+            // WhatsApp Web peut livrer le message puis remonter une erreur de
+            // synchronisation. Vérifier le chat avant de déclarer un échec.
+            if (await confirmDressurDelivery(dressurJob.profileId, candidate, message)) sent = true;
           }
           if (!sent) throw lastError || new Error('Tous les formats ont échoué');
           dressurJob.sent++;

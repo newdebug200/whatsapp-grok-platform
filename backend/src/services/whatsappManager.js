@@ -673,14 +673,17 @@ class WhatsAppManager {
     // Pour les contacts avec chat existant (LID ou @c.us), c'est la méthode la plus
     // fiable. Elle utilise l'objet chat déjà chargé en mémoire par WhatsApp Web, ce
     // qui garantit que le message part vraiment via le réseau (sync vers le téléphone).
+    let chat = null;
     try {
-      const chat = await client.getChatById(to);
-      if (chat) {
-        await chat.sendMessage(content);
-        return;
-      }
+      chat = await client.getChatById(to);
     } catch (_) {
-      // Pas de chat existant ou ID invalide → on essaie les méthodes suivantes
+      // Pas de chat existant ou ID invalide : on utilise WPP.js une seule fois.
+    }
+    if (chat) {
+      // Ne pas basculer vers un autre transport si sendMessage() remonte une
+      // erreur après avoir accepté le message : cela provoquerait un doublon.
+      await chat.sendMessage(content);
+      return;
     }
 
     // ── Méthode 2 : WPP.js natif via pupPage ──────────────────────────────────
