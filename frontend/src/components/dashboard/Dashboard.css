@@ -2315,3 +2315,43 @@
 @media (max-width: 560px) {
   .wa-session-notice { font-size: 12px; padding: 10px; }
 }
+
+/* ── Identité Botora : finition globale ── */
+.app-navigation,
+.feature-page-shell,
+.feature-main-area { transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+.app-navigation-brand,
+.sidebar-logo { color: var(--brand-navy); }
+.app-navigation-link.active,
+.app-navigation-sub-link.active { color: var(--accent); }
+.app-navigation-link.active::before,
+.app-navigation-sub-link.active::before { background: var(--accent); }
+.profile-selector-btn,
+.profile-dropdown,
+.user-dropdown,
+.search-input,
+.sidebar-search { background: var(--bg-card); color: var(--text-primary); border-color: var(--border); }
+.profile-selector-btn:hover,
+.profile-dropdown-item:hover,
+.dropdown-item:hover,
+.nav-btn:hover,
+.icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.profile-dropdown-item.active { background: var(--accent-soft); color: var(--accent-dark); }
+.search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); background: var(--bg-card); }
+.app-navigation-link.active,
+.nav-btn.active { background: var(--accent-soft); }
+.sidebar-credits-bar,
+.dh-wa-pill.ok { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+[data-theme="dark"] .app-navigation-brand,
+[data-theme="dark"] .sidebar-logo { color: var(--brand-navy); }
+[data-theme="dark"] .profile-dropdown,
+[data-theme="dark"] .user-dropdown { background: var(--bg-card); border-color: var(--border); box-shadow: 0 14px 34px rgba(0,0,0,.34); }
+[data-theme="dark"] .profile-dropdown-item,
+[data-theme="dark"] .dropdown-item { color: var(--text-primary); }
+[data-theme="dark"] .profile-dropdown-item.active { background: var(--accent-soft); color: var(--brand-mint); }
+[data-theme="dark"] .app-navigation-link.active,
+[data-theme="dark"] .nav-btn.active { background: var(--accent-soft); color: var(--brand-mint); }
+[data-theme="dark"] .search-input { background: var(--bg-input); color: var(--text-primary); }
+[data-theme="dark"] .search-input::placeholder { color: var(--text-muted); }
+[data-theme="dark"] .sidebar-credits-bar { background: rgba(56,214,171,.1); color: var(--brand-mint); }
