@@ -775,3 +775,78 @@
 }
 .bc-tag-filter-chip:hover { background: rgba(255,255,255,0.06); }
 .bc-tag-filter-chip.active { background: rgba(255,255,255,0.1); color: #e8eaed; border-color: rgba(255,255,255,0.25); }
+
+/* Harmonisation Botora */
+.bc-panel {
+  width: min(100%, 1120px);
+  min-width: 0;
+  height: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, var(--bg-primary, #f7fafb), var(--bg-secondary, #fff));
+  color: var(--text-primary, #172b34);
+}
+
+.bc-toolbar {
+  padding: clamp(22px, 3vw, 34px) clamp(16px, 3vw, 34px) 20px;
+  border-bottom: 1px solid var(--border, #e3eaed);
+}
+
+.bc-title {
+  font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  color: var(--text-primary, #172b34);
+}
+
+.bc-campaigns,
+.bc-form,
+.bc-detail {
+  padding: 22px clamp(16px, 3vw, 34px) 44px;
+}
+
+.bc-card,
+.bc-form-section,
+.bc-detail-section {
+  border-color: var(--border, #e3eaed);
+  border-radius: 16px;
+  background: var(--bg-primary, #fff);
+  box-shadow: 0 10px 26px rgba(22, 48, 59, .07);
+}
+
+.bc-card { padding: 18px 20px; }
+.bc-card-name { overflow-wrap: anywhere; color: var(--text-primary, #172b34); }
+.bc-card-meta { line-height: 1.5; }
+.bc-card-actions { flex-wrap: wrap; }
+.bc-btn-primary, .bc-btn-secondary, .bc-btn-warning, .bc-btn-danger { min-height: 40px; }
+
+.bc-input,
+.bc-textarea,
+.bc-select {
+  max-width: 100%;
+  box-sizing: border-box;
+  border-color: var(--border, #dce5e8);
+  border-radius: 10px;
+  background: var(--bg-secondary, #f8fafb);
+  color: var(--text-primary, #172b34);
+  line-height: 1.5;
+}
+
+.bc-label { color: var(--text-primary, #30434c); }
+.bc-hint, .bc-card-meta, .bc-progress-label { overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .bc-toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .bc-toolbar .bc-btn-primary { margin-left: auto; }
+  .bc-card-top { align-items: flex-start; flex-wrap: wrap; }
+  .bc-card-progress { flex-wrap: wrap; }
+  .bc-progress-track { flex-basis: 100%; }
+}
+
+@media (max-width: 480px) {
+  .bc-toolbar { padding: 18px 12px 16px; }
+  .bc-title { font-size: 1.45rem; }
+  .bc-campaigns, .bc-form, .bc-detail { padding: 16px 12px 30px; }
+  .bc-card { padding: 16px; }
+  .bc-card-actions > button { flex: 1 1 auto; justify-content: center; }
+}
