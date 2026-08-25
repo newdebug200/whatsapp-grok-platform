@@ -825,28 +825,31 @@
 }
 
 .chat-empty-icon {
-  width: 100px;
-  height: 100px;
-  margin: 0 auto 20px;
-  opacity: 0.5;
+  width: clamp(112px, 12vw, 148px);
+  height: clamp(112px, 12vw, 148px);
+  margin: 0 auto 22px;
+  opacity: 1;
+  filter: drop-shadow(0 8px 20px rgba(0, 168, 132, .16));
 }
 .chat-empty-icon svg, .chat-empty-icon img { width: 100%; height: 100%; display: block; object-fit: contain; border-radius: 22%; }
 
 .chat-empty-content h3 {
-  font-size: 24px;
-  font-weight: 300;
-  color: #41525d;
-  margin: 0 0 8px;
+  font-size: clamp(1.45rem, 3vw, 1.8rem);
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--text-primary, #41525d);
+  margin: 0 0 10px;
 }
 .chat-empty-content p {
   font-size: 14px;
-  color: #8696a0;
-  margin: 0 0 8px;
+  line-height: 1.5;
+  color: var(--text-secondary, #667781);
+  margin: 0 0 9px;
 }
 .wa-hint {
-  font-size: 12px !important;
-  color: #b0bec5 !important;
-  margin-top: 12px !important;
+  font-size: 13px !important;
+  color: var(--text-secondary, #667781) !important;
+  margin-top: 14px !important;
 }
 
 .chat-window {
@@ -1919,8 +1922,10 @@
 /* Chat window dark */
 [data-theme="dark"] .chat-window { background: var(--chat-bg, #0b141a); }
 [data-theme="dark"] .chat-empty { background: var(--chat-bg, #0b141a); }
-[data-theme="dark"] .chat-empty-content h3 { color: var(--text-secondary, #8696a0); }
-[data-theme="dark"] .chat-empty-content p { color: var(--text-muted, #667781); }
+[data-theme="dark"] .chat-empty-icon { opacity: 1; filter: drop-shadow(0 8px 24px rgba(0, 168, 132, .24)); }
+[data-theme="dark"] .chat-empty-content h3 { color: #f1f5f6; }
+[data-theme="dark"] .chat-empty-content p { color: #b7c4ca; }
+[data-theme="dark"] .chat-empty-content .wa-hint { color: #d1dbe0 !important; }
 [data-theme="dark"] .chat-header { background: var(--header-bg, #202c33); border-bottom-color: var(--border, #2a3942); }
 [data-theme="dark"] .chat-header-name { color: var(--text-primary, #e9edef); }
 [data-theme="dark"] .chat-header-phone { color: var(--text-secondary, #8696a0); }
