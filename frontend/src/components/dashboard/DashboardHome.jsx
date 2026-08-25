@@ -46,6 +46,7 @@ export default function DashboardHome({
     ...(featureEnabled('whatsapp_discussions_enabled') ? [{ key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null }] : []),
     ...(featureEnabled('funnel_enabled') ? [{ key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊', color: '#667eea' }] : []),
     { key: 'subscriptions', label: 'Abonnements', desc: 'Voir les offres Botora', emoji: '◈', color: '#0aa37f' },
+    { key: 'credits', label: 'Recharger les crédits', desc: 'Payer avec FedaPay', emoji: '₣', color: '#0aa37f' },
     ...(featureEnabled('stats_enabled') ? [{ key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈', color: '#34b7f1' }] : []),
     ...(featureEnabled('sentiments_enabled') ? [{ key: 'sentiments', label: 'Sentiments clients', desc: 'Alertes et messages à traiter', emoji: '💛', color: '#e47738', badge: data?.sentimentAlerts > 0 ? data.sentimentAlerts : null }] : []),
     ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣', color: '#f39c12' }] : []),
@@ -131,10 +132,10 @@ export default function DashboardHome({
               <div className="dh-kpi-label">Réponses envoyées aujourd'hui</div>
             </div>
             {creditBalance !== null && (
-              <div className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`}>
+              <button className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`} onClick={() => onGoTo('credits')}>
                 <div className="dh-kpi-value">{creditBalance.toFixed(2)}</div>
-                <div className="dh-kpi-label">Crédits restants</div>
-              </div>
+                <div className="dh-kpi-label">Crédits restants · Recharger</div>
+              </button>
             )}
           </div>
 

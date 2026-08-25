@@ -36,6 +36,7 @@ const statusRoutes = require('./routes/statusRoutes');
 const funnelRoutes = require('./routes/funnelRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -46,6 +47,8 @@ const io = new Server(server, {
 const prisma = new PrismaClient();
 
 app.use(cors());
+// FedaPay signatures require the exact raw JSON body.
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRoutes);
@@ -63,6 +66,7 @@ app.use('/api/statuses', statusRoutes);
 app.use('/api/funnel', funnelRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/payments', paymentRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 

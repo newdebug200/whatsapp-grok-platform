@@ -13,6 +13,7 @@ import { AboutPage, HowItWorksPage } from './InfoPages';
 import DashboardHome from './DashboardHome';
 import FunnelPage from './FunnelPage';
 import SubscriptionPlans from './SubscriptionPlans';
+import RechargeCredits from './RechargeCredits';
 import Sentiments from './Sentiments';
 import './Dashboard.css';
 
@@ -773,6 +774,7 @@ export default function Dashboard() {
             {activePanel === 'about' && <AboutPage onBack={goHome} />}
             {activePanel === 'how-it-works' && <HowItWorksPage onBack={goHome} />}
             {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
+            {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBack={goHome} />}
             {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
             {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
