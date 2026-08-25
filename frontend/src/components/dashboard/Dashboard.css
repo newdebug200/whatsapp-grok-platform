@@ -830,7 +830,7 @@
   margin: 0 auto 20px;
   opacity: 0.5;
 }
-.chat-empty-icon svg { width: 100%; height: 100%; }
+.chat-empty-icon svg, .chat-empty-icon img { width: 100%; height: 100%; display: block; object-fit: contain; border-radius: 22%; }
 
 .chat-empty-content h3 {
   font-size: 24px;
