@@ -584,3 +584,30 @@ button.dh-kpi:hover { box-shadow: 0 2px 8px var(--shadow, rgba(0,0,0,0.14)); }
 .dh-settings-card:hover .dh-settings-arrow { transform: translateX(3px); }
 @media (max-width: 600px) { .dh-settings-heading { align-items: flex-start; padding-left: 16px; padding-right: 16px; } .dh-settings-grid { grid-template-columns: 1fr; padding: 0 16px; } }
 @media (prefers-reduced-motion: reduce) { .dh-settings-card, .dh-settings-arrow { transition: none; } }
+
+/* ===== Harmonisation générale du dashboard ===== */
+.dh-panel { background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary, #f0f2f5) 92%, #25d366 8%) 0, var(--bg-secondary, #f0f2f5) 280px); }
+.dh-greeting { max-width: 1100px; width: calc(100% - 56px); margin: 22px auto 8px; padding: 22px 24px; border: 1px solid color-mix(in srgb, var(--accent, #25d366) 18%, var(--border, #e9edef)); border-radius: 18px; background: var(--bg-primary, #fff); box-shadow: 0 5px 18px var(--shadow, rgba(0,0,0,.07)); font-size: 16px; font-weight: 700; color: var(--text-primary, #111b21); }
+.dh-kpis { max-width: 1100px; width: calc(100% - 56px); margin: 0 auto; padding: 12px 0; }
+.dh-grid { width: calc(100% - 56px); margin: 0 auto; padding: 0; max-width: 1100px; }
+.dh-card { min-width: 0; border: 1px solid transparent; transition: box-shadow 180ms cubic-bezier(.23,1,.32,1), transform 180ms cubic-bezier(.23,1,.32,1); }
+.dh-card:hover { box-shadow: 0 5px 16px var(--shadow, rgba(0,0,0,.12)); transform: translateY(-1px); }
+.dh-card-attention { border-top: 3px solid #e74c3c; }
+.dh-sections-heading, .dh-settings-heading { width: calc(100% - 56px); margin-left: auto; margin-right: auto; }
+.dh-sections-grid, .dh-settings-grid { width: calc(100% - 56px); margin-left: auto; margin-right: auto; padding-left: 0; padding-right: 0; }
+.dh-sections-title { font-size: 15px; letter-spacing: -.01em; }
+.dh-section-card, .dh-settings-card { border-color: color-mix(in srgb, var(--border, #e9edef) 80%, transparent); }
+.dh-section-card { min-height: 160px; }
+.dh-settings-card { min-height: 76px; }
+
+@media (min-width: 1200px) {
+  .dh-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .dh-greeting, .dh-kpis, .dh-grid, .dh-sections-heading, .dh-settings-heading, .dh-sections-grid, .dh-settings-grid { width: calc(100% - 32px); }
+  .dh-greeting { margin-top: 14px; padding: 18px; font-size: 14px; }
+  .dh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .dh-kpi { padding: 13px 11px; }
+  .dh-kpi-value { font-size: 22px; }
+}
