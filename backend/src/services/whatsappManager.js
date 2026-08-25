@@ -458,6 +458,9 @@ class WhatsAppManager {
     client.on('message', async (message) => {
       try {
         if (message.fromMe) return;
+        // Les statuts WhatsApp ne sont pas des conversations : ne pas les persister,
+        // ne pas les compter comme non lus et ne jamais les diffuser à l’interface.
+        if (message.from === 'status@broadcast' || message.from?.includes('@broadcast')) return;
         if (this.campaignSendingWaIds.has(message.from)) return;
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
           || this._findEntryByClient(client);
