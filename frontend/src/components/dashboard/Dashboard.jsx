@@ -416,12 +416,6 @@ export default function Dashboard() {
     ...navItems,
     { key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }
   ];
-  const appSettingsItems = [
-    ['config', 'Réglages du bot'], ['faq', 'FAQ'], ['templates', 'Réponses rapides'],
-    ['tags', 'Tags'], ['journal', 'Alertes'], ['account', 'Mon compte'],
-    ...(isAdmin ? [['admin', 'Administration']] : [])
-  ];
-
   return (
     <div className="dashboard">
       {(
@@ -439,14 +433,6 @@ export default function Dashboard() {
               <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => item.key === 'funnel' ? setActivePanel('funnel') : handleNavClick(item.key)}>
                 <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
                 {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
-              </button>
-            ))}
-          </div>
-          <div className="app-navigation-group">
-            <div className="app-navigation-heading">Paramètres</div>
-            {appSettingsItems.map(([tab, label]) => (
-              <button key={tab} className="app-navigation-sub-link" onClick={() => goToSettings(tab)}>
-                <span className="app-navigation-sub-dot" />{label}
               </button>
             ))}
           </div>
@@ -651,19 +637,6 @@ export default function Dashboard() {
                   )}
                 </span>
                 <span className="nav-label">{item.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="sidebar-settings-nav">
-            <div className="sidebar-settings-title">Paramètres</div>
-            {[
-              ['config', 'Réglages du bot'], ['faq', 'FAQ'], ['templates', 'Réponses rapides'],
-              ['tags', 'Tags'], ['journal', 'Alertes'], ['account', 'Mon compte'],
-              ...(isAdmin ? [['admin', 'Administration']] : [])
-            ].map(([tab, label]) => (
-              <button key={tab} className="sidebar-settings-link" onClick={() => goToSettings(tab)}>
-                <span className="sidebar-settings-dot" />
-                <span>{label}</span>
               </button>
             ))}
           </div>
