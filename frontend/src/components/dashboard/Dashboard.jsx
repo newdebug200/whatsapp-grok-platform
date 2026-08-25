@@ -716,7 +716,7 @@ export default function Dashboard() {
                 onContactsUpdate={handleContactsUpdate}
                 waStatus={waStatus}
                 socket={socket}
-                onConnectWhatsApp={handleConnectWhatsApp}
+                onConnectWhatsApp={() => { goToSettings('config'); handleConnectWhatsApp(); }}
               />
             )
           )}

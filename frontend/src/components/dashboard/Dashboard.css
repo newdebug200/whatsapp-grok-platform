@@ -562,22 +562,54 @@
 .wa-connect-banner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  background: #fff3cd;
-  border-bottom: 1px solid #ffc107;
-  font-size: 13px;
-  color: #856404;
-}
-.wa-connect-banner button {
-  background: #ffc107;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 12px;
+  gap: 10px;
+  margin: 10px 12px 4px;
+  padding: 11px 12px;
+  background: linear-gradient(135deg, #fff8df, #fff3c4);
+  border: 1px solid #f1d68a;
+  border-radius: 12px;
   font-size: 12px;
-  font-weight: 600;
+  line-height: 1.35;
+  color: #725300;
+  box-shadow: 0 3px 12px rgba(143, 102, 0, .08);
+}
+.wa-connect-banner::before {
+  content: '◉';
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  background: #f0b900;
+  color: #fff;
+  font-size: 11px;
+}
+.wa-connect-banner span { flex: 1; min-width: 0; font-weight: 600; }
+.wa-connect-banner button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dark, #08745f);
+  border: none;
+  border-radius: 8px;
+  min-height: 32px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
-  color: #333;
+  color: #fff;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(8, 116, 95, .22);
+  transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.wa-connect-banner button:hover { background: var(--accent, #0aa37f); transform: translateY(-1px); box-shadow: 0 5px 12px rgba(8, 116, 95, .3); }
+[data-theme="dark"] .wa-connect-banner { background: rgba(240,185,0,.12); border-color: rgba(240,185,0,.3); color: #ffe28a; box-shadow: none; }
+[data-theme="dark"] .wa-connect-banner::before { background: #c99400; }
+[data-theme="dark"] .wa-connect-banner button { background: var(--accent, #38d6ab); color: #062d2a; }
+@media (max-width: 420px) {
+  .wa-connect-banner { margin: 8px 9px 3px; padding: 10px; gap: 8px; }
+  .wa-connect-banner button { padding: 7px 10px; }
 }
 
 .search-container {
@@ -2376,3 +2408,30 @@
 [data-theme="dark"] .search-input { background: var(--bg-input); color: var(--text-primary); }
 [data-theme="dark"] .search-input::placeholder { color: var(--text-muted); }
 [data-theme="dark"] .sidebar-credits-bar { background: rgba(56,214,171,.1); color: var(--brand-mint); }
+
+/* Profil WhatsApp — finition Botora */
+.chat-sidebar .profile-selector-wrapper {
+  padding: 12px 12px 10px;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--border);
+}
+.chat-sidebar .profile-selector-btn {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid rgba(19,169,181,.22);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #082f49, #0b4658);
+  color: #f4ffff;
+  box-shadow: 0 5px 14px rgba(8,47,73,.18);
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.chat-sidebar .profile-selector-btn:hover { background: linear-gradient(135deg, #0a3c5a, #08745f); color: #fff; }
+.chat-sidebar .profile-selector-dot { width: 9px; height: 9px; box-shadow: 0 0 0 3px rgba(99,230,190,.14); }
+.chat-sidebar .profile-selector-label { color: inherit; }
+.chat-sidebar .profile-dropdown { border: 1px solid var(--border); background: var(--bg-card); }
+.chat-sidebar .profile-dropdown-item { min-height: 42px; color: var(--text-primary); }
+.chat-sidebar .profile-dropdown-add { min-height: 42px; color: var(--accent-dark); }
+[data-theme="dark"] .chat-sidebar .profile-selector-wrapper { background: var(--sidebar-bg); }
+[data-theme="dark"] .chat-sidebar .profile-selector-btn { border-color: rgba(56,214,171,.3); box-shadow: 0 5px 16px rgba(0,0,0,.25); }
+[data-theme="dark"] .chat-sidebar .profile-dropdown-add { color: var(--brand-mint); }
