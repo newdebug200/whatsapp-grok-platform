@@ -356,7 +356,6 @@ export default function Dashboard() {
       key: 'sentiments', label: 'Sentiments clients',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-4 9a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 8 11zm4 7a6 6 0 0 1-5.19-3h2.3a3.75 3.75 0 0 0 5.78 0h2.3A6 6 0 0 1 12 18zm4-7a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 16 11z"/></svg>
     },
-    ...(isAdmin ? [{ key: 'admin', label: 'Administration', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg> }] : []),
   ];
 
   const toggleSound = () => {
@@ -594,9 +593,6 @@ export default function Dashboard() {
                     <div className="dropdown-divider" />
                     <div className="dropdown-section-label">Compte</div>
                     <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
-                    {account?.role === 'admin' && (
-                      <button className="dropdown-item" onClick={() => goToSettings('admin')}>Administration</button>
-                    )}
                     <div className="dropdown-divider" />
                     <button className="dropdown-item danger" onClick={logout}>Déconnexion</button>
                   </div>
