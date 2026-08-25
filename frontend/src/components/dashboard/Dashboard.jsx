@@ -336,7 +336,7 @@ export default function Dashboard() {
   const navItems = [
     {
       key: 'chat', label: 'Discussions',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1.9-2-2-2z"/></svg>
     },
     ...(campaignsEnabled ? [{
       key: 'broadcast', label: 'Campagnes',
@@ -349,14 +349,6 @@ export default function Dashboard() {
     {
       key: 'sentiments', label: 'Sentiments clients',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-4 9a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 8 11zm4 7a6 6 0 0 1-5.19-3h2.3a3.75 3.75 0 0 0 5.78 0h2.3A6 6 0 0 1 12 18zm4-7a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 16 11z"/></svg>
-    },
-    {
-      key: 'bot', label: 'Bot & WhatsApp',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.33C18.33 14.33 19 13.66 19 12.83C19 12 18.33 11.33 17.5 11.33C16.67 11.33 16 12 16 12.83C16 13.66 16.67 14.33 17.5 14.33M13 2.05V4.06C16.39 4.54 19 7.45 19 11C19 12.44 18.53 13.77 17.75 14.86L16.29 13.4C16.74 12.76 17 12 17 11.17C17 8.61 14.87 6.5 12.28 6.5H12V8.5L9 5.5L12 2.5V4.5H12.28C15.97 4.5 19 7.47 19 11.17C19 12.95 18.26 14.57 17.07 15.74L18.5 17.17C20.04 15.65 21 13.54 21 11.17C21 6.5 17.5 2.63 13 2.05M10 12.5C10 12.5 10 12.5 10 12.5C8.9 12.5 8 13.4 8 14.5C8 15.6 8.9 16.5 10 16.5C11.1 16.5 12 15.6 12 14.5C12 13.4 11.1 12.5 10 12.5M6.5 14.33C6.5 13.5 7.17 12.83 8 12.83C8.83 12.83 9.5 13.5 9.5 14.33C9.5 15.16 8.83 15.83 8 15.83C7.17 15.83 6.5 15.16 6.5 14.33M12 20C9.24 20 6.86 18.34 5.68 15.96L4.08 17.08C5.61 20.09 8.59 22 12 22C15.41 22 18.39 20.09 19.92 17.08L18.32 15.96C17.14 18.34 14.76 20 12 20Z"/></svg>
-    },
-    {
-      key: 'settings', label: 'Paramètres',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.95s-.03-.66-.07-1l2.16-1.65c.19-.15.24-.42.12-.64l-2.05-3.55c-.12-.22-.39-.3-.61-.22l-2.55 1.03c-.52-.4-1.08-.73-1.7-.98l-.38-2.71C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.71c-.62.25-1.18.58-1.7.98L4.88 5.08c-.22-.08-.49 0-.61.22L2.22 8.85c-.13.22-.07.49.12.64l2.16 1.65c-.04.34-.07.67-.07 1s.03.65.07.97l-2.16 1.66c-.19.15-.24.42-.12.64l2.05 3.55c.12.22.39.3.61.22l2.55-1.02c.52.4 1.08.73 1.7.98l.38 2.71c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.71c.62-.25 1.18-.58 1.7-.98l2.55 1.02c.22.08.49 0 .61-.22l2.05-3.55c.12-.22.07-.49-.12-.64l-2.16-1.66z"/></svg>
     },
   ];
 
@@ -438,6 +430,18 @@ export default function Dashboard() {
               <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => item.key === 'funnel' ? setActivePanel('funnel') : handleNavClick(item.key)}>
                 <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
                 {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
+              </button>
+            ))}
+          </div>
+          <div className="app-navigation-group">
+            <div className="app-navigation-heading">Paramètres</div>
+            {[
+              ['config', 'Réglages du bot'], ['faq', 'FAQ'], ['templates', 'Réponses rapides'],
+              ['tags', 'Tags'], ['journal', 'Alertes'], ['account', 'Mon compte'],
+              ...(isAdmin ? [['admin', 'Administration']] : [])
+            ].map(([tab, label]) => (
+              <button key={tab} className="app-navigation-sub-link" onClick={() => goToSettings(tab)}>
+                <span className="app-navigation-sub-dot" />{label}
               </button>
             ))}
           </div>
