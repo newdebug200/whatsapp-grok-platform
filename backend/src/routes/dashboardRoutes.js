@@ -202,15 +202,15 @@ router.get('/storage', async (req, res) => {
     const profileId = req.profileId;
     const accountId = req.accountId;
     const [messageMedia, campaignMedia, queueCount, archivedMessages] = await Promise.all([
-      prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }).catch((error) => {
+      (prisma.message?.findMany ? prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])).catch((error) => {
         console.warn('Stockage: médias des messages indisponibles:', error.message);
         return [];
       }),
-      prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }).catch((error) => {
+      (prisma.campaignMessage?.findMany ? prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])).catch((error) => {
         console.warn('Stockage: médias des campagnes indisponibles:', error.message);
         return [];
       }),
-      prisma.dressurQueueItem.count({ where: { account_id: accountId } }).catch((error) => {
+      (prisma.dressurQueueItem?.count ? prisma.dressurQueueItem.count({ where: { account_id: accountId } }) : Promise.resolve(0)).catch((error) => {
         console.warn('Stockage: file locale indisponible, nettoyage ignoré:', error.message);
         return 0;
       }),
@@ -240,8 +240,8 @@ router.delete('/storage/:kind', async (req, res) => {
     const { kind } = req.params;
     if (kind === 'media') {
       const [messageMedia, campaignMedia] = await Promise.all([
-        prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
-        prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
+        (prisma.message?.findMany ? prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])),
+        (prisma.campaignMessage?.findMany ? prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])),
       ]);
       const filenames = [...new Set([...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean))];
       for (const filename of filenames) {
@@ -254,6 +254,7 @@ router.delete('/storage/:kind', async (req, res) => {
       return res.json({ ok: true, deleted: filenames.length });
     }
     if (kind === 'local-queue') {
+      if (!prisma.dressurQueueItem?.deleteMany) return res.json({ ok: true, deleted: 0, unavailable: true });
       const result = await prisma.dressurQueueItem.deleteMany({ where: { account_id: accountId } });
       return res.json({ ok: true, deleted: result.count });
     }
