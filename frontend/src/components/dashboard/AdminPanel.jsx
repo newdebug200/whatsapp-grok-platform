@@ -512,7 +512,9 @@ function DressurQueueSection() {
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [minDelay, setMinDelay] = useState(10);
   const [maxDelay, setMaxDelay] = useState(30);
-  const [status, setStatus] = useState({ running: false, sent: 0, failed: 0, total: 0, current: null, results: [] });
+  const [batchSize, setBatchSize] = useState(10);
+  const [order, setOrder] = useState('asc');
+  const [status, setStatus] = useState({ running: false, paused: false, sent: 0, failed: 0, total: 0, nextIndex: 0, current: null, results: [], pending: [] });
   const [msg, setMsg] = useState(null);
   const pollRef = useRef(null);
 
@@ -521,194 +523,71 @@ function DressurQueueSection() {
     setTimeout(() => setMsg(null), 4000);
   };
 
-  useEffect(() => {
-    axios.get(`${API_URL}/admin/profiles`)
-      .then(r => {
-        setProfiles(r.data);
-        if (r.data.length > 0) setProfileId(String(r.data[0].id));
-      })
-      .catch(() => {});
-
-    axios.get(`${API_URL}/admin/dressur-queue/status`)
-      .then(r => setStatus(r.data))
-      .catch(() => {});
+  const refreshStatus = useCallback(async () => {
+    try { const r = await axios.get(`${API_URL}/admin/dressur-queue/status`); setStatus(r.data); return r.data; } catch (_) { return null; }
   }, []);
+
+  useEffect(() => {
+    axios.get(`${API_URL}/admin/profiles`).then(r => { setProfiles(r.data); if (r.data.length > 0) setProfileId(String(r.data[0].id)); }).catch(() => {});
+    refreshStatus();
+  }, [refreshStatus]);
 
   const startPolling = () => {
     if (pollRef.current) return;
     pollRef.current = setInterval(async () => {
-      try {
-        const r = await axios.get(`${API_URL}/admin/dressur-queue/status`);
-        setStatus(r.data);
-        if (!r.data.running) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      } catch (_) {}
+      const data = await refreshStatus();
+      if (data && !data.running) { clearInterval(pollRef.current); pollRef.current = null; }
     }, 1000);
   };
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const loadQueue = async () => {
-    setLoadingQueue(true);
-    setMsg(null);
-    try {
-      const r = await axios.get(`${API_URL}/admin/dressur-queue`);
-      setQueue(r.data.items);
-    } catch (err) {
-      showMsg(err.response?.data?.error || 'Erreur de connexion à dressur.site', true);
-    } finally {
-      setLoadingQueue(false);
-    }
+    setLoadingQueue(true); setMsg(null);
+    try { const r = await axios.get(`${API_URL}/admin/dressur-queue`); setQueue(r.data.items); setBatchSize(prev => Math.min(Math.max(1, prev), Math.max(1, r.data.items.length))); }
+    catch (err) { showMsg(err.response?.data?.error || 'Erreur de connexion à dressur.site', true); }
+    finally { setLoadingQueue(false); }
   };
 
   const handleStart = async () => {
     if (!profileId) return showMsg('Sélectionnez un profil WhatsApp', true);
-    const min = Number(minDelay);
-    const max = Number(maxDelay);
+    const min = Number(minDelay), max = Number(maxDelay), batch = Number(batchSize);
     if (min > max) return showMsg('Le délai minimum doit être ≤ au maximum', true);
+    if (!Number.isInteger(batch) || batch < 1) return showMsg('Le nombre de messages doit être supérieur à 0', true);
     try {
-      await axios.post(`${API_URL}/admin/dressur-queue/start`, { profileId: parseInt(profileId), minDelay: min, maxDelay: max });
-      const r = await axios.get(`${API_URL}/admin/dressur-queue/status`);
-      setStatus(r.data);
-      startPolling();
-      showMsg('Envoi démarré');
-    } catch (err) {
-      showMsg(err.response?.data?.error || 'Erreur lors du démarrage', true);
-    }
+      const startResponse = await axios.post(`${API_URL}/admin/dressur-queue/start`, { profileId: parseInt(profileId), minDelay: min, maxDelay: max, batchSize: batch, order });
+      await refreshStatus(); startPolling(); showMsg(startResponse.data?.resumed ? 'Envoi repris' : 'Envoi démarré');
+    } catch (err) { showMsg(err.response?.data?.error || 'Erreur lors du démarrage', true); }
   };
 
   const handleStop = async () => {
-    try {
-      await axios.post(`${API_URL}/admin/dressur-queue/stop`);
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-      const r = await axios.get(`${API_URL}/admin/dressur-queue/status`);
-      setStatus(r.data);
-      showMsg('Envoi arrêté');
-    } catch (err) {
-      showMsg(err.response?.data?.error || "Erreur lors de l'arrêt", true);
-    }
+    try { await axios.post(`${API_URL}/admin/dressur-queue/stop`); await refreshStatus(); if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } showMsg('Envoi mis en pause'); }
+    catch (err) { showMsg(err.response?.data?.error || 'Erreur lors de la mise en pause', true); }
   };
 
   const isRunning = status?.running === true;
   const results = status?.results || [];
-  const processed = (status?.sent || 0) + (status?.failed || 0);
+  const processed = status?.processed ?? ((status?.sent || 0) + (status?.failed || 0));
   const pct = status?.total > 0 ? Math.round((processed / status.total) * 100) : 0;
+  const pending = status?.pending || (queue || []).map((item, i) => ({ ...item, index: i + 1, status: 'pending' }));
 
   return (
     <div className="admin-dressur-section">
       <div className="admin-dressur-header">
-        <div className="admin-dressur-title-row">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" className="admin-dressur-icon">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-          </svg>
-          <h3 className="admin-dressur-title">File d'attente WhatsApp — dressur.site</h3>
-        </div>
-        <p className="admin-dressur-desc">Récupère les messages en attente depuis dressur.site et les envoie automatiquement aux numéros concernés.</p>
+        <div className="admin-dressur-title-row"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" className="admin-dressur-icon"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg><h3 className="admin-dressur-title">File d'attente WhatsApp — dressur.site</h3></div>
+        <p className="admin-dressur-desc">Choisissez l’ordre et le nombre de messages à envoyer. La pause reprend exactement au prochain numéro en attente.</p>
       </div>
-
       {msg && <div className={`admin-dressur-msg ${msg.error ? 'error' : 'success'}`}>{msg.text}</div>}
-
       <div className="admin-dressur-controls">
-        <div className="admin-dressur-row">
-          <label className="admin-dressur-label">Profil WhatsApp</label>
-          <select className="admin-verif-select" value={profileId} onChange={e => setProfileId(e.target.value)} disabled={isRunning}>
-            {profiles.length === 0 && <option value="">Aucun profil</option>}
-            {profiles.map(p => (
-              <option key={p.id} value={String(p.id)}>
-                {p.phone_number}{p.display_name ? ` — ${p.display_name}` : ''}{p.is_connected ? ' ●' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="admin-dressur-row">
-          <label className="admin-dressur-label">Délai aléatoire entre envois (sec)</label>
-          <div className="admin-dressur-delay-row">
-            <span className="admin-dressur-delay-lbl">Min</span>
-            <input type="number" min="1" max="300" className="admin-dressur-delay-input" value={minDelay}
-              onChange={e => setMinDelay(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} />
-            <span className="admin-dressur-delay-lbl">Max</span>
-            <input type="number" min="1" max="300" className="admin-dressur-delay-input" value={maxDelay}
-              onChange={e => setMaxDelay(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} />
-            <span className="admin-dressur-delay-hint">secondes</span>
-          </div>
-        </div>
+        <div className="admin-dressur-row"><label className="admin-dressur-label">Profil WhatsApp</label><select className="admin-verif-select" value={profileId} onChange={e => setProfileId(e.target.value)} disabled={isRunning}>{profiles.length === 0 && <option value="">Aucun profil</option>}{profiles.map(p => <option key={p.id} value={String(p.id)}>{p.phone_number}{p.display_name ? ` — ${p.display_name}` : ''}{p.is_connected ? ' ●' : ''}</option>)}</select></div>
+        <div className="admin-dressur-row"><label className="admin-dressur-label">Ordre des numéros</label><select className="admin-verif-select" value={order} onChange={e => setOrder(e.target.value)} disabled={isRunning}><option value="asc">Croissant</option><option value="desc">Décroissant</option></select></div>
+        <div className="admin-dressur-row"><label className="admin-dressur-label">Messages à envoyer maintenant</label><input type="number" min="1" max="100000" className="admin-dressur-delay-input" value={batchSize} onChange={e => setBatchSize(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} /><span className="admin-dressur-delay-hint">dans la liste restante</span></div>
+        <div className="admin-dressur-row"><label className="admin-dressur-label">Délai aléatoire entre envois (sec)</label><div className="admin-dressur-delay-row"><span className="admin-dressur-delay-lbl">Min</span><input type="number" min="1" max="300" className="admin-dressur-delay-input" value={minDelay} onChange={e => setMinDelay(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} /><span className="admin-dressur-delay-lbl">Max</span><input type="number" min="1" max="300" className="admin-dressur-delay-input" value={maxDelay} onChange={e => setMaxDelay(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} /><span className="admin-dressur-delay-hint">secondes</span></div></div>
       </div>
-
-      <div className="admin-dressur-actions">
-        <button className="admin-dressur-fetch-btn" onClick={loadQueue} disabled={loadingQueue || isRunning}>
-          {loadingQueue ? 'Chargement…' : '↻ Charger la file'}
-        </button>
-        <button className="admin-dressur-start-btn" onClick={handleStart} disabled={isRunning || !profileId}>
-          ▶ Déclencher
-        </button>
-        <button className="admin-dressur-stop-btn" onClick={handleStop} disabled={!isRunning}>
-          ■ Arrêter
-        </button>
-      </div>
-
-      {(isRunning || processed > 0) && (
-        <div className="admin-dressur-progress">
-          <div className="admin-dressur-progress-stats">
-            <span className="admin-dressur-stat ok">✅ {status.sent} envoyés</span>
-            <span className="admin-dressur-stat ko">❌ {status.failed} échoués</span>
-            <span className="admin-dressur-stat tot">📋 {status.total} total</span>
-            {isRunning
-              ? <span className="admin-dressur-badge running">En cours…</span>
-              : <span className="admin-dressur-badge done">Terminé</span>}
-          </div>
-          {isRunning && status.current && (
-            <div className="admin-dressur-current">
-              Envoi {status.current.index}/{status.total} → <strong>{status.current.numero}</strong>
-            </div>
-          )}
-          {status.total > 0 && (
-            <div className="admin-dressur-bar-wrap">
-              <div className="admin-dressur-bar-fill" style={{ width: `${pct}%` }} />
-              <span className="admin-dressur-bar-pct">{pct}%</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {queue !== null && (
-        <div className="admin-dressur-list-section">
-          <div className="admin-dressur-list-title">File ({queue.length} message{queue.length !== 1 ? 's' : ''})</div>
-          {queue.length === 0
-            ? <div className="admin-dressur-empty">Aucun message en attente.</div>
-            : (
-              <div className="admin-dressur-list">
-                {queue.slice(0, 30).map((item, i) => (
-                  <div key={i} className="admin-dressur-item">
-                    <span className="admin-dressur-item-num">{item.numero}</span>
-                    <span className="admin-dressur-item-msg">{String(item.message).slice(0, 90)}{String(item.message).length > 90 ? '…' : ''}</span>
-                  </div>
-                ))}
-                {queue.length > 30 && <div className="admin-dressur-more">+{queue.length - 30} autres…</div>}
-              </div>
-            )
-          }
-        </div>
-      )}
-
-      {results.length > 0 && (
-        <div className="admin-dressur-results">
-          <div className="admin-dressur-list-title">Résultats ({results.length})</div>
-          <div className="admin-dressur-result-list">
-            {results.map((r, i) => (
-              <div key={i} className={`admin-dressur-result-item ${r.status}`}>
-                <span className="admin-dressur-result-icon">{r.status === 'sent' ? '✅' : '❌'}</span>
-                <span className="admin-dressur-result-num">{r.numero}</span>
-                <span className="admin-dressur-result-preview">{r.preview}</span>
-                {r.error && <span className="admin-dressur-result-err">{r.error}</span>}
-                <span className="admin-dressur-result-time">{new Date(r.at).toLocaleTimeString('fr-FR')}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="admin-dressur-actions"><button className="admin-dressur-fetch-btn" onClick={loadQueue} disabled={loadingQueue || isRunning}>{loadingQueue ? 'Chargement…' : '↻ Charger la file'}</button><button className="admin-dressur-start-btn" onClick={handleStart} disabled={isRunning || !profileId}>{status.paused ? '▶ Reprendre' : '▶ Déclencher'}</button><button className="admin-dressur-stop-btn" onClick={handleStop} disabled={!isRunning}>Ⅱ Pause</button></div>
+      {(isRunning || processed > 0 || status.paused) && <div className="admin-dressur-progress"><div className="admin-dressur-progress-stats"><span className="admin-dressur-stat ok">✅ {status.sent} envoyés</span><span className="admin-dressur-stat ko">❌ {status.failed} échoués</span><span className="admin-dressur-stat tot">⏳ {Math.max(0, (status.total || 0) - processed)} en attente</span><span className="admin-dressur-stat tot">📋 {status.total} total</span><span className={`admin-dressur-badge ${isRunning ? 'running' : 'done'}`}>{isRunning ? 'En cours…' : status.paused ? 'En pause' : 'Terminé'}</span></div>{isRunning && status.current && <div className="admin-dressur-current">Envoi {status.current.index}/{status.total} → <strong>{status.current.numero}</strong></div>}{status.total > 0 && <div className="admin-dressur-bar-wrap"><div className="admin-dressur-bar-fill" style={{ width: `${pct}%` }} /><span className="admin-dressur-bar-pct">{pct}%</span></div>}</div>}
+      {queue !== null && <div className="admin-dressur-list-section"><div className="admin-dressur-list-title">File source ({queue.length} messages) — ordre {order === 'asc' ? 'croissant' : 'décroissant'}</div><div className="admin-dressur-list">{queue.slice(0, 30).map((item, i) => <div key={i} className="admin-dressur-item"><span className="admin-dressur-item-num">{item.numero}</span><span className="admin-dressur-item-msg">{String(item.message).slice(0, 90)}{String(item.message).length > 90 ? '…' : ''}</span></div>)}{queue.length > 30 && <div className="admin-dressur-more">+{queue.length - 30} autres…</div>}</div></div>}
+      {(results.length > 0 || pending.length > 0) && <div className="admin-dressur-results"><div className="admin-dressur-list-title">Suivi des numéros ({results.length + pending.length})</div><div className="admin-dressur-result-list">{results.map((r, i) => <div key={`result-${i}`} className={`admin-dressur-result-item ${r.status}`}><span className="admin-dressur-result-icon">{r.status === 'sent' ? '✅' : '❌'}</span><span className="admin-dressur-result-num">{r.numero}</span><span className="admin-dressur-result-preview">{r.status === 'sent' ? 'Message reçu' : 'Échec'}</span>{r.error && <span className="admin-dressur-result-err">{r.error}</span>}</div>)}{pending.slice(0, 100).map((r, i) => <div key={`pending-${i}`} className="admin-dressur-result-item pending"><span className="admin-dressur-result-icon">⏳</span><span className="admin-dressur-result-num">{r.numero}</span><span className="admin-dressur-result-preview">En attente</span></div>)}{pending.length > 100 && <div className="admin-dressur-more">+{pending.length - 100} numéros en attente…</div>}</div></div>}
     </div>
   );
 }

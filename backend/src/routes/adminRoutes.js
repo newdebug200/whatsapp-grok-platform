@@ -388,27 +388,67 @@ const DRESSUR_QUEUE_URL = 'https://dressur.site/crud/communication-mail/file-att
 
 let dressurJob = {
   running: false,
+  paused: false,
   cancelled: false,
   accountId: null,
   profileId: null,
   total: 0,
   sent: 0,
   failed: 0,
+  nextIndex: 0,
+  batchSize: 0,
+  order: 'asc',
+  minDelay: 10,
+  maxDelay: 30,
   current: null,
-  results: []
+  items: [],
+  results: [],
+  runner: null
 };
+
+function sortDressurItems(items, order) {
+  const direction = order === 'desc' ? -1 : 1;
+  return [...items].sort((a, b) => {
+    const aNumber = String(a?.numero ?? '');
+    const bNumber = String(b?.numero ?? '');
+    const aDigits = aNumber.replace(/\D/g, '');
+    const bDigits = bNumber.replace(/\D/g, '');
+    if (aDigits && bDigits && aDigits !== bDigits) {
+      return direction * (BigInt(aDigits) < BigInt(bDigits) ? -1 : 1);
+    }
+    return direction * aNumber.localeCompare(bNumber, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}
+
+function dressurStatusPayload() {
+  const processed = dressurJob.sent + dressurJob.failed;
+  const pending = dressurJob.items.slice(dressurJob.nextIndex).map((item, offset) => ({
+    ...item,
+    index: dressurJob.nextIndex + offset + 1,
+    status: 'pending'
+  }));
+  return {
+    running: dressurJob.running,
+    paused: dressurJob.paused,
+    cancelled: dressurJob.cancelled,
+    sent: dressurJob.sent,
+    failed: dressurJob.failed,
+    processed,
+    total: dressurJob.total,
+    nextIndex: dressurJob.nextIndex,
+    batchSize: dressurJob.batchSize,
+    order: dressurJob.order,
+    minDelay: dressurJob.minDelay,
+    maxDelay: dressurJob.maxDelay,
+    current: dressurJob.current,
+    results: dressurJob.results,
+    pending
+  };
+}
 
 function emitDressurProgress() {
   if (whatsappManager.io && dressurJob.accountId) {
-    whatsappManager.io.to(`account_${dressurJob.accountId}`).emit('dressur-progress', {
-      running: dressurJob.running,
-      cancelled: dressurJob.cancelled,
-      sent: dressurJob.sent,
-      failed: dressurJob.failed,
-      total: dressurJob.total,
-      current: dressurJob.current,
-      results: dressurJob.results
-    });
+    whatsappManager.io.to(`account_${dressurJob.accountId}`).emit('dressur-progress', dressurStatusPayload());
   }
 }
 
@@ -425,161 +465,147 @@ router.get('/dressur-queue', async (req, res) => {
 
 // GET /api/admin/dressur-queue/status — current job state
 router.get('/dressur-queue/status', (req, res) => {
-  res.json({
-    running: dressurJob.running,
-    cancelled: dressurJob.cancelled,
-    sent: dressurJob.sent,
-    failed: dressurJob.failed,
-    total: dressurJob.total,
-    current: dressurJob.current,
-    results: dressurJob.results
-  });
+  res.json(dressurStatusPayload());
 });
 
-// POST /api/admin/dressur-queue/start — launch sending
+// POST /api/admin/dressur-queue/start — launch or resume a batch
 router.post('/dressur-queue/start', async (req, res) => {
   if (dressurJob.running) {
     return res.status(409).json({ error: 'Un envoi est déjà en cours' });
   }
 
-  const { profileId, minDelay = 10, maxDelay = 30 } = req.body;
+  const { profileId, minDelay = 10, maxDelay = 30, batchSize, order = 'asc' } = req.body;
   if (!profileId) return res.status(400).json({ error: 'profileId requis' });
 
-  const min = Math.max(1, Number(minDelay));
-  const max = Math.max(min, Number(maxDelay));
+  const min = Math.max(1, Number(minDelay) || 10);
+  const max = Math.max(min, Number(maxDelay) || 30);
+  const normalizedOrder = order === 'desc' ? 'desc' : 'asc';
+  const requestedBatch = Math.max(1, parseInt(batchSize, 10) || 0);
+  const canResume = dressurJob.paused && dressurJob.items.length > 0 && dressurJob.profileId === parseInt(profileId, 10);
 
-  let items;
-  try {
-    const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
-    items = Array.isArray(r.data) ? r.data : [];
-  } catch (err) {
-    return res.status(502).json({ error: `Impossible de joindre dressur.site : ${err.message}` });
+  if (!canResume) {
+    let items;
+    try {
+      const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
+      items = Array.isArray(r.data) ? r.data : [];
+    } catch (err) {
+      return res.status(502).json({ error: `Impossible de joindre dressur.site : ${err.message}` });
+    }
+    if (items.length === 0) return res.status(400).json({ error: "La file d'attente est vide" });
+    dressurJob = {
+      ...dressurJob,
+      running: false,
+      paused: true,
+      cancelled: false,
+      accountId: req.accountId,
+      profileId: parseInt(profileId, 10),
+      total: items.length,
+      sent: 0,
+      failed: 0,
+      nextIndex: 0,
+      batchSize: requestedBatch || items.length,
+      order: normalizedOrder,
+      minDelay: min,
+      maxDelay: max,
+      current: null,
+      items: sortDressurItems(items, normalizedOrder),
+      results: [],
+      runner: null
+    };
+  } else {
+    dressurJob.accountId = req.accountId;
+    // Une reprise conserve l’ordre initial afin de ne sauter ni répéter de numéro.
+    dressurJob.order = dressurJob.order || normalizedOrder;
+    dressurJob.batchSize = requestedBatch || dressurJob.batchSize || dressurJob.total;
+    dressurJob.minDelay = min;
+    dressurJob.maxDelay = max;
   }
 
-  if (items.length === 0) {
-    return res.status(400).json({ error: "La file d'attente est vide" });
-  }
+  dressurJob.running = true;
+  dressurJob.paused = false;
+  dressurJob.cancelled = false;
+  const runToken = {};
+  dressurJob.runner = runToken;
+  res.json({ success: true, total: dressurJob.total, batchSize: dressurJob.batchSize, order: dressurJob.order, resumed: canResume });
 
-  dressurJob = {
-    running: true,
-    cancelled: false,
-    accountId: req.accountId,
-    profileId: parseInt(profileId),
-    total: items.length,
-    sent: 0,
-    failed: 0,
-    current: null,
-    results: []
-  };
-
-  res.json({ success: true, total: items.length });
-
-  // Async sending loop — runs after response is sent
   (async () => {
-    for (let i = 0; i < items.length; i++) {
-      if (dressurJob.cancelled) break;
+    const batchEnd = Math.min(dressurJob.nextIndex + dressurJob.batchSize, dressurJob.total);
+    try {
+      while (dressurJob.nextIndex < batchEnd && dressurJob.runner === runToken && !dressurJob.cancelled) {
+        const i = dressurJob.nextIndex;
+        const item = dressurJob.items[i];
+        const { numero, message, wa_id: itemWaId } = item;
+        dressurJob.current = { numero, index: i + 1 };
+        emitDressurProgress();
 
-      const { numero, message, wa_id: itemWaId } = items[i];
-      dressurJob.current = { numero, index: i + 1 };
-      emitDressurProgress();
+        try {
+          const rawDigits = String(numero).replace(/[^\d]/g, '');
+          const lidFallback = (itemWaId && String(itemWaId).trim()) ? String(itemWaId).trim() + '@lid' : null;
+          const candidates = [];
+          if (lidFallback) candidates.push(lidFallback);
+          candidates.push(rawDigits + '@c.us');
+          const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
+          if (noPrefix01 !== rawDigits) candidates.push(noPrefix01 + '@c.us');
+          const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
+          if (withPrefix01 !== rawDigits) candidates.push(withPrefix01 + '@c.us');
 
-      try {
-        // ── Résolution du waId et envoi avec fallbacks ─────────────────────────
-        // Priorité 1 : numéro de téléphone en format @c.us (ID de chat standard).
-        //   sendMessage(@lid) crée un objet local mais n'envoie RIEN — le @lid est
-        //   l'identifiant interne utilisateur, pas l'identifiant du chat.
-        // Priorité 2 : variantes béninoises du numéro en @c.us.
-        // Priorité 3 : @lid fourni par dressur.site (dernier recours).
-        const rawDigits = String(numero).replace(/[^\d]/g, '');
-        const lidFallback = (itemWaId && String(itemWaId).trim())
-          ? String(itemWaId).trim() + '@lid'
-          : null;
-
-        // Construire la liste des candidats dans l'ordre de préférence.
-        // Le @lid de dressur.site est EN PREMIER car ces contacts ont déjà interagi
-        // avec le bot → leur chat existe sous ce LID dans WhatsApp. sendMessage()
-        // utilisera getChatById(@lid) pour envoyer via le chat existant.
-        const candidates = [];
-        if (lidFallback) candidates.push(lidFallback);            // 1. @lid dressur (priorité absolue)
-        candidates.push(rawDigits + '@c.us');                      // 2. nouveau format béninois @c.us
-        const noPrefix01 = rawDigits.replace(/^(\d{3})01(\d{8})$/, '$1$2');
-        if (noPrefix01 !== rawDigits) candidates.push(noPrefix01 + '@c.us');  // 3. ancien format béninois
-        const withPrefix01 = rawDigits.replace(/^(\d{3})([1-9]\d{7})$/, '$101$2');
-        if (withPrefix01 !== rawDigits) candidates.push(withPrefix01 + '@c.us'); // 4. variante +01
-
-        let sent = false;
-        let lastError = null;
-
-        for (const candidate of candidates) {
-          try {
-            console.log(`[DressurQueue] Tentative → ${candidate} (${numero})`);
-            await whatsappManager.sendMessage(dressurJob.profileId, candidate, message);
-            console.log(`[DressurQueue] ✅ Envoyé → ${candidate}`);
-            sent = true;
-            break;
-          } catch (err) {
-            lastError = err;
-            console.log(`[DressurQueue] ❌ Échec ${candidate} : ${err.message}`);
+          let sent = false;
+          let lastError = null;
+          for (const candidate of candidates) {
+            try {
+              await whatsappManager.sendMessage(dressurJob.profileId, candidate, message);
+              sent = true;
+              break;
+            } catch (err) { lastError = err; }
           }
+          if (!sent) throw lastError || new Error('Tous les formats ont échoué');
+          dressurJob.sent++;
+          dressurJob.results.push({ numero, preview: String(message).slice(0, 80), status: 'sent', at: new Date().toISOString() });
+        } catch (err) {
+          dressurJob.failed++;
+          dressurJob.results.push({ numero, preview: String(message).slice(0, 80), status: 'failed', error: err.message, at: new Date().toISOString() });
         }
 
-        if (!sent) throw lastError || new Error('Tous les formats ont échoué');
-
-        dressurJob.sent++;
-        dressurJob.results.push({
-          numero,
-          preview: String(message).slice(0, 80),
-          status: 'sent',
-          at: new Date().toISOString()
-        });
-      } catch (err) {
-        dressurJob.failed++;
-        dressurJob.results.push({
-          numero,
-          preview: String(message).slice(0, 80),
-          status: 'failed',
-          error: err.message,
-          at: new Date().toISOString()
-        });
-      }
-
-      emitDressurProgress();
-
-      // Random delay between messages (skip after last one)
-      if (!dressurJob.cancelled && i < items.length - 1) {
-        const delayMs = (Math.random() * (max - min) + min) * 1000;
+        dressurJob.nextIndex = i + 1;
+        dressurJob.current = null;
+        emitDressurProgress();
+        if (dressurJob.nextIndex >= batchEnd || dressurJob.cancelled) break;
+        const delayMs = (Math.random() * (dressurJob.maxDelay - dressurJob.minDelay) + dressurJob.minDelay) * 1000;
         await new Promise(resolve => {
           const timer = setTimeout(resolve, delayMs);
           const check = setInterval(() => {
-            if (dressurJob.cancelled) { clearTimeout(timer); clearInterval(check); resolve(); }
+            if (dressurJob.cancelled || dressurJob.runner !== runToken) {
+              clearTimeout(timer); clearInterval(check); resolve();
+            }
           }, 200);
           setTimeout(() => clearInterval(check), delayMs + 500);
         });
       }
-    }
-
-    dressurJob.running = false;
-    dressurJob.current = null;
-    emitDressurProgress();
-    if (whatsappManager.io && dressurJob.accountId) {
-      whatsappManager.io.to(`account_${dressurJob.accountId}`).emit('dressur-done', {
-        sent: dressurJob.sent,
-        failed: dressurJob.failed,
-        total: dressurJob.total
-      });
+    } catch (err) {
+      console.error('[DressurQueue] Erreur runner:', err.message);
+    } finally {
+      if (dressurJob.runner === runToken) {
+        dressurJob.running = false;
+        dressurJob.paused = dressurJob.nextIndex < dressurJob.total;
+        dressurJob.current = null;
+        dressurJob.runner = null;
+        emitDressurProgress();
+        if (dressurJob.nextIndex >= dressurJob.total && whatsappManager.io && dressurJob.accountId) {
+          whatsappManager.io.to(`account_${dressurJob.accountId}`).emit('dressur-done', dressurStatusPayload());
+        }
+      }
     }
   })();
 });
 
-// POST /api/admin/dressur-queue/stop — cancel current job
+// POST /api/admin/dressur-queue/stop — pause current job without resetting progress
 router.post('/dressur-queue/stop', (req, res) => {
-  if (!dressurJob.running) {
-    return res.status(400).json({ error: 'Aucun envoi en cours' });
-  }
+  if (!dressurJob.running) return res.status(400).json({ error: 'Aucun envoi en cours' });
   dressurJob.cancelled = true;
+  dressurJob.paused = true;
   dressurJob.running = false;
   emitDressurProgress();
-  res.json({ success: true, sent: dressurJob.sent, failed: dressurJob.failed });
+  res.json({ success: true, sent: dressurJob.sent, failed: dressurJob.failed, nextIndex: dressurJob.nextIndex });
 });
 
 module.exports = router;
