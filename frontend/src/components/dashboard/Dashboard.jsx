@@ -424,7 +424,7 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      {activePanel !== 'chat' && (
+      {(
         <aside className="app-navigation" aria-label="Navigation principale">
           <button className="app-navigation-brand" onClick={goHome} title="Retour au tableau de bord">
             <img src="/icons/icon-192.png" alt="Botora" />
@@ -456,7 +456,7 @@ export default function Dashboard() {
           </div>
         </aside>
       )}
-      <div className={`sidebar ${activePanel !== 'chat' ? 'sidebar-context-hidden' : ''} ${mobileView === 'chat' ? 'sidebar-hidden-mobile' : ''}`}>
+      <div className={`sidebar ${activePanel !== 'chat' ? 'sidebar-context-hidden' : ''} chat-sidebar ${mobileView === 'chat' ? 'sidebar-hidden-mobile' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <button className="sidebar-logo sidebar-logo-btn" onClick={goHome} title="Retour au tableau de bord">

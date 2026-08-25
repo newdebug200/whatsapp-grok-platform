@@ -2132,3 +2132,11 @@
 .feature-page-shell .sh-wrapper, .feature-page-shell .funnel-page, .feature-page-shell .broadcast-page, .feature-page-shell .stats-page { width: 100%; max-width: 1440px; margin: 0 auto; }
 @media (max-width: 560px) { .app-navigation + .sidebar + .main-area { min-width: 0; } .feature-page-shell { overflow-x: hidden; } }
 [data-theme="dark"] .feature-main-area, [data-theme="dark"] .feature-page-shell { background: #111b21; }
+
+/* Discussions uses the same application rail plus a focused conversation column */
+.chat-sidebar .sidebar-header-top, .chat-sidebar .sidebar-nav, .chat-sidebar .sidebar-settings-nav, .chat-sidebar .sidebar-credits-bar { display: none; }
+.chat-sidebar .sidebar-header { border-bottom: 1px solid #e9edef; }
+.chat-sidebar .profile-selector-wrapper { padding-top: 12px; padding-bottom: 12px; }
+.chat-sidebar .sidebar-content { min-width: 0; }
+@media (max-width: 900px) { .chat-sidebar { width: 320px; min-width: 320px; } }
+@media (max-width: 560px) { .chat-sidebar { width: calc(100vw - 66px); min-width: calc(100vw - 66px); } }
