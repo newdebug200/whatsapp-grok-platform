@@ -202,10 +202,22 @@ router.get('/storage', async (req, res) => {
     const profileId = req.profileId;
     const accountId = req.accountId;
     const [messageMedia, campaignMedia, queueCount, archivedMessages] = await Promise.all([
-      prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
-      prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
-      prisma.dressurQueueItem.count({ where: { account_id: accountId } }),
-      prisma.message.count({ where: { contact: { profile_id: profileId, archived: true } } }),
+      prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }).catch((error) => {
+        console.warn('Stockage: médias des messages indisponibles:', error.message);
+        return [];
+      }),
+      prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }).catch((error) => {
+        console.warn('Stockage: médias des campagnes indisponibles:', error.message);
+        return [];
+      }),
+      prisma.dressurQueueItem.count({ where: { account_id: accountId } }).catch((error) => {
+        console.warn('Stockage: file locale indisponible, nettoyage ignoré:', error.message);
+        return 0;
+      }),
+      prisma.message.count({ where: { contact: { profile_id: profileId, archived: true } } }).catch((error) => {
+        console.warn('Stockage: comptage des messages archivés indisponible:', error.message);
+        return 0;
+      }),
     ]);
     const mediaFiles = [...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean);
     const uniqueMedia = [...new Set(mediaFiles)];
