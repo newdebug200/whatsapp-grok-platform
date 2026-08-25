@@ -10,6 +10,7 @@ import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import DashboardHome from './DashboardHome';
 import FunnelPage from './FunnelPage';
+import Sentiments from './Sentiments';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -344,6 +345,10 @@ export default function Dashboard() {
     {
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
+    },
+    {
+      key: 'sentiments', label: 'Sentiments clients',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-4 9a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 8 11zm4 7a6 6 0 0 1-5.19-3h2.3a3.75 3.75 0 0 0 5.78 0h2.3A6 6 0 0 1 12 18zm4-7a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 16 11z"/></svg>
     },
     {
       key: 'bot', label: 'Bot & WhatsApp',
@@ -711,6 +716,7 @@ export default function Dashboard() {
           <div className="feature-page-shell">
             {activePanel === 'funnel' && <FunnelPage onBack={goHome} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
+            {activePanel === 'sentiments' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
             {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
             {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} />}
           </div>

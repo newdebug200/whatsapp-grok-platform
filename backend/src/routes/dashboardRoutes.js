@@ -144,4 +144,38 @@ router.get('/overview', async (req, res) => {
   }
 });
 
+// GET /api/dashboard/sentiments — dedicated sentiment treatment workspace.
+router.get('/sentiments', async (req, res) => {
+  try {
+    const profileId = req.profileId;
+    const filter = req.query.filter === 'all' ? undefined : (req.query.filter || 'negative');
+    const where = {
+      contact: { profile_id: profileId, archived: false },
+      ...(filter === 'all' ? {} : { sentiment: filter === 'angry' ? 'colere' : { in: NEGATIVE_SENTIMENTS } }),
+      ...(req.query.unread !== 'false' ? { unread: true } : {}),
+    };
+    const [messages, counts] = await Promise.all([
+      prisma.message.findMany({
+        where,
+        select: {
+          id: true, content: true, sentiment: true, unread: true, created_at: true,
+          contact: { select: { id: true, name: true, phone_number: true, ia_paused: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 100,
+      }),
+      prisma.message.groupBy({
+        by: ['sentiment'],
+        where: { contact: { profile_id: profileId, archived: false }, sentiment: { in: NEGATIVE_SENTIMENTS } },
+        _count: { _all: true },
+      }),
+    ]);
+    const countMap = Object.fromEntries(counts.map(item => [item.sentiment, item._count._all]));
+    res.json({ messages, counts: { all: (countMap.colere || 0) + (countMap.negatif || 0), angry: countMap.colere || 0, negative: countMap.negatif || 0 } });
+  } catch (error) {
+    console.error('Erreur GET dashboard sentiments:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des sentiments' });
+  }
+});
+
 module.exports = router;
