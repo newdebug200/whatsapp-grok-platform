@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [mobileView, setMobileView] = useState('list');
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [appNavCollapsed, setAppNavCollapsed] = useState(() => localStorage.getItem('botora-sidebar-collapsed') === 'true');
   const [editingProfileId, setEditingProfileId] = useState(null);
   const [editName, setEditName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
@@ -416,10 +417,27 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       {(
-        <aside className="app-navigation" aria-label="Navigation principale">
+        <aside className={`app-navigation ${appNavCollapsed ? 'app-navigation-collapsed' : ''}`} aria-label="Navigation principale">
           <button className="app-navigation-brand" onClick={goHome} title="Retour au tableau de bord">
             <img src="/icons/icon-192.png" alt="Botora" />
             <span>Botora</span>
+          </button>
+          <button
+            className="app-navigation-collapse"
+            type="button"
+            onClick={() => setAppNavCollapsed(value => {
+              const next = !value;
+              localStorage.setItem('botora-sidebar-collapsed', String(next));
+              return next;
+            })}
+            aria-label={appNavCollapsed ? 'Ouvrir la sidebar' : 'Fermer la sidebar'}
+            aria-expanded={!appNavCollapsed}
+            title={appNavCollapsed ? 'Ouvrir la sidebar' : 'Fermer la sidebar'}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+              <path d={appNavCollapsed ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'} />
+            </svg>
+            <span>{appNavCollapsed ? 'Ouvrir' : 'Réduire'}</span>
           </button>
           <div className="app-navigation-profile">
             <span className={`app-navigation-status ${waStatus.isConnected ? 'connected' : ''}`} />

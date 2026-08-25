@@ -2140,3 +2140,78 @@
 .chat-sidebar .sidebar-content { min-width: 0; }
 @media (max-width: 900px) { .chat-sidebar { width: 320px; min-width: 320px; } }
 @media (max-width: 560px) { .chat-sidebar { width: calc(100vw - 66px); min-width: calc(100vw - 66px); } }
+
+/* Sidebar principale : mode ouvert/replié et responsive global */
+.app-navigation {
+  position: relative;
+  flex: 0 0 248px;
+  width: 248px;
+  min-width: 248px;
+  transition: width .22s ease, flex-basis .22s ease, padding .22s ease;
+  overflow-x: hidden;
+}
+
+.app-navigation-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: calc(100% - 24px);
+  min-height: 34px;
+  margin: 0 12px 10px;
+  padding: 7px 10px;
+  border: 1px solid rgba(134, 150, 160, .22);
+  border-radius: 9px;
+  background: transparent;
+  color: #667781;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background .16s, color .16s, border-color .16s;
+}
+
+.app-navigation-collapse:hover {
+  color: #128c7e;
+  background: rgba(37, 211, 102, .08);
+  border-color: rgba(37, 211, 102, .28);
+}
+
+.app-navigation-collapse svg { flex-shrink: 0; }
+.app-navigation-collapsed {
+  flex-basis: 76px;
+  width: 76px;
+  min-width: 76px;
+  align-items: center;
+}
+
+.app-navigation-collapsed .app-navigation-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+.app-navigation-collapsed .app-navigation-brand span,
+.app-navigation-collapsed .app-navigation-profile span:last-child,
+.app-navigation-collapsed .app-navigation-link > span:not(.app-navigation-icon),
+.app-navigation-collapsed .app-navigation-heading,
+.app-navigation-collapsed .app-navigation-sub-link > span:last-child,
+.app-navigation-collapsed .app-navigation-footer button:not(.app-navigation-logout) { display: none; }
+.app-navigation-collapsed .app-navigation-collapse { justify-content: center; width: 38px; margin-left: auto; margin-right: auto; padding-left: 0; padding-right: 0; }
+.app-navigation-collapsed .app-navigation-collapse span { display: none; }
+.app-navigation-collapsed .app-navigation-profile { justify-content: center; width: auto; margin-left: 12px; margin-right: 12px; }
+.app-navigation-collapsed .app-navigation-links,
+.app-navigation-collapsed .app-navigation-group { width: 100%; }
+.app-navigation-collapsed .app-navigation-link,
+.app-navigation-collapsed .app-navigation-sub-link { justify-content: center; padding-left: 8px; padding-right: 8px; }
+.app-navigation-collapsed .app-navigation-footer { align-items: center; width: 100%; }
+.app-navigation-collapsed .app-navigation-footer .app-navigation-logout { width: 38px; overflow: hidden; white-space: nowrap; text-indent: -9999px; }
+
+@media (max-width: 900px) {
+  .app-navigation { flex-basis: 220px; width: 220px; min-width: 220px; }
+  .app-navigation-collapsed { flex-basis: 70px; width: 70px; min-width: 70px; }
+}
+
+@media (max-width: 560px) {
+  .app-navigation-collapse { min-height: 36px; }
+  .app-navigation:not(.app-navigation-collapsed) .app-navigation-collapse span { display: inline; }
+  .app-navigation-collapsed { flex-basis: 66px; width: 66px; min-width: 66px; }
+}
+
+[data-theme="dark"] .app-navigation-collapse { color: #aebac1; border-color: rgba(174, 186, 193, .2); }
+[data-theme="dark"] .app-navigation-collapse:hover { color: #6ee7a0; background: rgba(37, 211, 102, .12); border-color: rgba(37, 211, 102, .35); }
