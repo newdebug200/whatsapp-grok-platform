@@ -468,6 +468,25 @@ router.get('/dressur-queue/status', (req, res) => {
   res.json(dressurStatusPayload());
 });
 
+async function confirmDressurDelivery(profileId, candidate, message) {
+  try {
+    const client = whatsappManager.getClient(profileId);
+    if (!client) return false;
+    const chat = await client.getChatById(candidate);
+    if (!chat || typeof chat.fetchMessages !== 'function') return false;
+    const recent = await chat.fetchMessages({ limit: 10 });
+    const now = Date.now();
+    return recent.some(item => {
+      const bodyMatches = String(item?.body || '') === String(message || '');
+      const sentByUs = item?.fromMe === true;
+      const timestamp = item?.timestamp ? Number(item.timestamp) * 1000 : now;
+      return bodyMatches && sentByUs && Math.abs(now - timestamp) <= 120000;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 // POST /api/admin/dressur-queue/start — launch or resume a batch
 router.post('/dressur-queue/start', async (req, res) => {
   if (dressurJob.running) {
@@ -556,7 +575,15 @@ router.post('/dressur-queue/start', async (req, res) => {
               await whatsappManager.sendMessage(dressurJob.profileId, candidate, message);
               sent = true;
               break;
-            } catch (err) { lastError = err; }
+            } catch (err) {
+              lastError = err;
+              // WhatsApp Web peut livrer le message puis remonter une erreur de
+              // synchronisation. Vérifier le chat avant de déclarer un échec.
+              if (await confirmDressurDelivery(dressurJob.profileId, candidate, message)) {
+                sent = true;
+                break;
+              }
+            }
           }
           if (!sent) throw lastError || new Error('Tous les formats ont échoué');
           dressurJob.sent++;
