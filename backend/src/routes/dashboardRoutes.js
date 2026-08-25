@@ -200,10 +200,11 @@ const getFileSize = (filename) => {
 router.get('/storage', async (req, res) => {
   try {
     const profileId = req.profileId;
+    const accountId = req.accountId;
     const [messageMedia, campaignMedia, queueCount, archivedMessages] = await Promise.all([
       prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
       prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }),
-      prisma.dressurQueueItem.count({ where: { profile_id: profileId } }),
+      prisma.dressurQueueItem.count({ where: { account_id: accountId } }),
       prisma.message.count({ where: { contact: { profile_id: profileId, archived: true } } }),
     ]);
     const mediaFiles = [...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean);
@@ -223,6 +224,7 @@ router.get('/storage', async (req, res) => {
 router.delete('/storage/:kind', async (req, res) => {
   try {
     const profileId = req.profileId;
+    const accountId = req.accountId;
     const { kind } = req.params;
     if (kind === 'media') {
       const [messageMedia, campaignMedia] = await Promise.all([
@@ -240,7 +242,7 @@ router.delete('/storage/:kind', async (req, res) => {
       return res.json({ ok: true, deleted: filenames.length });
     }
     if (kind === 'local-queue') {
-      const result = await prisma.dressurQueueItem.deleteMany({ where: { profile_id: profileId } });
+      const result = await prisma.dressurQueueItem.deleteMany({ where: { account_id: accountId } });
       return res.json({ ok: true, deleted: result.count });
     }
     if (kind === 'archived-messages') {
