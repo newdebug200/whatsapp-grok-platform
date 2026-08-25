@@ -16,7 +16,70 @@
 .sh-content > .panel-content,
 .sh-content > .tm-panel,
 .sh-content > .settings-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: clamp(22px, 3vw, 42px) clamp(18px, 4vw, 56px) 48px;
+}
+
+/* BotConfig utilise encore les classes historiques globales. Ces règles évitent
+   que les libellés et descriptions soient compressés ou masqués. */
+.sh-content > .panel-content .panel-title {
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.sh-content > .panel-content .config-section,
+.sh-content > .panel-content .wa-section {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.sh-content > .panel-content .field-group,
+.sh-content > .panel-content .toggle-row {
+  min-width: 0;
+}
+
+.sh-content > .panel-content .field-group input,
+.sh-content > .panel-content .field-group textarea,
+.sh-content > .panel-content select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.sh-content > .panel-content .toggle-row > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.sh-content > .panel-content .toggle-label,
+.sh-content > .panel-content .toggle-desc,
+.sh-content > .panel-content .section-label,
+.sh-content > .panel-content .qr-waiting-desc,
+.sh-content > .panel-content .wa-error-banner {
+  overflow-wrap: anywhere;
+}
+
+.sh-content > .panel-content .wa-status-row {
+  flex-wrap: wrap;
+}
+
+.sh-content > .panel-content .qr-waiting > div:last-child {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.sh-content > .panel-content .save-btn {
+  max-width: 100%;
+  white-space: normal;
 }
 
 .sh-content .panel-content > h1,
@@ -75,6 +138,23 @@
 }
 
 @media (max-width: 760px) {
+  .sh-content > .panel-content .wa-status-row > div {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .sh-content > .panel-content .wa-status-row button {
+    flex: 1 1 auto;
+  }
+
+  .sh-content > .panel-content .toggle-row {
+    align-items: flex-start;
+  }
+
+  .sh-content > .panel-content .config-section > div[style*='grid-template-columns'] {
+    grid-template-columns: 1fr !important;
+  }
+
   .sh-content > .panel-content,
   .sh-content > .tm-panel,
   .sh-content > .settings-panel {
