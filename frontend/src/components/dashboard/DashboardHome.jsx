@@ -41,13 +41,13 @@ export default function DashboardHome({
   const maxDaily = data ? Math.max(1, ...data.dailyMessages.map(d => d.sent + d.received)) : 1;
 
   const sections = [
-    { key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null },
-    { key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊' },
-    { key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈' },
-    ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣' }] : []),
-    { key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️' },
-    { key: 'settings', label: 'Paramètres', desc: 'Compte et préférences', emoji: '🔧' },
-    ...(isAdmin ? [{ key: 'admin', label: 'Administration', desc: 'Gestion de la plateforme', emoji: '🛠️' }] : []),
+    { key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null },
+    { key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊', color: '#667eea' },
+    { key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈', color: '#34b7f1' },
+    ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣', color: '#f39c12' }] : []),
+    { key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️', color: '#128c7e' },
+    { key: 'settings', label: 'Paramètres', desc: 'Compte et préférences', emoji: '🔧', color: '#8e9baa' },
+    ...(isAdmin ? [{ key: 'admin', label: 'Administration', desc: 'Gestion de la plateforme', emoji: '🛠️', color: '#9b59b6' }] : []),
   ];
 
   return (
@@ -235,17 +235,21 @@ export default function DashboardHome({
         </>
       )}
 
-      {/* Section buttons — the actual entry points into the app */}
-      <div className="dh-sections-title">Accéder à</div>
+      {/* Accès rapides à tous les espaces de Botora */}
+      <div className="dh-sections-heading">
+        <div>
+          <div className="dh-sections-title">Votre espace Botora</div>
+          <div className="dh-sections-subtitle">Accédez rapidement à chaque fonctionnalité de votre plateforme.</div>
+        </div>
+        <span className="dh-sections-count">{sections.length} espaces</span>
+      </div>
       <div className="dh-sections-grid">
         {sections.map(s => (
-          <button key={s.key} className="dh-section-card" onClick={() => onGoTo(s.key)}>
-            <span className="dh-section-emoji">{s.emoji}</span>
-            <span className="dh-section-label">
-              {s.label}
-              {s.badge && <span className="dh-section-badge">{s.badge}</span>}
-            </span>
+          <button key={s.key} className="dh-section-card" onClick={() => onGoTo(s.key)} style={{ '--dh-card-color': s.color }}>
+            <span className="dh-section-icon-wrap"><span className="dh-section-emoji">{s.emoji}</span></span>
+            <span className="dh-section-label">{s.label}{s.badge && <span className="dh-section-badge">{s.badge}</span>}</span>
             <span className="dh-section-desc">{s.desc}</span>
+            <span className="dh-section-open">Ouvrir <span aria-hidden="true">→</span></span>
           </button>
         ))}
       </div>
