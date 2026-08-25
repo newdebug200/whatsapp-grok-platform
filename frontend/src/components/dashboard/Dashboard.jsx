@@ -8,6 +8,7 @@ import Stats from './Stats';
 import Broadcast from './Broadcast';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
+import AdminHub from './AdminHub';
 import DashboardHome from './DashboardHome';
 import FunnelPage from './FunnelPage';
 import SubscriptionPlans from './SubscriptionPlans';
@@ -355,6 +356,7 @@ export default function Dashboard() {
       key: 'sentiments', label: 'Sentiments clients',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-4 9a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 8 11zm4 7a6 6 0 0 1-5.19-3h2.3a3.75 3.75 0 0 0 5.78 0h2.3A6 6 0 0 1 12 18zm4-7a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 16 11z"/></svg>
     },
+    ...(isAdmin ? [{ key: 'admin', label: 'Administration', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg> }] : []),
   ];
 
   const toggleSound = () => {
@@ -465,14 +467,21 @@ export default function Dashboard() {
               ['tags', 'Tags', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.78-.78.78-2.04 0-2.83zM5.5 7A1.5 1.5 0 1 1 5.5 4a1.5 1.5 0 0 1 0 3z"/></svg>],
               ['journal', 'Alertes', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.93 6 11v5l-2 2v1h16v-1z"/></svg>],
               ['storage', 'Données & stockage', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>],
-              ['account', 'Mon compte', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4z"/></svg>],
-              ...(isAdmin ? [['admin', 'Administration', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5zm0 4c1.1 0 2 .9 2 2v1h1v5h-6V8h1V7c0-1.1.9-2 2-2z"/></svg>]] : [])
+              ['account', 'Mon compte', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4z"/></svg>]
             ].map(([tab, label, icon]) => (
               <button key={tab} className={`app-navigation-sub-link ${activePanel === 'settings' && settingsInitialTab === tab ? 'active' : ''}`} onClick={() => goToSettings(tab)} title={label}>
                 <span className="app-navigation-sub-icon">{icon}</span><span>{label}</span>
               </button>
             ))}
           </div>
+          {isAdmin && (
+            <div className="app-navigation-group app-navigation-admin-group">
+              <div className="app-navigation-heading">Administration</div>
+              <button className={`app-navigation-sub-link ${activePanel === 'admin' ? 'active' : ''}`} onClick={() => handleNavClick('admin')} title="Centre d’administration">
+                <span className="app-navigation-sub-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg></span><span>Centre de contrôle</span>
+              </button>
+            </div>
+          )}
           <div className="app-navigation-footer">
             <button onClick={goHome}>← Tableau de bord</button>
             <button className="app-navigation-logout" onClick={logout} title="Déconnexion" aria-label="Déconnexion">
@@ -749,6 +758,7 @@ export default function Dashboard() {
           />
         ) : (
           <div className="feature-page-shell">
+            {activePanel === 'admin' && isAdmin && <AdminHub account={account} onBack={goHome} />}
             {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
             {activePanel === 'funnel' && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}

@@ -616,7 +616,7 @@ function DressurQueueSection() {
 
 // Main AdminPanel
 // ─────────────────────────────────────────────────────────────
-export default function AdminPanel() {
+export default function AdminPanel({ section = 'overview' } = {}) {
   const { account: currentAccount } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -704,13 +704,13 @@ export default function AdminPanel() {
         </button>
       </div>
 
-      <PlatformConfigSection />
-      <VerificationSection />
-      <DressurQueueSection />
-      <CreditsSection users={users} />
-      <SubscriptionManager />
+      {section === 'features' && <PlatformConfigSection />}
+      {section === 'verification' && <VerificationSection />}
+      {section === 'dressur' && <DressurQueueSection />}
+      {section === 'credits' && <CreditsSection users={users} />}
+      {section === 'subscriptions' && <SubscriptionManager />}
 
-      <div className="admin-stats-row">
+      {(section === 'overview' || section === 'users') && <div className="admin-stats-row">
         <div className="admin-stat-card">
           <div className="admin-stat-value">{users.length}</div>
           <div className="admin-stat-label">Utilisateurs</div>
@@ -727,15 +727,15 @@ export default function AdminPanel() {
           <div className="admin-stat-value">{totalMessages}</div>
           <div className="admin-stat-label">Messages traités</div>
         </div>
-      </div>
+      </div>}
 
-      {actionMsg && (
+      {(section === 'overview' || section === 'users') && actionMsg && (
         <div className={`admin-action-msg ${actionMsg.error ? 'error' : 'success'}`}>
           {actionMsg.text}
         </div>
       )}
 
-      {loading ? (
+      {(section === 'overview' || section === 'users') && (loading ? (
         <div className="admin-loading">Chargement des utilisateurs…</div>
       ) : error ? (
         <div className="admin-error">{error}</div>
@@ -828,7 +828,7 @@ export default function AdminPanel() {
             </tbody>
           </table>
         </div>
-      )}
+      ))}
 
       {confirmDelete && (
         <div className="admin-confirm-overlay">

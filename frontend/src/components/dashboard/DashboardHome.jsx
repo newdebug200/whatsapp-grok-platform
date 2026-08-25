@@ -60,7 +60,6 @@ export default function DashboardHome({
     { key: 'settings-journal', tab: 'journal', label: 'Alertes', desc: 'Journal des alertes et sentiments', emoji: '🔔', color: '#e74c3c' },
     { key: 'settings-storage', tab: 'storage', label: 'Données & stockage', desc: 'Libérer l’espace local', emoji: '🧹', color: '#e47738' },
     { key: 'settings-account', tab: 'account', label: 'Mon compte', desc: 'Profil, sécurité et préférences', emoji: '👤', color: '#8e9baa' },
-    ...(isAdmin ? [{ key: 'settings-admin', tab: 'admin', label: 'Administration', desc: 'Utilisateurs et configuration plateforme', emoji: '🛠️', color: '#9b59b6' }] : []),
   ];
 
   return (
