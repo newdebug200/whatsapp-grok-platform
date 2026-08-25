@@ -5,7 +5,7 @@ import './FunnelPage.css';
 // Full-screen page for the contact funnel — same treatment as the Dashboard
 // home page (no sidebar, own header), so the CRM board gets an entire page
 // to breathe instead of being squeezed next to other widgets.
-export default function FunnelPage({ onBack, onSelectContact }) {
+export default function FunnelPage({ onBack, onSelectContact, onGoConfig, noProfile = false }) {
   return (
     <div className="fp-page">
       <div className="fp-header">
@@ -21,7 +21,15 @@ export default function FunnelPage({ onBack, onSelectContact }) {
       </div>
 
       <div className="fp-body">
-        <Funnel onSelectContact={onSelectContact} />
+        {noProfile ? (
+          <div className="fp-no-profile" role="status">
+            <div className="fp-no-profile-icon" aria-hidden="true">◌</div>
+            <span className="fp-no-profile-eyebrow">Première configuration</span>
+            <h2>Aucun profil WhatsApp n’est encore configuré</h2>
+            <p>Connectez votre premier profil WhatsApp pour commencer à recevoir des contacts et suivre leur progression dans l’entonnoir.</p>
+            {onGoConfig && <button className="fp-no-profile-action" onClick={onGoConfig}>Configurer WhatsApp</button>}
+          </div>
+        ) : <Funnel onSelectContact={onSelectContact} />}
       </div>
     </div>
   );

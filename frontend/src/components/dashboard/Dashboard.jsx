@@ -696,13 +696,6 @@ export default function Dashboard() {
         </div>
 
         <div className="sidebar-content">
-          {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
-          {activePanel === 'funnel' && (
-            <FunnelPage
-              onBack={goHome}
-              onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
-            />
-          )}
           {activePanel === 'chat' && (
             noProfile ? (
               <div className="no-profile-msg">
@@ -754,7 +747,8 @@ export default function Dashboard() {
           />
         ) : (
           <div className="feature-page-shell">
-            {activePanel === 'funnel' && <FunnelPage onBack={goHome} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
+            {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
+            {activePanel === 'funnel' && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
             {activePanel === 'sentiments' && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
             {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
