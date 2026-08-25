@@ -408,6 +408,14 @@ let dressurJob = {
 };
 
 function sortDressurItems(items, order) {
+  if (order === 'random') {
+    const shuffled = [...items];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
   const direction = order === 'desc' ? -1 : 1;
   return [...items].sort((a, b) => {
     const aNumber = String(a?.numero ?? '');
@@ -504,9 +512,24 @@ router.get('/dressur-queue/status', (req, res) => {
 });
 
 async function updateLocalDressurStatus(item, status, error = null) {
-  if (dressurJob.source !== 'local' || !item?.sourceKey) return;
+  if (!item?.sourceKey || !dressurJob.accountId) return;
   try {
-    await prisma.dressurQueueItem.update({ where: { account_id_source_key: { account_id: dressurJob.accountId, source_key: item.sourceKey } }, data: { status, error, sent_at: status === 'sent' ? new Date() : null } });
+    const position = Number.isInteger(item.position) ? item.position : 0;
+    await prisma.dressurQueueItem.upsert({
+      where: { account_id_source_key: { account_id: dressurJob.accountId, source_key: item.sourceKey } },
+      update: { status, error, sent_at: status === 'sent' ? new Date() : null },
+      create: {
+        account_id: dressurJob.accountId,
+        source_key: item.sourceKey,
+        numero: String(item.numero || ''),
+        message: String(item.message || ''),
+        wa_id: item.wa_id ? String(item.wa_id) : null,
+        position,
+        status,
+        error,
+        sent_at: status === 'sent' ? new Date() : null
+      }
+    });
   } catch (err) { console.error('[DressurQueue] Erreur sauvegarde statut local:', err.message); }
 }
 
@@ -540,7 +563,7 @@ router.post('/dressur-queue/start', async (req, res) => {
 
   const min = Math.max(1, Number(minDelay) || 10);
   const max = Math.max(min, Number(maxDelay) || 30);
-  const normalizedOrder = order === 'desc' ? 'desc' : 'asc';
+  const normalizedOrder = ['asc', 'desc', 'random'].includes(order) ? order : 'asc';
   const normalizedSource = source === 'local' ? 'local' : 'online';
   const requestedBatch = Math.max(1, parseInt(batchSize, 10) || 0);
   const canResume = dressurJob.paused && dressurJob.items.length > 0 && dressurJob.profileId === parseInt(profileId, 10);
@@ -548,12 +571,21 @@ router.post('/dressur-queue/start', async (req, res) => {
   if (!canResume) {
     let items;
     try {
+      const sentRows = await prisma.dressurQueueItem.findMany({
+        where: { account_id: req.accountId, status: 'sent' },
+        select: { source_key: true, numero: true }
+      });
+      const sentKeys = new Set(sentRows.map(row => row.source_key));
+      const sentNumbers = new Set(sentRows.map(row => String(row.numero || '').replace(/\D/g, '')));
+      const wasAlreadySent = (item) => sentKeys.has(item.sourceKey) || sentNumbers.has(String(item.numero || '').replace(/\D/g, ''));
+
       if (normalizedSource === 'local') {
         const localItems = await prisma.dressurQueueItem.findMany({ where: { account_id: req.accountId, status: 'pending' }, orderBy: { position: 'asc' } });
-        items = localItems.map(item => ({ ...item, sourceKey: item.source_key }));
+        items = localItems.map(item => ({ ...item, sourceKey: item.source_key })).filter(item => !wasAlreadySent(item));
       } else {
         const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
         items = Array.isArray(r.data) ? r.data.map(item => ({ ...item, sourceKey: dressurSourceKey(item) })) : [];
+        items = items.filter(item => !wasAlreadySent(item));
       }
     } catch (err) {
       return res.status(normalizedSource === 'local' ? 500 : 502).json({ error: normalizedSource === 'local' ? `Impossible de lire la file locale : ${err.message}` : `Impossible de joindre dressur.site : ${err.message}` });
