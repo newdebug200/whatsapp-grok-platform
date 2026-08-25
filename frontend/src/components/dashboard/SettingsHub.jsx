@@ -93,7 +93,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
         {tab === 'templates' && <QuickReplyManager />}
         {tab === 'tags' && <TagManager activeProfile={activeProfile} />}
         {tab === 'journal' && <FlagJournal />}
-        {tab === 'storage' && <StorageManager />}
+        {tab === 'storage' && <StorageManager isAdmin={account?.role === 'admin'} />}
         {tab === 'account' && <Settings />}
         {tab === 'admin' && account?.role === 'admin' && <AdminPanel />}
       </div>

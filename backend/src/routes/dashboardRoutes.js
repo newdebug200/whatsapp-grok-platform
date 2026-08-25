@@ -201,6 +201,8 @@ router.get('/storage', async (req, res) => {
   try {
     const profileId = req.profileId;
     const accountId = req.accountId;
+    const account = await prisma.account.findUnique({ where: { id: accountId }, select: { role: true } });
+    const isAdmin = account?.role === 'admin';
     const [messageMedia, campaignMedia, queueCount, archivedMessages] = await Promise.all([
       (prisma.message?.findMany ? prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])).catch((error) => {
         console.warn('Stockage: médias des messages indisponibles:', error.message);
@@ -223,7 +225,8 @@ router.get('/storage', async (req, res) => {
     const uniqueMedia = [...new Set(mediaFiles)];
     res.json({
       media: { files: uniqueMedia.length, bytes: uniqueMedia.reduce((sum, filename) => sum + getFileSize(filename), 0) },
-      localQueue: { items: queueCount },
+      // La file Dressursite est réservée à l’administration.
+      localQueue: isAdmin ? { items: queueCount } : null,
       archivedMessages: { items: archivedMessages },
     });
   } catch (error) {
@@ -254,6 +257,8 @@ router.delete('/storage/:kind', async (req, res) => {
       return res.json({ ok: true, deleted: filenames.length });
     }
     if (kind === 'local-queue') {
+      const account = await prisma.account.findUnique({ where: { id: accountId }, select: { role: true } });
+      if (account?.role !== 'admin') return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
       if (!prisma.dressurQueueItem?.deleteMany) return res.json({ ok: true, deleted: 0, unavailable: true });
       const result = await prisma.dressurQueueItem.deleteMany({ where: { account_id: accountId } });
       return res.json({ ok: true, deleted: result.count });
