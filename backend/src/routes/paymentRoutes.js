@@ -1,7 +1,12 @@
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
-const { Webhook } = require('fedapay');
+let Webhook = null;
+try {
+  ({ Webhook } = require('fedapay'));
+} catch (_) {
+  console.warn('[FedaPay] SDK absent : les paiements resteront indisponibles jusqu’à npm install.');
+}
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware } = require('../middleware/auth');
@@ -59,6 +64,7 @@ router.post('/webhook', async (req, res) => {
   const signature = req.headers['x-fedapay-signature'];
   let event;
   try {
+    if (!Webhook) throw new Error('SDK FedaPay absent. Exécutez npm install dans backend.');
     if (!process.env.FEDAPAY_WEBHOOK_SECRET) throw new Error('FEDAPAY_WEBHOOK_SECRET non configurée');
     event = Webhook.constructEvent(raw, signature, process.env.FEDAPAY_WEBHOOK_SECRET);
   } catch (err) {
