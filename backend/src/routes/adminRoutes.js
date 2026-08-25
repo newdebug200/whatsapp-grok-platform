@@ -401,6 +401,7 @@ let dressurJob = {
   minDelay: 10,
   maxDelay: 30,
   current: null,
+  source: 'online',
   items: [],
   results: [],
   runner: null
@@ -438,6 +439,7 @@ function dressurStatusPayload() {
     nextIndex: dressurJob.nextIndex,
     batchSize: dressurJob.batchSize,
     order: dressurJob.order,
+    source: dressurJob.source,
     minDelay: dressurJob.minDelay,
     maxDelay: dressurJob.maxDelay,
     current: dressurJob.current,
@@ -463,10 +465,50 @@ router.get('/dressur-queue', async (req, res) => {
   }
 });
 
+function dressurSourceKey(item) {
+  return `${String(item?.numero || '')}|${String(item?.wa_id || '')}|${String(item?.message || '')}`;
+}
+
+// GET /api/admin/dressur-queue/local — local persisted queue
+router.get('/dressur-queue/local', async (req, res) => {
+  try {
+    const items = await prisma.dressurQueueItem.findMany({ where: { account_id: req.accountId }, orderBy: { position: 'asc' } });
+    res.json({ items, count: items.length });
+  } catch (err) { res.status(500).json({ error: `Impossible de lire la file locale : ${err.message}` }); }
+});
+
+// POST /api/admin/dressur-queue/local/sync — merge online queue into local queue
+router.post('/dressur-queue/local/sync', async (req, res) => {
+  try {
+    const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
+    const items = Array.isArray(r.data) ? r.data : [];
+    await prisma.$transaction(items.map((item, position) => prisma.dressurQueueItem.upsert({
+      where: { account_id_source_key: { account_id: req.accountId, source_key: dressurSourceKey(item) } },
+      create: { account_id: req.accountId, source_key: dressurSourceKey(item), numero: String(item.numero || ''), message: String(item.message || ''), wa_id: item.wa_id ? String(item.wa_id) : null, position, status: 'pending' },
+      update: { numero: String(item.numero || ''), message: String(item.message || ''), wa_id: item.wa_id ? String(item.wa_id) : null, position }
+    })));
+    const local = await prisma.dressurQueueItem.findMany({ where: { account_id: req.accountId }, orderBy: { position: 'asc' } });
+    res.json({ success: true, items: local, count: local.length });
+  } catch (err) { res.status(502).json({ error: `Synchronisation impossible : ${err.message}` }); }
+});
+
+// DELETE /api/admin/dressur-queue/local — clear local queue
+router.delete('/dressur-queue/local', async (req, res) => {
+  try { const result = await prisma.dressurQueueItem.deleteMany({ where: { account_id: req.accountId } }); res.json({ success: true, deleted: result.count }); }
+  catch (err) { res.status(500).json({ error: `Impossible de vider la file locale : ${err.message}` }); }
+});
+
 // GET /api/admin/dressur-queue/status — current job state
 router.get('/dressur-queue/status', (req, res) => {
   res.json(dressurStatusPayload());
 });
+
+async function updateLocalDressurStatus(item, status, error = null) {
+  if (dressurJob.source !== 'local' || !item?.sourceKey) return;
+  try {
+    await prisma.dressurQueueItem.update({ where: { account_id_source_key: { account_id: dressurJob.accountId, source_key: item.sourceKey } }, data: { status, error, sent_at: status === 'sent' ? new Date() : null } });
+  } catch (err) { console.error('[DressurQueue] Erreur sauvegarde statut local:', err.message); }
+}
 
 async function confirmDressurDelivery(profileId, candidate, message) {
   try {
@@ -493,24 +535,30 @@ router.post('/dressur-queue/start', async (req, res) => {
     return res.status(409).json({ error: 'Un envoi est déjà en cours' });
   }
 
-  const { profileId, minDelay = 10, maxDelay = 30, batchSize, order = 'asc' } = req.body;
+  const { profileId, minDelay = 10, maxDelay = 30, batchSize, order = 'asc', source = 'online' } = req.body;
   if (!profileId) return res.status(400).json({ error: 'profileId requis' });
 
   const min = Math.max(1, Number(minDelay) || 10);
   const max = Math.max(min, Number(maxDelay) || 30);
   const normalizedOrder = order === 'desc' ? 'desc' : 'asc';
+  const normalizedSource = source === 'local' ? 'local' : 'online';
   const requestedBatch = Math.max(1, parseInt(batchSize, 10) || 0);
   const canResume = dressurJob.paused && dressurJob.items.length > 0 && dressurJob.profileId === parseInt(profileId, 10);
 
   if (!canResume) {
     let items;
     try {
-      const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
-      items = Array.isArray(r.data) ? r.data : [];
+      if (normalizedSource === 'local') {
+        const localItems = await prisma.dressurQueueItem.findMany({ where: { account_id: req.accountId, status: 'pending' }, orderBy: { position: 'asc' } });
+        items = localItems.map(item => ({ ...item, sourceKey: item.source_key }));
+      } else {
+        const r = await axios.get(DRESSUR_QUEUE_URL, { timeout: 10000 });
+        items = Array.isArray(r.data) ? r.data.map(item => ({ ...item, sourceKey: dressurSourceKey(item) })) : [];
+      }
     } catch (err) {
-      return res.status(502).json({ error: `Impossible de joindre dressur.site : ${err.message}` });
+      return res.status(normalizedSource === 'local' ? 500 : 502).json({ error: normalizedSource === 'local' ? `Impossible de lire la file locale : ${err.message}` : `Impossible de joindre dressur.site : ${err.message}` });
     }
-    if (items.length === 0) return res.status(400).json({ error: "La file d'attente est vide" });
+    if (items.length === 0) return res.status(400).json({ error: normalizedSource === 'local' ? 'Aucun message local en attente' : "La file d'attente est vide" });
     dressurJob = {
       ...dressurJob,
       running: false,
@@ -527,6 +575,7 @@ router.post('/dressur-queue/start', async (req, res) => {
       minDelay: min,
       maxDelay: max,
       current: null,
+      source: normalizedSource,
       items: sortDressurItems(items, normalizedOrder),
       results: [],
       runner: null
@@ -545,7 +594,7 @@ router.post('/dressur-queue/start', async (req, res) => {
   dressurJob.cancelled = false;
   const runToken = {};
   dressurJob.runner = runToken;
-  res.json({ success: true, total: dressurJob.total, batchSize: dressurJob.batchSize, order: dressurJob.order, resumed: canResume });
+  res.json({ success: true, total: dressurJob.total, batchSize: dressurJob.batchSize, order: dressurJob.order, source: dressurJob.source, resumed: canResume });
 
   (async () => {
     const batchEnd = Math.min(dressurJob.nextIndex + dressurJob.batchSize, dressurJob.total);
@@ -586,9 +635,11 @@ router.post('/dressur-queue/start', async (req, res) => {
           }
           if (!sent) throw lastError || new Error('Tous les formats ont échoué');
           dressurJob.sent++;
+          await updateLocalDressurStatus(item, 'sent');
           dressurJob.results.push({ numero, preview: String(message).slice(0, 80), status: 'sent', at: new Date().toISOString() });
         } catch (err) {
           dressurJob.failed++;
+          await updateLocalDressurStatus(item, 'failed', err.message);
           dressurJob.results.push({ numero, preview: String(message).slice(0, 80), status: 'failed', error: err.message, at: new Date().toISOString() });
         }
 

@@ -514,6 +514,8 @@ function DressurQueueSection() {
   const [maxDelay, setMaxDelay] = useState(30);
   const [batchSize, setBatchSize] = useState(10);
   const [order, setOrder] = useState('asc');
+  const [source, setSource] = useState('online');
+  const [localItems, setLocalItems] = useState([]);
   const [status, setStatus] = useState({ running: false, paused: false, sent: 0, failed: 0, total: 0, nextIndex: 0, current: null, results: [], pending: [] });
   const [msg, setMsg] = useState(null);
   const pollRef = useRef(null);
@@ -549,13 +551,29 @@ function DressurQueueSection() {
     finally { setLoadingQueue(false); }
   };
 
+  const loadLocalQueue = async () => {
+    try { const r = await axios.get(`${API_URL}/admin/dressur-queue/local`); setLocalItems(r.data.items || []); setBatchSize(prev => Math.min(Math.max(1, prev), Math.max(1, r.data.count || 1))); }
+    catch (err) { showMsg(err.response?.data?.error || 'Impossible de lire la file locale', true); }
+  };
+
+  const syncLocalQueue = async () => {
+    try { const r = await axios.post(`${API_URL}/admin/dressur-queue/local/sync`); setLocalItems(r.data.items || []); setQueue(r.data.items || []); showMsg(`${r.data.count || 0} message(s) synchronisé(s) localement`); }
+    catch (err) { showMsg(err.response?.data?.error || 'Synchronisation impossible', true); }
+  };
+
+  const clearLocalQueue = async () => {
+    if (!window.confirm('Vider toute la file locale ? Les statuts locaux seront supprimés.')) return;
+    try { await axios.delete(`${API_URL}/admin/dressur-queue/local`); setLocalItems([]); showMsg('File locale vidée'); }
+    catch (err) { showMsg(err.response?.data?.error || 'Impossible de vider la file locale', true); }
+  };
+
   const handleStart = async () => {
     if (!profileId) return showMsg('Sélectionnez un profil WhatsApp', true);
     const min = Number(minDelay), max = Number(maxDelay), batch = Number(batchSize);
     if (min > max) return showMsg('Le délai minimum doit être ≤ au maximum', true);
     if (!Number.isInteger(batch) || batch < 1) return showMsg('Le nombre de messages doit être supérieur à 0', true);
     try {
-      const startResponse = await axios.post(`${API_URL}/admin/dressur-queue/start`, { profileId: parseInt(profileId), minDelay: min, maxDelay: max, batchSize: batch, order });
+      const startResponse = await axios.post(`${API_URL}/admin/dressur-queue/start`, { profileId: parseInt(profileId), minDelay: min, maxDelay: max, batchSize: batch, order, source });
       await refreshStatus(); startPolling(); showMsg(startResponse.data?.resumed ? 'Envoi repris' : 'Envoi démarré');
     } catch (err) { showMsg(err.response?.data?.error || 'Erreur lors du démarrage', true); }
   };
@@ -580,13 +598,16 @@ function DressurQueueSection() {
       {msg && <div className={`admin-dressur-msg ${msg.error ? 'error' : 'success'}`}>{msg.text}</div>}
       <div className="admin-dressur-controls">
         <div className="admin-dressur-row"><label className="admin-dressur-label">Profil WhatsApp</label><select className="admin-verif-select" value={profileId} onChange={e => setProfileId(e.target.value)} disabled={isRunning}>{profiles.length === 0 && <option value="">Aucun profil</option>}{profiles.map(p => <option key={p.id} value={String(p.id)}>{p.phone_number}{p.display_name ? ` — ${p.display_name}` : ''}{p.is_connected ? ' ●' : ''}</option>)}</select></div>
+        <div className="admin-dressur-row"><label className="admin-dressur-label">Source de la file</label><select className="admin-verif-select" value={source} onChange={e => { setSource(e.target.value); if (e.target.value === 'local') loadLocalQueue(); }} disabled={isRunning}><option value="online">File en ligne (dressur.site)</option><option value="local">File locale (base Botora)</option></select></div>
+        <div className="admin-dressur-row"><label className="admin-dressur-label">Gestion de la file locale</label><div className="admin-dressur-delay-row"><button className="admin-dressur-fetch-btn" onClick={syncLocalQueue} disabled={isRunning}>↻ Recharger depuis le site</button><button className="admin-dressur-fetch-btn" onClick={loadLocalQueue} disabled={isRunning}>Lire le local</button><button className="admin-dressur-stop-btn" onClick={clearLocalQueue} disabled={isRunning}>Vider le local</button></div></div>
         <div className="admin-dressur-row"><label className="admin-dressur-label">Ordre des numéros</label><select className="admin-verif-select" value={order} onChange={e => setOrder(e.target.value)} disabled={isRunning}><option value="asc">Croissant</option><option value="desc">Décroissant</option></select></div>
         <div className="admin-dressur-row"><label className="admin-dressur-label">Messages à envoyer maintenant</label><input type="number" min="1" max="100000" className="admin-dressur-delay-input" value={batchSize} onChange={e => setBatchSize(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} /><span className="admin-dressur-delay-hint">dans la liste restante</span></div>
         <div className="admin-dressur-row"><label className="admin-dressur-label">Délai aléatoire entre envois (sec)</label><div className="admin-dressur-delay-row"><span className="admin-dressur-delay-lbl">Min</span><input type="number" min="1" max="300" className="admin-dressur-delay-input" value={minDelay} onChange={e => setMinDelay(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} /><span className="admin-dressur-delay-lbl">Max</span><input type="number" min="1" max="300" className="admin-dressur-delay-input" value={maxDelay} onChange={e => setMaxDelay(Math.max(1, parseInt(e.target.value) || 1))} disabled={isRunning} /><span className="admin-dressur-delay-hint">secondes</span></div></div>
       </div>
       <div className="admin-dressur-actions"><button className="admin-dressur-fetch-btn" onClick={loadQueue} disabled={loadingQueue || isRunning}>{loadingQueue ? 'Chargement…' : '↻ Charger la file'}</button><button className="admin-dressur-start-btn" onClick={handleStart} disabled={isRunning || !profileId}>{status.paused ? '▶ Reprendre' : '▶ Déclencher'}</button><button className="admin-dressur-stop-btn" onClick={handleStop} disabled={!isRunning}>Ⅱ Pause</button></div>
       {(isRunning || processed > 0 || status.paused) && <div className="admin-dressur-progress"><div className="admin-dressur-progress-stats"><span className="admin-dressur-stat ok">✅ {status.sent} envoyés</span><span className="admin-dressur-stat ko">❌ {status.failed} échoués</span><span className="admin-dressur-stat tot">⏳ {Math.max(0, (status.total || 0) - processed)} en attente</span><span className="admin-dressur-stat tot">📋 {status.total} total</span><span className={`admin-dressur-badge ${isRunning ? 'running' : 'done'}`}>{isRunning ? 'En cours…' : status.paused ? 'En pause' : 'Terminé'}</span></div>{isRunning && status.current && <div className="admin-dressur-current">Envoi {status.current.index}/{status.total} → <strong>{status.current.numero}</strong></div>}{status.total > 0 && <div className="admin-dressur-bar-wrap"><div className="admin-dressur-bar-fill" style={{ width: `${pct}%` }} /><span className="admin-dressur-bar-pct">{pct}%</span></div>}</div>}
-      {queue !== null && <div className="admin-dressur-list-section"><div className="admin-dressur-list-title">File source ({queue.length} messages) — ordre {order === 'asc' ? 'croissant' : 'décroissant'}</div><div className="admin-dressur-list">{queue.slice(0, 30).map((item, i) => <div key={i} className="admin-dressur-item"><span className="admin-dressur-item-num">{item.numero}</span><span className="admin-dressur-item-msg">{String(item.message).slice(0, 90)}{String(item.message).length > 90 ? '…' : ''}</span></div>)}{queue.length > 30 && <div className="admin-dressur-more">+{queue.length - 30} autres…</div>}</div></div>}
+      {source === 'local' && localItems.length > 0 && <div className="admin-dressur-list-section"><div className="admin-dressur-list-title">File locale persistée ({localItems.length} messages)</div><div className="admin-dressur-list">{localItems.slice(0, 30).map(item => <div key={item.id} className="admin-dressur-item"><span className="admin-dressur-item-num">{item.numero}</span><span className="admin-dressur-item-msg">{item.status === 'sent' ? '✅ Envoyé' : item.status === 'failed' ? '❌ Échec' : '⏳ En attente'} — {String(item.message).slice(0, 70)}</span></div>)}{localItems.length > 30 && <div className="admin-dressur-more">+{localItems.length - 30} autres…</div>}</div></div>}
+      {queue !== null && source !== 'local' && <div className="admin-dressur-list-section"><div className="admin-dressur-list-title">File source ({queue.length} messages) — ordre {order === 'asc' ? 'croissant' : 'décroissant'}</div><div className="admin-dressur-list">{queue.slice(0, 30).map((item, i) => <div key={i} className="admin-dressur-item"><span className="admin-dressur-item-num">{item.numero}</span><span className="admin-dressur-item-msg">{String(item.message).slice(0, 90)}{String(item.message).length > 90 ? '…' : ''}</span></div>)}{queue.length > 30 && <div className="admin-dressur-more">+{queue.length - 30} autres…</div>}</div></div>}
       {(results.length > 0 || pending.length > 0) && <div className="admin-dressur-results"><div className="admin-dressur-list-title">Suivi des numéros ({results.length + pending.length})</div><div className="admin-dressur-result-list">{results.map((r, i) => <div key={`result-${i}`} className={`admin-dressur-result-item ${r.status}`}><span className="admin-dressur-result-icon">{r.status === 'sent' ? '✅' : '❌'}</span><span className="admin-dressur-result-num">{r.numero}</span><span className="admin-dressur-result-preview">{r.status === 'sent' ? 'Message reçu' : 'Échec'}</span>{r.error && <span className="admin-dressur-result-err">{r.error}</span>}</div>)}{pending.slice(0, 100).map((r, i) => <div key={`pending-${i}`} className="admin-dressur-result-item pending"><span className="admin-dressur-result-icon">⏳</span><span className="admin-dressur-result-num">{r.numero}</span><span className="admin-dressur-result-preview">En attente</span></div>)}{pending.length > 100 && <div className="admin-dressur-more">+{pending.length - 100} numéros en attente…</div>}</div></div>}
     </div>
   );

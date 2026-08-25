@@ -21,6 +21,7 @@ model Account {
 
   whatsappProfiles   WhatsAppProfile[]
   creditTransactions CreditTransaction[]
+  dressurQueueItems  DressurQueueItem[]
 }
 
 model WhatsAppProfile {
@@ -256,6 +257,26 @@ model Status {
 model PlatformConfig {
   key   String @id
   value String
+}
+
+model DressurQueueItem {
+  id         Int       @id @default(autoincrement())
+  account_id Int
+  source_key String
+  numero     String
+  message    String
+  wa_id      String?
+  position   Int       @default(0)
+  status     String    @default("pending")
+  error      String?
+  sent_at    DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@unique([account_id, source_key])
+  @@index([account_id, status])
 }
 
 model CreditTransaction {
