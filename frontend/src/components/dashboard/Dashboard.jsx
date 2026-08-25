@@ -367,17 +367,6 @@ export default function Dashboard() {
 
   const noProfile = !activeProfile;
 
-  if (activePanel === 'funnel') {
-    return (
-      <div className="dashboard dashboard-home-fullscreen">
-        <FunnelPage
-          onBack={goHome}
-          onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
-        />
-      </div>
-    );
-  }
-
   if (activePanel === 'home') {
     return (
       <div className="dashboard dashboard-home-fullscreen">
@@ -623,6 +612,19 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          <div className="sidebar-settings-nav">
+            <div className="sidebar-settings-title">Paramètres</div>
+            {[
+              ['config', 'Réglages du bot'], ['faq', 'FAQ'], ['templates', 'Réponses rapides'],
+              ['tags', 'Tags'], ['journal', 'Alertes'], ['account', 'Mon compte'],
+              ...(isAdmin ? [['admin', 'Administration']] : [])
+            ].map(([tab, label]) => (
+              <button key={tab} className="sidebar-settings-link" onClick={() => goToSettings(tab)}>
+                <span className="sidebar-settings-dot" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
 
           {creditBalance !== null && (
             <div className={`sidebar-credits-bar ${creditBalance <= 0 ? 'empty' : creditBalance < 10 ? 'low' : ''}`}>
@@ -635,6 +637,12 @@ export default function Dashboard() {
         </div>
 
         <div className="sidebar-content">
+          {activePanel === 'funnel' && (
+            <FunnelPage
+              onBack={goHome}
+              onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
+            />
+          )}
           {activePanel === 'chat' && (
             noProfile ? (
               <div className="no-profile-msg">
