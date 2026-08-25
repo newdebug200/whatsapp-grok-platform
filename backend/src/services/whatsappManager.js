@@ -487,8 +487,6 @@ class WhatsAppManager {
         // skip if message was sent before the session became ready
         const readyAt = entry.entry.readyAt || 0;
         if (message.timestamp * 1000 < readyAt) return;
-        // Also skip anything arriving in the first 20s grace period after reconnect
-        if (Date.now() - readyAt < 20000) return;
 
         // If a campaign is running for this profile, save message but skip AI
         const campaignActive = [...this.runningCampaigns.values()].some(h => h.profileId === currentProfileId);
@@ -525,9 +523,7 @@ class WhatsAppManager {
         // Skip messages older than session ready time (avoid replaying history on reconnect)
         const readyAt = entry.entry.readyAt || 0;
         if (msg.timestamp * 1000 < readyAt) return;
-        if (Date.now() - readyAt < 20000) return;
-
-        const waId = msg.to;
+                const waId = msg.to;
         const phoneNumber = '+' + waId.split('@')[0];
 
         // Find or create the contact this message was sent to

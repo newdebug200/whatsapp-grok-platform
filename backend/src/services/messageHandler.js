@@ -168,7 +168,7 @@ class MessageHandler {
       }
 
       // ── Save message with unread=true (sentiment is filled in later, only if the bot actually responds) ──
-      prisma.message.create({
+      await prisma.message.create({
         data: {
           contact_id: dbContact.id,
           content: messageContent,
@@ -178,13 +178,13 @@ class MessageHandler {
           unread: true,
           media_path: mediaPath
         }
-      }).catch(() => {});
+      }).catch((err) => console.error('[WA] Enregistrement message entrant:', err.message));
 
-      // ── Increment unread count ──
-      prisma.contact.update({
+      // ── Increment unread count before notifying the UI ──
+      await prisma.contact.update({
         where: { id: dbContact.id },
         data: { unread_count: { increment: 1 } }
-      }).catch(() => {});
+      }).catch((err) => console.error('[WA] Mise à jour compteur non-lu:', err.message));
 
       waManager.addToCache(profileId, dbContact.id, 'received', messageContent);
 
