@@ -28,6 +28,96 @@
 
 /* BotConfig utilise encore les classes historiques globales. Ces règles évitent
    que les libellés et descriptions soient compressés ou masqués. */
+.sh-content > .panel-content {
+  background: linear-gradient(180deg, var(--bg-primary, #f7fafb) 0%, var(--bg-secondary, #ffffff) 100%);
+}
+
+.sh-content > .panel-content .panel-title {
+  max-width: 1120px;
+  margin: 0 auto 24px;
+  padding: 4px 2px 0;
+  color: var(--text-primary, #172b34);
+  font-size: clamp(1.55rem, 2.5vw, 2.15rem);
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.sh-content > .panel-content .section-label {
+  margin: 0 0 18px;
+  color: var(--accent, #00a884);
+  font-size: .78rem;
+  font-weight: 750;
+  letter-spacing: .08em;
+}
+
+.sh-content > .panel-content .wa-section,
+.sh-content > .panel-content .config-section {
+  padding: clamp(20px, 2.5vw, 30px);
+  margin: 0 auto 18px;
+  border: 1px solid var(--border, #e3eaed);
+  border-radius: 18px;
+  background: var(--bg-primary, #fff);
+  box-shadow: 0 10px 28px rgba(22, 48, 59, .08);
+}
+
+.sh-content > .panel-content .wa-section {
+  margin-bottom: 18px;
+}
+
+.sh-content > .panel-content .field-group {
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.sh-content > .panel-content .field-group label {
+  color: var(--text-primary, #30434c);
+  font-size: .88rem;
+  font-weight: 650;
+}
+
+.sh-content > .panel-content .field-group input,
+.sh-content > .panel-content .field-group textarea,
+.sh-content > .panel-content select {
+  min-height: 44px;
+  padding: 11px 13px;
+  border-color: var(--border, #dce5e8);
+  border-radius: 10px;
+  background: var(--bg-secondary, #f8fafb);
+  color: var(--text-primary, #172b34);
+  font-size: .92rem;
+  line-height: 1.5;
+}
+
+.sh-content > .panel-content .field-group textarea {
+  min-height: 132px;
+}
+
+.sh-content > .panel-content .toggle-row {
+  padding: 17px 0;
+  margin-bottom: 0;
+  border-top-color: var(--border, #e8eef0);
+}
+
+.sh-content > .panel-content .toggle-label {
+  color: var(--text-primary, #172b34);
+  font-size: .94rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.sh-content > .panel-content .toggle-desc {
+  max-width: 680px;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+
+.sh-content > .panel-content .save-btn {
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-size: .9rem;
+  font-weight: 700;
+}
 .sh-content > .panel-content .panel-title {
   font-size: clamp(1.45rem, 2.4vw, 2rem);
   line-height: 1.2;
@@ -138,6 +228,16 @@
 }
 
 @media (max-width: 760px) {
+  .sh-content > .panel-content .panel-title {
+    margin-bottom: 18px;
+  }
+
+  .sh-content > .panel-content .wa-section,
+  .sh-content > .panel-content .config-section {
+    padding: 18px 16px;
+    border-radius: 15px;
+  }
+
   .sh-content > .panel-content .wa-status-row > div {
     width: 100%;
     margin-left: 0 !important;
@@ -179,7 +279,16 @@
 }
 
 @media (max-width: 480px) {
+  .sh-content > .panel-content .panel-title {
+    font-size: 1.4rem;
+  }
+
+  .sh-content > .panel-content .field-group textarea {
+    min-height: 116px;
+  }
+
   .sh-content > .panel-content,
+
   .sh-content > .tm-panel,
   .sh-content > .settings-panel {
     padding: 18px 12px 28px;
