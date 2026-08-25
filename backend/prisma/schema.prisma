@@ -290,3 +290,22 @@ model CreditTransaction {
 
   account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
 }
+
+model SubscriptionPlan {
+  id            Int      @id @default(autoincrement())
+  name          String
+  slug          String   @unique
+  description   String?
+  price         Float    @default(0)
+  currency      String   @default("XOF")
+  credits       Float    @default(0)
+  duration_days Int      @default(30)
+  max_profiles  Int      @default(1)
+  features      String?
+  is_active     Boolean  @default(true)
+  sort_order    Int      @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([is_active, sort_order])
+}

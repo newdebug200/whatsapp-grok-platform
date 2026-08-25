@@ -35,6 +35,7 @@ const platformConfigRoutes = require('./routes/platformConfigRoutes');
 const statusRoutes = require('./routes/statusRoutes');
 const funnelRoutes = require('./routes/funnelRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -61,6 +62,7 @@ app.use('/api/platform-config', platformConfigRoutes);
 app.use('/api/statuses', statusRoutes);
 app.use('/api/funnel', funnelRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 

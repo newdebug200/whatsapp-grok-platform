@@ -43,6 +43,7 @@ export default function DashboardHome({
   const sections = [
     { key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null },
     { key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊', color: '#667eea' },
+    { key: 'subscriptions', label: 'Abonnements', desc: 'Voir les offres Botora', emoji: '◈', color: '#0aa37f' },
     { key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈', color: '#34b7f1' },
     { key: 'sentiments', label: 'Sentiments clients', desc: 'Alertes et messages à traiter', emoji: '💛', color: '#e47738', badge: data?.sentimentAlerts > 0 ? data.sentimentAlerts : null },
     ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣', color: '#f39c12' }] : []),

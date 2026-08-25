@@ -303,6 +303,68 @@ router.put('/platform-config', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// SUBSCRIPTION PLANS
+// ─────────────────────────────────────────────────────────────
+router.get('/subscription-plans', async (_req, res) => {
+  try {
+    const plans = await prisma.subscriptionPlan.findMany({ orderBy: [{ sort_order: 'asc' }, { price: 'asc' }] });
+    res.json(plans);
+  } catch (error) {
+    console.error('Erreur GET admin/subscription-plans:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des abonnements' });
+  }
+});
+
+router.post('/subscription-plans', async (req, res) => {
+  try {
+    const { name, slug, description, price, currency, credits, duration_days, max_profiles, features, is_active, sort_order } = req.body || {};
+    if (!String(name || '').trim() || !String(slug || '').trim()) return res.status(400).json({ error: 'Nom et identifiant obligatoires' });
+    const plan = await prisma.subscriptionPlan.create({ data: {
+      name: String(name).trim(), slug: String(slug).trim().toLowerCase(), description: description ? String(description) : null,
+      price: Math.max(0, Number(price) || 0), currency: String(currency || 'XOF').toUpperCase(), credits: Math.max(0, Number(credits) || 0),
+      duration_days: Math.max(1, parseInt(duration_days, 10) || 30), max_profiles: Math.max(1, parseInt(max_profiles, 10) || 1),
+      features: Array.isArray(features) ? features.join('\n') : (features ? String(features) : null), is_active: is_active !== false, sort_order: parseInt(sort_order, 10) || 0,
+    } });
+    res.status(201).json(plan);
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'Cet identifiant d’abonnement existe déjà' });
+    console.error('Erreur POST admin/subscription-plans:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de l’abonnement' });
+  }
+});
+
+router.patch('/subscription-plans/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const body = req.body || {};
+    const data = {};
+    for (const key of ['name', 'slug', 'description', 'currency']) if (body[key] !== undefined) data[key] = key === 'slug' || key === 'currency' ? String(body[key]).trim().toLowerCase() : (body[key] === '' ? null : String(body[key]));
+    for (const key of ['price', 'credits']) if (body[key] !== undefined) data[key] = Math.max(0, Number(body[key]) || 0);
+    for (const key of ['duration_days', 'max_profiles', 'sort_order']) if (body[key] !== undefined) data[key] = Math.max(0, parseInt(body[key], 10) || 0);
+    if (body.features !== undefined) data.features = Array.isArray(body.features) ? body.features.join('\n') : String(body.features || '');
+    if (body.is_active !== undefined) data.is_active = Boolean(body.is_active);
+    const plan = await prisma.subscriptionPlan.update({ where: { id }, data });
+    res.json(plan);
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Abonnement introuvable' });
+    if (error.code === 'P2002') return res.status(409).json({ error: 'Cet identifiant existe déjà' });
+    console.error('Erreur PATCH admin/subscription-plans:', error);
+    res.status(500).json({ error: 'Erreur lors de la modification de l’abonnement' });
+  }
+});
+
+router.delete('/subscription-plans/:id', async (req, res) => {
+  try {
+    await prisma.subscriptionPlan.delete({ where: { id: parseInt(req.params.id, 10) } });
+    res.json({ success: true });
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Abonnement introuvable' });
+    console.error('Erreur DELETE admin/subscription-plans:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression de l’abonnement' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // PROFILES & VERIFICATION TRIGGERS
 // ─────────────────────────────────────────────────────────────
 

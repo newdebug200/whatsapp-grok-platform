@@ -10,6 +10,7 @@ import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
 import DashboardHome from './DashboardHome';
 import FunnelPage from './FunnelPage';
+import SubscriptionPlans from './SubscriptionPlans';
 import Sentiments from './Sentiments';
 import './Dashboard.css';
 
@@ -415,7 +416,8 @@ export default function Dashboard() {
 
   const appNavItems = [
     ...navItems,
-    { key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }
+    { key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> },
+    { key: 'subscriptions', label: 'Abonnements', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> }
   ];
   return (
     <div className="dashboard">
@@ -694,6 +696,7 @@ export default function Dashboard() {
         </div>
 
         <div className="sidebar-content">
+          {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
           {activePanel === 'funnel' && (
             <FunnelPage
               onBack={goHome}

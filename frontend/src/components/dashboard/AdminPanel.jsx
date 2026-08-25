@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import './AdminPanel.css';
+import SubscriptionManager from './SubscriptionManager';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -707,6 +708,7 @@ export default function AdminPanel() {
       <VerificationSection />
       <DressurQueueSection />
       <CreditsSection users={users} />
+      <SubscriptionManager />
 
       <div className="admin-stats-row">
         <div className="admin-stat-card">
