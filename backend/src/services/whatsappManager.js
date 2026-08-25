@@ -195,6 +195,7 @@ class WhatsAppManager {
   async _syncChatHistory(client, profileId, accountId) {
     if (!WWEB_AVAILABLE) return;
     try {
+      this.io?.to(`account_${accountId}`).emit('sync-start', { profileId, message: 'Session WhatsApp conservée. Synchronisation en cours…' });
       console.log(`[WA] Synchronisation historique — profil ${profileId}`);
       const chats = await client.getChats();
       let syncedMessages = 0;
@@ -289,9 +290,10 @@ class WhatsAppManager {
       }
 
       console.log(`[WA] Historique synchronisé — ${syncedChats} chat(s), ${syncedMessages} nouveau(x) message(s) — profil ${profileId}`);
-      this.io?.to(`account_${accountId}`).emit('sync-complete', { profileId, syncedChats, syncedMessages });
+      this.io?.to(`account_${accountId}`).emit('sync-complete', { profileId, syncedChats, syncedMessages, message: 'Session WhatsApp conservée. Synchronisation terminée.' });
     } catch (err) {
       console.warn('[WA] Sync historique impossible:', err.message);
+      this.io?.to(`account_${accountId}`).emit('sync-failed', { profileId, message: 'La session WhatsApp est conservée, mais la synchronisation doit être relancée.' });
     }
   }
 
@@ -381,7 +383,8 @@ class WhatsAppManager {
       const entry = this.clients.get(clientKey);
       if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
       this.io?.to(`account_${accountId}`).emit('status', {
-        isConnected: false, qrCode: qr, status: 'qr', profileId
+        isConnected: false, qrCode: qr, status: 'qr', profileId,
+        message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.'
       });
     });
 
@@ -572,7 +575,8 @@ class WhatsAppManager {
       if (found) { found.entry.status = 'disconnected'; found.entry.qrCode = null; this.clients.delete(found.key); }
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'disconnected',
-        profileId: resolvedProfileId || null
+        profileId: resolvedProfileId || null,
+        message: 'La session WhatsApp de ce profil est perdue. Scannez le QR code pour vous reconnecter.'
       });
     });
 

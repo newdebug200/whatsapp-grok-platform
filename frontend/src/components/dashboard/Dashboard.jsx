@@ -162,10 +162,13 @@ export default function Dashboard() {
     });
 
     s.on('status', (status) => setWaStatus(status));
-    s.on('qr', (qr) => setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false })));
-    s.on('ready', () => setWaStatus({ isConnected: true, qrCode: null, status: 'connected' }));
-    s.on('disconnected', () => setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' }));
-    s.on('auth_failure', () => setWaStatus({ isConnected: false, qrCode: null, status: 'auth_failure' }));
+    s.on('qr', (qr) => setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false, message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.' })));
+    s.on('ready', () => setWaStatus({ isConnected: true, qrCode: null, status: 'connected', message: 'Session WhatsApp conservée.' }));
+    s.on('sync-start', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'syncing', message: data.message || 'Session WhatsApp conservée. Synchronisation en cours…' })));
+    s.on('sync-complete', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'synced', message: data.message || 'Session WhatsApp conservée. Synchronisation terminée.' })));
+    s.on('sync-failed', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, status: 'sync-failed', message: data.message || 'La session WhatsApp est conservée, mais la synchronisation doit être relancée.' })));
+    s.on('disconnected', () => setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'La session WhatsApp de ce profil est perdue. Scannez le QR code pour vous reconnecter.' }));
+    s.on('auth_failure', () => setWaStatus({ isConnected: false, qrCode: null, status: 'auth_failure', message: 'La session WhatsApp est invalide. Scannez le QR code pour reconnecter ce profil.' }));
 
     s.on('profile-ready', async (profile) => {
       selectProfile(profile);
@@ -227,11 +230,11 @@ export default function Dashboard() {
     if (!pid) return;
     try {
       await axios.post(`${API_URL}/messages/logout`, { profileId: pid });
-      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' });
+      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'Session WhatsApp déconnectée.' });
       await loadProfiles();
     } catch (err) {
       console.error('Erreur déconnexion WhatsApp:', err.message);
-      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' });
+      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'Session WhatsApp déconnectée.' });
     }
   };
 

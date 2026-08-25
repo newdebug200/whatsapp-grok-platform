@@ -2273,3 +2273,40 @@
 [data-theme="dark"] .app-navigation-sub-icon { color: #aebac1; }
 [data-theme="dark"] .app-navigation-sub-link:hover .app-navigation-sub-icon,
 [data-theme="dark"] .app-navigation-sub-link.active .app-navigation-sub-icon { color: #6ee7a0; }
+
+/* États explicites de session WhatsApp */
+.wa-session-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.wa-session-notice strong { display: block; font-weight: 700; }
+.wa-session-notice span { display: block; margin-top: 2px; }
+.wa-session-syncing { color: #146c43; background: #e9f8ef; border-color: #bde8ca; }
+.wa-session-synced { color: #146c43; background: #e9f8ef; border-color: #bde8ca; }
+.wa-session-warning { color: #8a5a00; background: #fff8df; border-color: #f1d68a; }
+.wa-session-lost { color: #a12b22; background: #fff0ef; border-color: #f1c1bd; }
+.wa-session-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-top: 2px;
+  border: 2px solid rgba(20, 108, 67, .25);
+  border-top-color: #00a884;
+  border-radius: 50%;
+  animation: wa-session-spin .75s linear infinite;
+}
+@keyframes wa-session-spin { to { transform: rotate(360deg); } }
+[data-theme="dark"] .wa-session-syncing,
+[data-theme="dark"] .wa-session-synced { color: #8be5ae; background: rgba(37,211,102,.11); border-color: rgba(37,211,102,.26); }
+[data-theme="dark"] .wa-session-warning { color: #ffd666; background: rgba(255,193,7,.1); border-color: rgba(255,193,7,.25); }
+[data-theme="dark"] .wa-session-lost { color: #ff8a80; background: rgba(231,76,60,.12); border-color: rgba(231,76,60,.26); }
+@media (max-width: 560px) {
+  .wa-session-notice { font-size: 12px; padding: 10px; }
+}
