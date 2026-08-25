@@ -46,7 +46,7 @@ const ACCOUNT_TABS = [
   },
 ];
 
-export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, noProfile, onGoConfig, platformConfig = {} }) {
+export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, noProfile, onGoConfig, platformConfig = {} }) {
   const [tab, setTab] = useState(initialTab || 'config');
 
   useEffect(() => {
@@ -84,6 +84,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
           <BotConfig
             waStatus={waStatus}
             onConnectWhatsApp={onConnectWhatsApp}
+            onResyncWhatsApp={onResyncWhatsApp}
             onLogoutWhatsApp={onLogoutWhatsApp}
             activeProfile={activeProfile}
           />

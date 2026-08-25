@@ -88,6 +88,21 @@ io.on('connection', (socket) => {
     socket.emit('status', status);
   });
 
+  socket.on('resync-whatsapp', async (data = {}) => {
+    const profileId = data?.profileId ? Number(data.profileId) : null;
+    if (!profileId) {
+      socket.emit('status', { status: 'error', message: 'Profil WhatsApp requis pour relancer la synchronisation.' });
+      return;
+    }
+    console.log(`Demande resynchronisation WhatsApp — compte ${accountId}, profil ${profileId}`);
+    try {
+      await whatsappManager.reconnectClient(accountId, profileId);
+    } catch (err) {
+      console.error('Erreur resynchronisation WhatsApp:', err.message);
+      socket.emit('status', { isConnected: false, qrCode: null, status: 'error', profileId, message: 'Impossible de relancer la synchronisation. Réessayez.' });
+    }
+  });
+
   socket.on('connect-whatsapp', (data = {}) => {
     const profileId = data?.profileId ? Number(data.profileId) : null;
     if (profileId) {

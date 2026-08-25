@@ -43,7 +43,7 @@ const PERSONALITIES = [
   { value: 'support',      label: '🛠️ Support technique', desc: 'Patient, précis, étape par étape' },
 ];
 
-export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp }) {
+export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, onResyncWhatsApp }) {
   const [config, setConfig] = useState({
     bot_name: 'Botora',
     bot_info: '',
@@ -66,6 +66,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const [waError, setWaError] = useState('');
   const [cooldownLeft, setCooldownLeft] = useState(0);
 
@@ -189,12 +190,17 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     onConnectWhatsApp();
   };
 
-  const handleDisconnect = async () => {
+    const handleDisconnect = async () => {
     setDisconnecting(true);
     try { await onLogoutWhatsApp(); }
     finally { setDisconnecting(false); }
   };
-
+  const handleResync = async () => {
+    if (resyncing || !onResyncWhatsApp) return;
+    setResyncing(true);
+    setWaError('');
+    try { await onResyncWhatsApp(); } finally { setTimeout(() => setResyncing(false), 1200); }
+  };
   const isConnectDisabled = connecting || cooldownLeft > 0;
   const connectLabel = () => {
     if (connecting) return 'Connexion...';
@@ -227,6 +233,11 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             {!waStatus.isConnected && (
               <button className="btn-connect" onClick={handleConnect} disabled={isConnectDisabled}>
                 {connectLabel()}
+              </button>
+            )}
+            {waStatus.status === 'sync-failed' && (
+              <button className="btn-connect" onClick={handleResync} disabled={resyncing}>
+                {resyncing ? 'Relance...' : 'Relancer la synchronisation'}
               </button>
             )}
             {waStatus.isConnected && (

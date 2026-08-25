@@ -297,6 +297,19 @@ class WhatsAppManager {
     }
   }
 
+  // ─── Reconnect an existing LocalAuth session without logging out ───────────
+
+  async reconnectClient(accountId, profileId) {
+    const existing = this._getEntryByProfileId(profileId);
+    if (existing) {
+      try { await this._destroyEntry(existing.key); } catch (err) {
+        console.warn('[WA] Nettoyage avant resynchronisation:', err.message);
+      }
+    }
+    this._cleanChromeLocks(profileId);
+    return this.initializeClient(accountId, profileId);
+  }
+
   // ─── Initialize a WhatsApp client ─────────────────────────────────────────
 
   async initializeClient(accountId, profileId = null) {

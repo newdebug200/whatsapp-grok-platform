@@ -227,6 +227,10 @@ export default function Dashboard() {
     const profileId = !forceNew && activeProfileRef.current?.id ? activeProfileRef.current.id : null;
     socketRef.current?.emit('connect-whatsapp', profileId ? { profileId } : {});
   };
+  const handleResyncWhatsApp = () => {
+    const profileId = activeProfileRef.current?.id;
+    if (profileId) socketRef.current?.emit('resync-whatsapp', { profileId });
+  };
 
   const handleLogoutWhatsApp = async (profileId) => {
     const pid = profileId || activeProfile?.id;
@@ -742,6 +746,7 @@ export default function Dashboard() {
             <SettingsHub
               waStatus={waStatus}
               onConnectWhatsApp={handleConnectWhatsApp}
+              onResyncWhatsApp={handleResyncWhatsApp}
               onLogoutWhatsApp={handleLogoutWhatsApp}
               activeProfile={activeProfile}
               account={account}
@@ -772,7 +777,7 @@ export default function Dashboard() {
             {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
             {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
             {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
-            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} noProfile={noProfile} onGoConfig={() => goToSettings('config')} platformConfig={platformConfig} />}
+            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onResyncWhatsApp={handleResyncWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} noProfile={noProfile} onGoConfig={() => goToSettings('config')} platformConfig={platformConfig} />}
           </div>
         )}
       </main>
