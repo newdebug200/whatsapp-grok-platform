@@ -253,6 +253,7 @@ export default function Dashboard() {
   const handleContactsUpdate = (updated) => setContacts(updated);
 
   const handleNavClick = (key) => {
+    if (key === 'admin' && account?.role !== 'admin') return;
     setActivePanel(key);
     if (key === 'chat') setUnreadCount(0);
     if (key === 'bot') setSettingsInitialTab('config');
@@ -383,7 +384,7 @@ export default function Dashboard() {
           onLogout={logout}
           onGoTo={(key) => {
             if (key.startsWith('settings-')) return goToSettings(key.replace('settings-', ''));
-            if (key === 'admin') return goToSettings('admin');
+            if (key === 'admin') return isAdmin ? setActivePanel('admin') : goHome();
             return handleNavClick(key);
           }}
           onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
