@@ -277,70 +277,51 @@ class MessageHandler {
 
   async _handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager) {
     try {
-      // 1. Resolve sender's LID (the historical Dressur.site contract).
-      let senderLid;
-      if (waId.endsWith('@lid')) {
-        senderLid = waId.split('@')[0];
+      // Historical Dressur.site contract: query with the sender phone number,
+      // not the WhatsApp privacy LID. The API expects digits without '+' or suffix.
+      const formattedNumber = String(phoneNumber || waId.split('@')[0]).replace(/[^0-9]/g, '');
+      const apiUrl = `https://dressur.site/crud/user/find_whatsapp_is_activatable/${formattedNumber}`;
+      console.log('[Verification] Appel API:', apiUrl);
+      const apiRes = await axios.get(apiUrl, {
+        timeout: 10000,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'WhatsApp-Groq-Bot/1.0'
+        }
+      });
+      console.log('[Verification] Réponse API reçue:', apiRes.data);
+
+      let replyText = '';
+      if (apiRes.data && typeof apiRes.data === 'object') {
+        if (apiRes.data.message) replyText = apiRes.data.message;
+        else if (apiRes.data.status === 'success' && apiRes.data.data) replyText = apiRes.data.data.message || JSON.stringify(apiRes.data.data);
+        else if (apiRes.data.response) replyText = apiRes.data.response;
+        else replyText = JSON.stringify(apiRes.data);
       } else {
-        try {
-          const numId = await client.getNumberId(waId.split('@')[0]);
-          senderLid = numId ? numId.user : waId.split('@')[0];
-        } catch (_) {
-          senderLid = waId.split('@')[0];
-        }
+        replyText = String(apiRes.data ?? '').trim();
       }
+      if (!replyText) throw new Error('Réponse vide de l’API de vérification');
 
-      // 2. Sync LIDs for numbers that don't have one yet in dressur.site
-      try {
-        const listRes = await axios.get(
-          'https://dressur.site/crud/user/find_number_not_have_lid',
-          { timeout: 8000 }
-        );
-        const numbersWithoutLid = Array.isArray(listRes.data)
-          ? listRes.data.slice(0, 50)
-          : [];
-
-        if (numbersWithoutLid.length > 0) {
-          console.log(`[Verification] Sync LID pour ${numbersWithoutLid.length} numéro(s)`);
-          const lidEntries = await Promise.all(
-            numbersWithoutLid.map(async (num) => {
-              try {
-                const numId = await client.getNumberId(String(num));
-                return numId ? { phone: String(num), lid: numId.user } : null;
-              } catch (_) { return null; }
-            })
-          );
-          const number_and_lid = {};
-          for (const entry of lidEntries) {
-            if (entry) number_and_lid[entry.phone] = entry.lid;
-          }
-          if (Object.keys(number_and_lid).length > 0) {
-            await axios.post(
-              'https://dressur.site/crud/user/number_and_lid',
-              { number_and_lid },
-              { timeout: 15000, responseType: 'text' }
-            );
-            console.log(`[Verification] Sync LID OK — ${Object.keys(number_and_lid).length} entrée(s) envoyée(s)`);
-          }
-        }
-      } catch (syncErr) {
-        console.warn('[Verification] Sync LID ignoré:', syncErr.message);
-      }
-
-      // 3. Check if sender's number is activatable and reply with exact API response.
-      const apiRes = await axios.get(
-        `https://dressur.site/crud/user/find_whatsapp_is_activatable/${senderLid}`,
-        { timeout: 10000, responseType: 'text' }
-      );
-      const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
       const sentVerif = await client.sendMessage(waId, replyText);
       waManager.trackBotSentId(sentVerif?.id?._serialized);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
-      prisma.message.create({
+      await prisma.message.create({
         data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
-      }).catch(() => {});
+      });
+      console.log('[Verification] Réponse WhatsApp envoyée');
     } catch (err) {
-      console.error('[Verification] Erreur:', err.message);
+      console.error('[Verification] Erreur:', err.message, err.response?.status || '', err.response?.data || '');
+      const errorMessage = 'Désolé, le service de vérification WhatsApp est temporairement indisponible. Veuillez réessayer plus tard.';
+      try {
+        const sentError = await client.sendMessage(waId, errorMessage);
+        waManager.trackBotSentId(sentError?.id?._serialized);
+        waManager.addToCache(profileId, dbContact.id, 'sent', errorMessage);
+        await prisma.message.create({
+          data: { contact_id: dbContact.id, content: errorMessage, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
+        });
+      } catch (sendErr) {
+        console.error('[Verification] Envoi du message d’erreur impossible:', sendErr.message);
+      }
     }
   }
 
