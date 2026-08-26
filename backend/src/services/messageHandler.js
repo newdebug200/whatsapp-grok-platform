@@ -206,11 +206,6 @@ class MessageHandler {
         if (!isAdminAccount && account?.is_blocked) return;
       }
 
-      if (!isAdminAccount) {
-        const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
-        if (iaGlobalCfg && iaGlobalCfg.value === 'false') return;
-      }
-
       // ── Verification trigger check ──
       const verificationTriggerEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'verification_triggers_enabled' } });
       if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
@@ -225,6 +220,12 @@ class MessageHandler {
         }
       }
 
+      // Verification is an explicit service and must remain available even
+      // when the general AI reply feature is disabled by the administrator.
+      if (!isAdminAccount) {
+        const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
+        if (iaGlobalCfg && iaGlobalCfg.value === 'false') return;
+      }
       // ── Sensitive keyword detection ──
       const sensitiveEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'sensitive_keywords_enabled' } });
       if (!sensitiveEnabledCfg || sensitiveEnabledCfg.value !== 'false') {
