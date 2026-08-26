@@ -213,6 +213,7 @@ class MessageHandler {
         const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
         const bodyTrimmed = message.body.trim().toLowerCase();
         const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
+        console.log(`[Verification] Contrôle message — profil=${profileId} body=${JSON.stringify(bodyTrimmed)} actifs=${triggers.length} trouvé=${Boolean(matchedTrigger)}`);
         if (matchedTrigger) {
           await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
           return;

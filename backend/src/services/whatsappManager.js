@@ -475,19 +475,32 @@ class WhatsAppManager {
     client.on('message', async (message) => {
       try {
         console.log(`[WA] Message reçu par listener — from=${message.from || 'inconnu'} body=${JSON.stringify((message.body || '').slice(0, 120))} fromMe=${message.fromMe}`);
-        if (message.fromMe) return;
-        if (this.campaignSendingWaIds.has(message.from)) return;
+        if (message.fromMe) {
+          console.log('[WA] Message entrant ignoré: fromMe=true');
+          return;
+        }
+        if (!message.from || message.from === 'status@broadcast' || message.from.includes('@broadcast')) {
+          console.log(`[WA] Message entrant ignoré: statut/broadcast (${message.from || 'inconnu'})`);
+          return;
+        }
+        if (this.campaignSendingWaIds.has(message.from)) {
+          console.log(`[WA] Message entrant ignoré: campagne active (${message.from})`);
+          return;
+        }
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
           || this._findEntryByClient(client);
-        if (!entry?.entry?.profileId) return;
+        if (!entry?.entry?.profileId) {
+          console.warn(`[WA] Message entrant ignoré: aucun profil actif trouvé (profil demandé=${profileId})`);
+          return;
+        }
         const currentProfileId = entry.entry.profileId;
-
-        // Ignore messages replayed on reconnect:
-        // skip if message was sent before the session became ready
+        // Ignore uniquement les messages historiques antérieurs à ready.
+        // Les messages privés réels reçus pendant la reconnexion doivent être traités.
         const readyAt = entry.entry.readyAt || 0;
-        if (message.timestamp * 1000 < readyAt) return;
-        // Also skip anything arriving in the first 20s grace period after reconnect
-        if (Date.now() - readyAt < 20000) return;
+        if (readyAt && Number(message.timestamp) * 1000 < readyAt) {
+          console.log(`[WA] Message entrant ignoré: replay historique timestamp=${message.timestamp} readyAt=${readyAt}`);
+          return;
+        }
 
         // If a campaign is running for this profile, save message but skip AI
         const campaignActive = [...this.runningCampaigns.values()].some(h => h.profileId === currentProfileId);
