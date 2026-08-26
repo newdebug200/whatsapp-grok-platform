@@ -216,12 +216,8 @@ class MessageHandler {
       if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
         if (!message.hasMedia && message.body) {
           const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
-          console.log(`[Verification] ${triggers.length} déclencheur(s) actif(s) pour le profil ${profileId}`);
-          const normalizeTriggerText = (value) => String(value || '')
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase().trim().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-          const bodyTrimmed = normalizeTriggerText(message.body);
-          const matchedTrigger = triggers.find(t => normalizeTriggerText(t.text) === bodyTrimmed);
+          const bodyTrimmed = message.body.trim().toLowerCase();
+          const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
           if (matchedTrigger) {
             await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
             return;
@@ -281,28 +277,18 @@ class MessageHandler {
 
   async _handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager) {
     try {
-      // 1. Resolve all identifiers that the verification API may accept.
-      // WhatsApp can expose a phone number (@c.us) or a privacy LID (@lid).
-      const candidates = [];
-      const addCandidate = (value) => {
-        const cleaned = String(value || '').replace(/@(?:c\.us|lid|g\.us)$/i, '').trim();
-        if (cleaned && !candidates.includes(cleaned)) candidates.push(cleaned);
-      };
-      addCandidate(waId);
-      addCandidate(phoneNumber);
-      if (waId.endsWith('@lid')) addCandidate(waId.split('@')[0]);
-      try {
-        const waContact = await client.getContactById(waId);
-        addCandidate(waContact?.id?._serialized);
-        addCandidate(waContact?.id?.user);
-        addCandidate(waContact?.number);
-      } catch (_) {}
-      try {
-        const numId = await client.getNumberId(waId.split('@')[0]);
-        addCandidate(numId?.user);
-      } catch (_) {}
-      if (candidates.length === 0) addCandidate(waId.split('@')[0]);
-      console.log(`[Verification] Identifiants testés: ${candidates.join(', ')}`);
+      // 1. Resolve sender's LID (the historical Dressur.site contract).
+      let senderLid;
+      if (waId.endsWith('@lid')) {
+        senderLid = waId.split('@')[0];
+      } else {
+        try {
+          const numId = await client.getNumberId(waId.split('@')[0]);
+          senderLid = numId ? numId.user : waId.split('@')[0];
+        } catch (_) {
+          senderLid = waId.split('@')[0];
+        }
+      }
 
       // 2. Sync LIDs for numbers that don't have one yet in dressur.site
       try {
@@ -341,39 +327,12 @@ class MessageHandler {
         console.warn('[Verification] Sync LID ignoré:', syncErr.message);
       }
 
-      // 3. Check the number/LID. Some Dressur deployments index by phone,
-      // others by LID, so try the known identifiers without hiding a failure.
-      let replyText = '';
-      let apiFallbackReply = '';
-      let resolvedIdentifier = '';
-      for (const identifier of candidates) {
-        try {
-          const apiRes = await axios.get(
-            `https://dressur.site/crud/user/find_whatsapp_is_activatable/${encodeURIComponent(identifier)}`,
-            { timeout: 10000, responseType: 'text', validateStatus: (status) => status < 500 }
-          );
-          const candidateReply = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
-          if (candidateReply) {
-            if (apiRes.status >= 200 && apiRes.status < 300) {
-              replyText = candidateReply;
-              resolvedIdentifier = identifier;
-              break;
-            }
-            // Dressur.site intentionally uses 404 with a human-readable answer
-            // for an unknown number. Preserve it as the final API response while
-            // still trying the other WhatsApp identifiers (phone/LID).
-            apiFallbackReply = candidateReply;
-          }
-        } catch (lookupErr) {
-          console.warn(`[Verification] Échec identifiant ${identifier}:`, lookupErr.message);
-        }
-      }
-      if (!replyText) {
-        replyText = apiFallbackReply || 'Nous n’avons pas pu obtenir la réponse de vérification pour ce numéro. Veuillez réessayer dans quelques instants.';
-        console.warn(`[Verification] Réponse non confirmée par Dressur pour ${phoneNumber}`);
-      } else {
-        console.log(`[Verification] Réponse Dressur obtenue avec ${resolvedIdentifier}`);
-      }
+      // 3. Check if sender's number is activatable and reply with exact API response.
+      const apiRes = await axios.get(
+        `https://dressur.site/crud/user/find_whatsapp_is_activatable/${senderLid}`,
+        { timeout: 10000, responseType: 'text' }
+      );
+      const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
       const sentVerif = await client.sendMessage(waId, replyText);
       waManager.trackBotSentId(sentVerif?.id?._serialized);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
