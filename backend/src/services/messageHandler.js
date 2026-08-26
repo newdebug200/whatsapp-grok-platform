@@ -208,6 +208,7 @@ class MessageHandler {
 
       // ── Verification trigger check ──
       const verificationTriggerEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'verification_triggers_enabled' } });
+      console.log(`[Verification] Contrôle message — profil=${profileId} body=${JSON.stringify((message.body || '').slice(0, 120))} global=${verificationTriggerEnabledCfg?.value ?? 'absent'}`);
       if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
         if (!message.hasMedia && message.body) {
           const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });

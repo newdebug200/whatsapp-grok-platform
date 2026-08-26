@@ -474,6 +474,7 @@ class WhatsAppManager {
     // ── Incoming message ──
     client.on('message', async (message) => {
       try {
+        console.log(`[WA] Message reçu par listener — from=${message.from || 'inconnu'} body=${JSON.stringify((message.body || '').slice(0, 120))} fromMe=${message.fromMe}`);
         if (message.fromMe) return;
         if (this.campaignSendingWaIds.has(message.from)) return;
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
