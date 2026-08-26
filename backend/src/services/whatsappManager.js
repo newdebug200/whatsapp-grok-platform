@@ -35,6 +35,7 @@ class WhatsAppManager {
     this.runningCampaigns = new Map(); // campaignId → { cancelled: boolean }
     this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
     this._botSentIds = new Set(); // WA message IDs sent by Botora API — used to skip duplicates in message_create
+    this._incomingHandledIds = new Set(); // Prevent message + message_create double processing
     this.io = null;
     this.prisma = null;
   }
@@ -473,7 +474,12 @@ class WhatsAppManager {
     // ── Incoming message ──
     client.on('message', async (message) => {
       try {
+        console.log(`[WA] Message entrant reçu — ${message.from || 'inconnu'}${message.body ? `: ${message.body.slice(0, 80)}` : ''}`);
         if (message.fromMe) return;
+        const incomingId = message.id?._serialized || `${message.from}_${message.timestamp}_${message.body || ''}`;
+        if (this._incomingHandledIds.has(incomingId)) return;
+        this._incomingHandledIds.add(incomingId);
+        setTimeout(() => this._incomingHandledIds.delete(incomingId), 60000);
         // Les statuts WhatsApp ne sont pas des conversations : ne pas les persister,
         // ne pas les compter comme non lus et ne jamais les diffuser à l’interface.
         if (message.from === 'status@broadcast' || message.from?.includes('@broadcast')) return;
@@ -499,6 +505,33 @@ class WhatsAppManager {
         });
       } catch (err) {
         console.error('[WA] Erreur message:', err.message);
+      }
+    });
+
+    // Some whatsapp-web.js versions/sessions emit received messages through
+    // message_create but not message. Keep a fallback listener with the same
+    // handler and an ID guard so either event is safe.
+    client.on('message_create', async (msg) => {
+      try {
+        if (msg.fromMe) return;
+        const incomingId = msg.id?._serialized || `${msg.from}_${msg.timestamp}_${msg.body || ''}`;
+        if (this._incomingHandledIds.has(incomingId)) return;
+        this._incomingHandledIds.add(incomingId);
+        setTimeout(() => this._incomingHandledIds.delete(incomingId), 60000);
+        console.log(`[WA] Message entrant (message_create) — ${msg.from || 'inconnu'}${msg.body ? `: ${msg.body.slice(0, 80)}` : ''}`);
+        if (msg.from === 'status@broadcast' || msg.from?.includes('@broadcast') || msg.from?.includes('@g.us')) return;
+        const entry = this._getEntryByProfileId(profileId !== null ? profileId : null) || this._findEntryByClient(client);
+        if (!entry?.entry?.profileId) return;
+        const currentProfileId = entry.entry.profileId;
+        const readyAt = entry.entry.readyAt || 0;
+        if (msg.timestamp * 1000 < readyAt) return;
+        const campaignActive = [...this.runningCampaigns.values()].some(h => h.profileId === currentProfileId);
+        await messageHandler.handleIncomingMessage(msg, client, this.prisma, currentProfileId, this, { skipAI: campaignActive });
+        const contact = await msg.getContact();
+        const phone = '+' + (contact.number || contact.id.user);
+        this.io?.to(`account_${accountId}`).emit('new-message', { from: phone, body: msg.body, timestamp: msg.timestamp, profileId: currentProfileId });
+      } catch (err) {
+        console.error('[WA] Erreur message_create (entrant):', err.message);
       }
     });
 
