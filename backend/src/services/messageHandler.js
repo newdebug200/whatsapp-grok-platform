@@ -207,17 +207,15 @@ class MessageHandler {
       }
 
       // ── Verification trigger check ──
-      const verificationTriggerEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'verification_triggers_enabled' } });
-      console.log(`[Verification] Contrôle message — profil=${profileId} body=${JSON.stringify((message.body || '').slice(0, 120))} global=${verificationTriggerEnabledCfg?.value ?? 'absent'}`);
-      if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
-        if (!message.hasMedia && message.body) {
-          const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
-          const bodyTrimmed = message.body.trim().toLowerCase();
-          const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
-          if (matchedTrigger) {
-            await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
-            return;
-          }
+      // The active trigger is authoritative, as in work_valide. The general
+      // AI feature flag must not block this explicit verification service.
+      if (!message.hasMedia && message.body) {
+        const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
+        const bodyTrimmed = message.body.trim().toLowerCase();
+        const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
+        if (matchedTrigger) {
+          await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
+          return;
         }
       }
 
