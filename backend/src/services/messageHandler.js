@@ -216,6 +216,7 @@ class MessageHandler {
       if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
         if (!message.hasMedia && message.body) {
           const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
+          console.log(`[Verification] ${triggers.length} déclencheur(s) actif(s) pour le profil ${profileId}`);
           const normalizeTriggerText = (value) => String(value || '')
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .toLowerCase().trim().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -343,6 +344,7 @@ class MessageHandler {
       // 3. Check the number/LID. Some Dressur deployments index by phone,
       // others by LID, so try the known identifiers without hiding a failure.
       let replyText = '';
+      let apiFallbackReply = '';
       let resolvedIdentifier = '';
       for (const identifier of candidates) {
         try {
@@ -351,18 +353,24 @@ class MessageHandler {
             { timeout: 10000, responseType: 'text', validateStatus: (status) => status < 500 }
           );
           const candidateReply = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
-          if (apiRes.status >= 200 && apiRes.status < 300 && candidateReply) {
-            replyText = candidateReply;
-            resolvedIdentifier = identifier;
-            break;
+          if (candidateReply) {
+            if (apiRes.status >= 200 && apiRes.status < 300) {
+              replyText = candidateReply;
+              resolvedIdentifier = identifier;
+              break;
+            }
+            // Dressur.site intentionally uses 404 with a human-readable answer
+            // for an unknown number. Preserve it as the final API response while
+            // still trying the other WhatsApp identifiers (phone/LID).
+            apiFallbackReply = candidateReply;
           }
         } catch (lookupErr) {
           console.warn(`[Verification] Échec identifiant ${identifier}:`, lookupErr.message);
         }
       }
       if (!replyText) {
-        replyText = 'Nous n’avons pas pu obtenir la réponse de vérification pour ce numéro. Veuillez réessayer dans quelques instants.';
-        console.warn(`[Verification] Aucune réponse Dressur pour ${phoneNumber}`);
+        replyText = apiFallbackReply || 'Nous n’avons pas pu obtenir la réponse de vérification pour ce numéro. Veuillez réessayer dans quelques instants.';
+        console.warn(`[Verification] Réponse non confirmée par Dressur pour ${phoneNumber}`);
       } else {
         console.log(`[Verification] Réponse Dressur obtenue avec ${resolvedIdentifier}`);
       }
