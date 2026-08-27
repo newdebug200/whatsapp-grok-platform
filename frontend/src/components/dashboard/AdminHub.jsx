@@ -15,7 +15,7 @@ const ADMIN_PAGES = [
 
 export default function AdminHub({ account, onBack }) {
   const [page, setPage] = useState('overview');
-  if (account?.role !== 'admin') {
+  if (!['admin', 'superadmin'].includes(account?.role)) {
     return <div className="admin-access-denied"><strong>Accès refusé</strong><span>Cette zone est réservée aux administrateurs.</span></div>;
   }
   const current = ADMIN_PAGES.find(item => item.key === page) || ADMIN_PAGES[0];

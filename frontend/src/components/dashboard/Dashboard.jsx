@@ -262,7 +262,7 @@ export default function Dashboard() {
   const handleContactsUpdate = (updated) => setContacts(updated);
 
   const handleNavClick = (key) => {
-    if (key === 'admin' && account?.role !== 'admin') return;
+    if (key === 'admin' && !['admin', 'superadmin'].includes(account?.role)) return;
     setActivePanel(key);
     if (key === 'chat') setUnreadCount(0);
     if (key === 'bot') setSettingsInitialTab('config');
@@ -344,7 +344,7 @@ export default function Dashboard() {
     setEditingProfileId(null);
   };
 
-  const isAdmin = account?.role === 'admin';
+  const isAdmin = ['admin', 'superadmin'].includes(account?.role);
   const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
   const discussionsEnabled = featureEnabled('whatsapp_discussions_enabled');
   const campaignsEnabled = featureEnabled('campaigns_enabled');
