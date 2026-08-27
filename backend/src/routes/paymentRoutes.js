@@ -13,8 +13,7 @@ const { authMiddleware } = require('../middleware/auth');
 
 const FEDAPAY_API_URL = (process.env.FEDAPAY_API_URL || 'https://api.fedapay.com/v1').replace(/\/$/, '');
 const BOTORA_ADMIN_API_URL = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
-// Clé publique de développement uniquement ; remplacer via .env en production.
-const BOTORA_ADMIN_SERVICE_KEY = process.env.BOTORA_ADMIN_SERVICE_KEY || process.env.BOTORA_SERVICE_KEY || process.env.BOTORA_API_KEY || '4458322a84f6c7ec80d592c2edb193e0bd70f715c79270d5ef2abcab6a45c69a';
+// Authentification interservices désactivée temporairement en développement.
 const MIN_CREDITS = 5;
 const XOF_PER_CREDIT = 120;
 const TOKENS_PER_CREDIT = 100000;
@@ -40,9 +39,8 @@ async function retrieveTransaction(externalId) {
 }
 
 async function botoraAdminRequest(path, body) {
-  if (!BOTORA_ADMIN_SERVICE_KEY) throw new Error('BOTORA_ADMIN_SERVICE_KEY non configurée');
   const response = await axios.post(`${BOTORA_ADMIN_API_URL}/${path.replace(/^\//, '')}`, body, {
-    headers: { 'X-Botora-Service-Key': BOTORA_ADMIN_SERVICE_KEY, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     timeout: 25000
   });
   return response.data;

@@ -5,12 +5,10 @@ const prisma = require('../prisma');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 const ADMIN_API = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
-// Clé publique de développement uniquement ; remplacer via .env en production.
-const SERVICE_KEY = process.env.BOTORA_ADMIN_SERVICE_KEY || process.env.BOTORA_SERVICE_KEY || process.env.BOTORA_API_KEY || '4458322a84f6c7ec80d592c2edb193e0bd70f715c79270d5ef2abcab6a45c69a';
+// Authentification interservices désactivée temporairement en développement.
 
 async function adminRequest(method, path, data, params) {
-  if (!SERVICE_KEY) throw new Error('BOTORA_ADMIN_SERVICE_KEY non configurée');
-  const response = await axios({ method, url: `${ADMIN_API}/${path.replace(/^\//, '')}`, data, params, headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 25000 });
+  const response = await axios({ method, url: `${ADMIN_API}/${path.replace(/^\//, '')}`, data, params, timeout: 25000 });
   return response.data;
 }
 
