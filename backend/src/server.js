@@ -37,6 +37,7 @@ const funnelRoutes = require('./routes/funnelRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const adminCentralRoutes = require('./routes/adminCentralRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -67,6 +68,7 @@ app.use('/api/funnel', funnelRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/admin-central', adminCentralRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 

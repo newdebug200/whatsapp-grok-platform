@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AdminPanel from './AdminPanel';
+import CentralAdminPanel from './CentralAdminPanel';
 import './AdminHub.css';
 
 const ADMIN_PAGES = [
@@ -36,7 +37,7 @@ export default function AdminHub({ account, onBack }) {
         ))}
       </nav>
       <div className="admin-page-heading"><div><span className="admin-workspace-kicker">Administration / {current.label}</span><h2>{current.label}</h2><p>{current.description}</p></div></div>
-      <AdminPanel section={page} />
+      {['overview', 'users', 'credits', 'subscriptions', 'features'].includes(page) ? <CentralAdminPanel section={page} /> : <AdminPanel section={page} />}
     </section>
   );
 }
