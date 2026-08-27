@@ -438,28 +438,29 @@ class MessageHandler {
       let isAdminAccount = false;
 
       try {
-        const creditsEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'credits_enabled' } });
-        creditsEnabled = creditsEnabledCfg?.value === 'true';
-
+        creditsEnabled = await centralSync.getFeature('credits_enabled', true);
         const profileRow = await prisma.whatsAppProfile.findUnique({ where: { id: profileId }, select: { account_id: true } });
         accountId = profileRow?.account_id;
-
         if (accountId) {
-          const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { credit_balance: true, role: true } });
+          const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { role: true } });
           isAdminAccount = accountRow?.role === 'admin';
           if (creditsEnabled && !isAdminAccount) {
-            const currentBalance = accountRow?.credit_balance ?? 0;
+            const centralCredits = await centralSync.getCredits(accountId);
+            if (!centralCredits?.ok) {
+              waManager.emitToProfileAccount(profileId, 'bot-error', { profileId, contactPhone: contact.phone_number || from, error: "⚠️ Le service central des crédits est indisponible. Réessayez dans quelques instants." });
+              return;
+            }
+            const currentBalance = Number(centralCredits.balance || 0);
+            await prisma.account.update({ where: { id: accountId }, data: { credit_balance: currentBalance } }).catch(() => {});
             if (currentBalance <= 0) {
-              waManager.emitToProfileAccount(profileId, 'bot-error', {
-                profileId, contactPhone: contact.phone_number || from,
-                error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger."
-              });
+              waManager.emitToProfileAccount(profileId, 'bot-error', { profileId, contactPhone: contact.phone_number || from, error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger." });
               return;
             }
           }
         }
       } catch (creditCheckErr) {
-        console.error('[Credits] Erreur vérification solde:', creditCheckErr.message);
+        console.error('[Credits] Erreur vérification centrale:', creditCheckErr.message);
+        if (accountId && creditsEnabled && !isAdminAccount) return;
       }
 
       // ── From here on we're committed to generating and sending a reply,

@@ -25,6 +25,16 @@ async function syncAccount(account) {
   } catch (error) { console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`); return null; }
 }
 
+async function getCredits(accountId) {
+  if (!SERVICE_KEY || !accountId) return null;
+  try {
+    const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
+    if (!account?.email) return null;
+    const response = await axios.post(`${ADMIN_API}/api/credits.php`, { email: account.email }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 8000 });
+    return response.data || null;
+  } catch (error) { console.warn(`[CentralSync] Solde central indisponible: ${error.message}`); return null; }
+}
+
 async function consumeCredits(accountId, tokensUsed, eventType = 'ai.usage', payload = {}) {
   if (!SERVICE_KEY || !accountId || !tokensUsed) return null;
   try {
@@ -55,4 +65,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, consumeCredits, getPlans, getFeature };
+module.exports = { reportActivity, syncAccount, getCredits, consumeCredits, getPlans, getFeature };
