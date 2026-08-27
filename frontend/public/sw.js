@@ -1,4 +1,4 @@
-const VERSION = 'v3';
+const VERSION = '2026-08-27-logos-v2';
 const STATIC_CACHE = `botora-static-${VERSION}`;
 const RUNTIME_CACHE = `botora-runtime-${VERSION}`;
 
