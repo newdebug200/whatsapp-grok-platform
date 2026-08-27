@@ -56,14 +56,19 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: 'Email et mot de passe requis' });
     }
-    const account = await prisma.account.findUnique({ where: { email: email.toLowerCase() } });
-    if (!account) {
-      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
-    }
-    const isValid = await bcrypt.compare(password, account.password);
+    const normalizedEmail = email.toLowerCase();
+    let account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
+    let isValid = account ? await bcrypt.compare(password, account.password) : false;
     if (!isValid) {
-      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      const centralUser = await centralSync.authenticateAccount(normalizedEmail, password);
+      if (!centralUser?.password_hash) return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      account = await prisma.account.upsert({
+        where: { email: normalizedEmail },
+        update: { name: centralUser.name, password: centralUser.password_hash, is_blocked: false },
+        create: { email: normalizedEmail, name: centralUser.name, password: centralUser.password_hash, role: 'user' }
+      });
     }
+    if (account.is_blocked) return res.status(403).json({ error: 'Compte bloqué.' });
     centralSync.syncAccount(account).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });

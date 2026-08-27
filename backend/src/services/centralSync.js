@@ -17,10 +17,18 @@ async function reportActivity(accountId, eventType, payload = {}, tokensUsed = n
   }
 }
 
+async function authenticateAccount(email, password) {
+  if (!SERVICE_KEY || !email || !password) return null;
+  try {
+    const response = await axios.post(`${ADMIN_API}/api/user-login.php`, { email, password }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 10000 });
+    return response.data?.user || null;
+  } catch (error) { console.warn(`[CentralSync] Authentification centrale impossible: ${error.message}`); return null; }
+}
+
 async function syncAccount(account) {
   if (!SERVICE_KEY || !account?.email) return null;
   try {
-    const response = await axios.post(`${ADMIN_API}/api/account-sync.php`, { email: account.email, name: account.name, phone: account.phone || null }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 10000 });
+    const response = await axios.post(`${ADMIN_API}/api/account-sync.php`, { email: account.email, name: account.name, phone: account.phone || null, password_hash: account.password || null }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 10000 });
     return response.data?.user || null;
   } catch (error) { console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`); return null; }
 }
@@ -65,4 +73,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, getCredits, consumeCredits, getPlans, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, getCredits, consumeCredits, getPlans, getFeature };
