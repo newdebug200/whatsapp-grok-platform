@@ -782,7 +782,7 @@ export default function Dashboard() {
             {activePanel === 'about' && <AboutPage onBack={goHome} />}
             {activePanel === 'how-it-works' && <HowItWorksPage onBack={goHome} />}
             {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
-            {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBack={goHome} />}
+            {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBalanceRefresh={refreshAccount} onBack={goHome} />}
             {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
             {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
