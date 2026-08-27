@@ -5,7 +5,7 @@ const prisma = require('../prisma');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 const ADMIN_API = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
-const SERVICE_KEY = process.env.BOTORA_ADMIN_SERVICE_KEY || process.env.BOTORA_API_KEY || '';
+const SERVICE_KEY = process.env.BOTORA_ADMIN_SERVICE_KEY || process.env.BOTORA_SERVICE_KEY || process.env.BOTORA_API_KEY || '';
 
 async function adminRequest(method, path, data, params) {
   if (!SERVICE_KEY) throw new Error('BOTORA_ADMIN_SERVICE_KEY non configurée');
