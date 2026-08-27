@@ -12,6 +12,8 @@ const prisma = require('../prisma');
 const { authMiddleware } = require('../middleware/auth');
 
 const FEDAPAY_API_URL = (process.env.FEDAPAY_API_URL || 'https://api.fedapay.com/v1').replace(/\/$/, '');
+const BOTORA_ADMIN_API_URL = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
+const BOTORA_ADMIN_SERVICE_KEY = process.env.BOTORA_ADMIN_SERVICE_KEY || process.env.BOTORA_API_KEY || '';
 const MIN_CREDITS = 5;
 const XOF_PER_CREDIT = 120;
 const TOKENS_PER_CREDIT = 100000;
@@ -34,6 +36,15 @@ function callbackUrl() {
 async function retrieveTransaction(externalId) {
   const response = await axios.get(`${FEDAPAY_API_URL}/transactions/${encodeURIComponent(externalId)}`, { headers: fedapayHeaders(), timeout: 20000 });
   return unwrap(response.data);
+}
+
+async function botoraAdminRequest(path, body) {
+  if (!BOTORA_ADMIN_SERVICE_KEY) throw new Error('BOTORA_ADMIN_SERVICE_KEY non configurée');
+  const response = await axios.post(`${BOTORA_ADMIN_API_URL}/${path.replace(/^\//, '')}`, body, {
+    headers: { 'X-Botora-Service-Key': BOTORA_ADMIN_SERVICE_KEY, 'Content-Type': 'application/json' },
+    timeout: 25000
+  });
+  return response.data;
 }
 
 async function creditApprovedPayment(payment, transaction, eventId, eventType, rawPayload) {
@@ -97,18 +108,14 @@ router.post('/checkout', async (req, res) => {
     const amount = Math.round(normalizedCredits * XOF_PER_CREDIT);
     const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { id: true, name: true, email: true } });
     if (!account) return res.status(404).json({ error: 'Compte introuvable.' });
-    const externalId = `BOTORA-${account.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const payment = await prisma.paymentTransaction.create({ data: { account_id: account.id, external_id: externalId, amount_xof: amount, credits: normalizedCredits, status: 'pending', description: `Recharge de ${normalizedCredits} crédit(s)` } });
+    const merchantReference = `BOTORA-${account.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const payment = await prisma.paymentTransaction.create({ data: { account_id: account.id, external_id: merchantReference, amount_xof: amount, credits: normalizedCredits, status: 'pending', description: `Recharge de ${normalizedCredits} crédit(s)` } });
     try {
-      const created = await axios.post(`${FEDAPAY_API_URL}/transactions`, { description: payment.description, amount, currency: { iso: 'XOF' }, callback_url: callbackUrl(), custom_metadata: { botora_payment_id: String(payment.id), account_id: String(account.id), credits: String(normalizedCredits) }, customer: { firstname: account.name || 'Client', lastname: 'Botora', email: account.email } }, { headers: fedapayHeaders(), timeout: 20000 });
-      const providerTransaction = unwrap(created.data);
-      const providerId = extractId(created.data);
-      if (!providerId) throw new Error('Identifiant FedaPay absent');
-      const tokenResponse = await axios.post(`${FEDAPAY_API_URL}/transactions/${providerId}/token`, {}, { headers: fedapayHeaders(), timeout: 20000 });
-      const token = tokenResponse.data?.token || tokenResponse.data?.payment_token;
-      if (!token) throw new Error('Lien de paiement FedaPay absent');
-      await prisma.paymentTransaction.update({ where: { id: payment.id }, data: { external_id: providerId, metadata: JSON.stringify({ merchant_reference: externalId, providerTransaction }) } });
-      return res.json({ paymentId: payment.id, transactionId: providerId, paymentUrl: `https://checkout.fedapay.com/${token}`, amount, credits: normalizedCredits });
+      const created = await botoraAdminRequest('/api/payment-create.php', { email: account.email, credits: normalizedCredits, callback_url: callbackUrl(), platform_payment_id: String(payment.id) });
+      const providerId = String(created.transactionId || '');
+      if (!created.ok || !providerId || !created.paymentUrl) throw new Error(created.error || 'Réponse de paiement admin invalide');
+      await prisma.paymentTransaction.update({ where: { id: payment.id }, data: { external_id: providerId, metadata: JSON.stringify({ merchant_reference: merchantReference, admin_payment_id: created.paymentId }) } });
+      return res.json({ paymentId: payment.id, transactionId: providerId, paymentUrl: created.paymentUrl, amount: created.amount || amount, credits: normalizedCredits });
     } catch (err) {
       await prisma.paymentTransaction.update({ where: { id: payment.id }, data: { status: 'creation_failed', metadata: JSON.stringify({ error: err.response?.data || err.message }) } });
       throw err;
@@ -130,10 +137,11 @@ router.post('/transactions/:id/verify', async (req, res) => {
   if (payment.status === APPROVED) return res.json({ status: APPROVED, alreadyCredited: true, credits: payment.credits });
   if (Date.now() - new Date(payment.created_at).getTime() > 24 * 60 * 60 * 1000) return res.status(410).json({ error: 'La vérification manuelle est disponible pendant 24 heures après la transaction.' });
   try {
-    const transaction = await retrieveTransaction(payment.external_id);
-    const status = normalizeStatus(transaction.status);
-    await creditApprovedPayment(payment, transaction, `manual:${payment.external_id}:${status}`, 'manual.verify', JSON.stringify(transaction));
-    return res.json({ status, approved: status === APPROVED, credits: status === APPROVED ? payment.credits : 0, message: status === APPROVED ? 'Paiement approuvé : crédits ajoutés.' : `Paiement non approuvé (${status}).` });
+    const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { email: true } });
+    const adminResult = await botoraAdminRequest('/api/payment-verify.php', { email: account.email, transaction_id: payment.external_id });
+    const status = normalizeStatus(adminResult.status);
+    await creditApprovedPayment(payment, { status }, `manual:${payment.external_id}:${status}`, 'manual.verify', JSON.stringify(adminResult));
+    return res.json({ status, approved: status === APPROVED, credits: status === APPROVED ? payment.credits : 0, message: adminResult.message || (status === APPROVED ? 'Paiement approuvé : crédits ajoutés.' : `Paiement non approuvé (${status}).`) });
   } catch (err) {
     console.error('[FedaPay] Verification error:', err.response?.data || err.message);
     return res.status(502).json({ error: 'La vérification FedaPay est temporairement indisponible.' });
