@@ -15,6 +15,7 @@ async function adminRequest(method, path, data, params) {
 
 router.use(authMiddleware, adminMiddleware);
 router.get('/overview', async (_req, res) => { try { res.json(await adminRequest('GET', '/api/admin.php', null, { resource: 'overview' })); } catch (e) { res.status(502).json({ error: 'API admin indisponible' }); } });
+router.get('/activities', async (req, res) => { try { res.json(await adminRequest('GET', '/api/admin.php', null, { resource: 'activities', limit: req.query.limit || 100 })); } catch (e) { res.status(502).json({ error: 'Activités indisponibles' }); } });
 router.get('/users', async (req, res) => { try { res.json(await adminRequest('GET', '/api/admin.php', null, { resource: 'users', q: req.query.q || '' })); } catch (e) { res.status(502).json({ error: 'Utilisateurs indisponibles' }); } });
 router.patch('/users/:id', async (req, res) => { try { const user = await prisma.account.findUnique({ where: { id: Number(req.params.id) }, select: { email: true } }); res.json(await adminRequest('PATCH', '/api/admin.php?resource=user', { ...req.body, email: user?.email })); } catch (e) { res.status(502).json({ error: 'Modification utilisateur impossible' }); } });
 router.get('/credits', async (req, res) => { try { res.json(await adminRequest('GET', '/api/admin.php', null, { resource: 'credits', email: req.query.email || '' })); } catch (e) { res.status(502).json({ error: 'Crédits indisponibles' }); } });
@@ -25,4 +26,5 @@ router.patch('/plans/:id', async (req, res) => { try { res.json(await adminReque
 router.delete('/plans/:id', async (req, res) => { try { res.json(await adminRequest('DELETE', `/api/admin.php?resource=plans&id=${Number(req.params.id)}`)); } catch (e) { res.status(502).json({ error: 'Suppression de l’abonnement impossible' }); } });
 router.get('/features', async (_req, res) => { try { res.json(await adminRequest('GET', '/api/admin.php', null, { resource: 'features' })); } catch (e) { res.status(502).json({ error: 'Fonctionnalités indisponibles' }); } });
 router.put('/features', async (req, res) => { try { res.json(await adminRequest('PUT', '/api/admin.php?resource=features', req.body)); } catch (e) { res.status(502).json({ error: 'Modification des fonctionnalités impossible' }); } });
+router.post('/telemetry', async (req, res) => { try { res.json(await adminRequest('POST', '/api/telemetry.php', { ...req.body, email: req.body.email || req.user?.email })); } catch (e) { res.status(502).json({ error: 'Remontée d’activité impossible' }); } });
 module.exports = router;

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const centralSync = require('./centralSync');
 const fs = require('fs');
 const path = require('path');
 
@@ -198,6 +199,7 @@ class MessageHandler {
       });
       let isAdminAccount = false;
       if (profile) {
+        centralSync.reportActivity(profile.account_id, 'whatsapp.message_received', { profile_id: profileId, phone: phoneNumber, type: message.type || 'text', has_media: Boolean(message.hasMedia) }).catch(() => {});
         const account = await prisma.account.findUnique({
           where: { id: profile.account_id },
           select: { is_blocked: true, role: true }
@@ -223,12 +225,10 @@ class MessageHandler {
       // Verification is an explicit service and must remain available even
       // when the general AI reply feature is disabled by the administrator.
       if (!isAdminAccount) {
-        const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
-        if (iaGlobalCfg && iaGlobalCfg.value === 'false') return;
+        if (!await centralSync.getFeature('ia_enabled_global', true)) return;
       }
       // ── Sensitive keyword detection ──
-      const sensitiveEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'sensitive_keywords_enabled' } });
-      if (!sensitiveEnabledCfg || sensitiveEnabledCfg.value !== 'false') {
+      if (await centralSync.getFeature('sensitive_keywords_enabled', true)) {
         if (!message.hasMedia && message.body) {
           const keywords = await prisma.sensitiveKeyword.findMany({ where: { profile_id: profileId, is_active: true } });
           const bodyLower = message.body.toLowerCase();
@@ -246,8 +246,7 @@ class MessageHandler {
 
       if (skipAI) return;
       if (!isAdminAccount) {
-        const autoRepliesCfg = await prisma.platformConfig.findUnique({ where: { key: 'auto_replies_enabled' } });
-        if (autoRepliesCfg && autoRepliesCfg.value === 'false') return;
+        if (!await centralSync.getFeature('auto_replies_enabled', true)) return;
       }
 
       const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
@@ -566,6 +565,7 @@ class MessageHandler {
               data: { account_id: accountId, amount: -creditsToDeduct, type: 'debit', description: `Réponse IA — ${totalTokens} tokens`, tokens_used: totalTokens }
             })
           ]);
+          centralSync.reportActivity(accountId, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant' }, totalTokens, creditsToDeduct).catch(() => {});
         } catch (deductErr) {
           console.error('[Credits] Erreur déduction:', deductErr.message);
         }
