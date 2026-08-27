@@ -37,13 +37,12 @@ router.post('/register', authLimiter, async (req, res) => {
     const accountCount = await prisma.account.count();
     const role = accountCount === 0 ? 'admin' : 'user';
 
-    const hashedPassword = await bcrypt.hash(password, 12);
-    const centralUser = await centralSync.syncAccount({ email: email.toLowerCase(), password: hashedPassword, name, phone: null });
-    if (!centralUser) {
+    const centralUser = await centralSync.syncAccount({ email: email.toLowerCase(), password_plain: password, name, phone: null });
+    if (!centralUser?.password_hash) {
       return res.status(502).json({ error: 'Le compte n’a pas été confirmé par l’API centrale. Inscription non validée.' });
     }
     const account = await prisma.account.create({
-      data: { email: email.toLowerCase(), password: hashedPassword, name, role }
+      data: { email: email.toLowerCase(), password: centralUser.password_hash, name, role }
     });
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });

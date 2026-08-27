@@ -71,6 +71,15 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin-central', adminCentralRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
+app.get('/api/central-health', async (_req, res) => {
+  try {
+    const centralSync = require('./services/centralSync');
+    const result = await centralSync.checkHealth();
+    res.status(result.ok ? 200 : 503).json(result);
+  } catch (error) {
+    res.status(503).json({ ok: false, error: error.message });
+  }
+});
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;

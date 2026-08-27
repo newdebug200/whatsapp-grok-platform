@@ -29,9 +29,19 @@ async function authenticateAccount(email, password) {
 async function syncAccount(account) {
   if (!SERVICE_KEY || !account?.email) return null;
   try {
-    const response = await axios.post(`${ADMIN_API}/api/account-sync.php`, { email: account.email, name: account.name, phone: account.phone || null, password_hash: account.password || null }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 10000 });
+    const response = await axios.post(`${ADMIN_API}/api/account-sync.php`, { email: account.email, name: account.name, phone: account.phone || null, password: account.password_plain || null }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 10000 });
     return response.data?.user || null;
   } catch (error) { console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`); return null; }
+}
+
+async function checkHealth() {
+  if (!SERVICE_KEY) return { ok: false, error: 'Clé centrale non configurée.' };
+  try {
+    const response = await axios.get(`${ADMIN_API}/api/health.php`, { headers: { 'X-Botora-Service-Key': SERVICE_KEY }, timeout: 8000 });
+    return response.data || { ok: response.status >= 200 && response.status < 300 };
+  } catch (error) {
+    return { ok: false, status: error.response?.status || 0, error: error.response?.data?.error || error.message };
+  }
 }
 
 async function getCredits(accountId) {
@@ -74,4 +84,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, getCredits, consumeCredits, getPlans, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, checkHealth, getCredits, consumeCredits, getPlans, getFeature };
