@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 const messageHandler = require('./messageHandler');
+const centralSync = require('./centralSync');
 
 // ─── Lazy-load whatsapp-web.js ────────────────────────────────────────────────
 let Client = null;
@@ -451,6 +452,7 @@ class WhatsAppManager {
         }
       }
 
+      centralSync.reportActivity(accountId, 'whatsapp.profile_connected', { profile_id: profile.id, phone_number: profile.phone_number }).catch(() => {});
       this.io?.to(`account_${accountId}`).emit('profile-ready', {
         id: profile.id, phone_number: profile.phone_number,
         display_name: profile.display_name, is_connected: true
@@ -585,6 +587,7 @@ class WhatsAppManager {
     // ── Disconnected ──
     client.on('disconnected', async (reason) => {
       console.log(`[WA] Déconnecté — ${reason}`);
+      centralSync.reportActivity(accountId, 'whatsapp.profile_disconnected', { profile_id: profileId, reason: String(reason || 'unknown') }).catch(() => {});
       const found = this._findEntryByClient(client);
       const resolvedProfileId = found?.entry?.profileId;
       if (resolvedProfileId) {
@@ -606,6 +609,7 @@ class WhatsAppManager {
     // ── Auth failure ──
     client.on('auth_failure', (msg) => {
       console.error(`[WA] Auth failure:`, msg);
+      centralSync.reportActivity(accountId, 'whatsapp.auth_failure', { profile_id: profileId, message: String(msg || '') }).catch(() => {});
       const found = this._findEntryByClient(client);
       if (found) { found.entry.status = 'auth_failure'; found.entry.lastErrorAt = Date.now(); }
       this.io?.to(`account_${accountId}`).emit('status', {
@@ -698,6 +702,7 @@ class WhatsAppManager {
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
     const client = found.entry.client;
+    const reportSent = () => centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to, content_length: String(content || '').length }).catch(() => {});
 
     // ── Méthode 1 : getChatById → chat.sendMessage() ──────────────────────────
     // Pour les contacts avec chat existant (LID ou @c.us), c'est la méthode la plus
@@ -713,6 +718,7 @@ class WhatsAppManager {
       // Ne pas basculer vers un autre transport si sendMessage() remonte une
       // erreur après avoir accepté le message : cela provoquerait un doublon.
       await chat.sendMessage(content);
+      reportSent();
       return;
     }
 
@@ -730,7 +736,7 @@ class WhatsAppManager {
         }
       }, to, content);
 
-      if (wppResult && wppResult.ok) return;
+      if (wppResult && wppResult.ok) { reportSent(); return; }
       if (wppResult && wppResult.error && wppResult.error !== 'WPP non disponible') {
         throw new Error(wppResult.error);
       }
@@ -741,6 +747,7 @@ class WhatsAppManager {
     // ── Méthode 3 : fallback wrapper whatsapp-web.js ──────────────────────────
     const result = await client.sendMessage(to, content);
     if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
+    reportSent();
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
@@ -866,6 +873,7 @@ class WhatsAppManager {
     const accountId = found.entry.accountId;
     const handle = { cancelled: false, profileId };
     this.runningCampaigns.set(campaignId, handle);
+    centralSync.reportActivity(accountId, 'campaign.started', { campaign_id: campaignId, profile_id: profileId }).catch(() => {});
 
     try {
       const campaign = await this.prisma.campaign.findUnique({
@@ -1070,17 +1078,20 @@ class WhatsAppManager {
             campaignId, done: finalDone, total: totalTargets, completed: true
           });
           console.log(`[Campaign ${campaignId}] Terminée — ${finalDone}/${totalTargets} envoyés`);
+          centralSync.reportActivity(accountId, 'campaign.completed', { campaign_id: campaignId, profile_id: profileId, done: finalDone, total: totalTargets }).catch(() => {});
         }
 
         this.runningCampaigns.delete(campaignId);
       })().catch(err => {
         console.error(`[Campaign ${campaignId}] Erreur runner:`, err.message);
+        centralSync.reportActivity(accountId, 'campaign.error', { campaign_id: campaignId, profile_id: profileId, error: err.message }).catch(() => {});
         this.runningCampaigns.delete(campaignId);
         this.prisma.campaign.update({ where: { id: campaignId }, data: { status: 'paused' } }).catch(() => {});
       });
 
     } catch (err) {
       console.error(`[Campaign ${campaignId}] Erreur démarrage:`, err.message);
+      centralSync.reportActivity(accountId, 'campaign.error', { campaign_id: campaignId, profile_id: profileId, error: err.message }).catch(() => {});
       this.runningCampaigns.delete(campaignId);
     }
   }
