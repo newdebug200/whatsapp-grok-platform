@@ -58,17 +58,16 @@ export default function RechargeCredits({ creditBalance, onBack, onBalanceRefres
 
   const checkout = async () => {
     if (qty < config.minCredits) return setMessage({ error: `Le minimum est de ${config.minCredits} crédits.` });
-    const paymentWindow = window.open('about:blank', '_blank', 'noopener,noreferrer');
     setPaying(true); setMessage(null);
     try {
       const r = await axios.post(`${API_URL}/payments/checkout`, { credits: qty });
-      if (!r.data?.paymentUrl) throw new Error('URL FedaPay absente.');
-      if (paymentWindow) paymentWindow.location.href = r.data.paymentUrl; else window.open(r.data.paymentUrl, '_blank', 'noopener,noreferrer');
+      if (!r.data?.paymentUrl || !/^https:\/\/(checkout\.)?fedapay\.com\//i.test(r.data.paymentUrl)) throw new Error('L’API n’a pas retourné une URL FedaPay valide.');
+      const paymentWindow = window.open(r.data.paymentUrl, '_blank', 'noopener,noreferrer');
+      if (!paymentWindow) window.location.assign(r.data.paymentUrl);
       setMessage({ text: 'Paiement ouvert dans un nouvel onglet. Botora vérifie automatiquement son statut toutes les 5 secondes.' });
       startPolling(r.data.paymentId);
     } catch (e) {
-      if (paymentWindow) paymentWindow.close();
-      setMessage({ error: e.response?.data?.error || e.message || 'Création du paiement impossible.' });
+      setMessage({ error: e.response?.data?.error || e.response?.data?.details || e.message || 'Création du paiement impossible.' });
     } finally { setPaying(false); }
   };
   const verify = async (id) => {
