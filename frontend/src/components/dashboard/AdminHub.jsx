@@ -1,20 +1,14 @@
 import React, { useState } from 'react';
 import AdminPanel from './AdminPanel';
-import CentralAdminPanel from './CentralAdminPanel';
 import './AdminHub.css';
 
 const ADMIN_PAGES = [
-  { key: 'overview', label: 'Vue d’ensemble', description: 'Suivez l’activité et l’état global de Botora.', icon: '◈' },
-  { key: 'users', label: 'Utilisateurs', description: 'Gérez les comptes, rôles, statuts et accès.', icon: '♙' },
-  { key: 'credits', label: 'Crédits', description: 'Contrôlez les soldes et les ajustements de crédits.', icon: '◉' },
-  { key: 'subscriptions', label: 'Abonnements', description: 'Créez et gérez les offres disponibles.', icon: '◇' },
-  { key: 'features', label: 'Fonctionnalités', description: 'Activez ou désactivez les modules de la plateforme.', icon: '⚙' },
   { key: 'verification', label: 'Vérification', description: 'Configurez les déclencheurs de vérification WhatsApp.', icon: '✓' },
   { key: 'dressur', label: 'File WhatsApp', description: 'Supervisez les envois et leur progression.', icon: '↗' },
 ];
 
 export default function AdminHub({ account, onBack }) {
-  const [page, setPage] = useState('overview');
+  const [page, setPage] = useState('verification');
   if (!['admin', 'superadmin'].includes(account?.role)) {
     return <div className="admin-access-denied"><strong>Accès refusé</strong><span>Cette zone est réservée aux administrateurs.</span></div>;
   }
@@ -37,7 +31,7 @@ export default function AdminHub({ account, onBack }) {
         ))}
       </nav>
       <div className="admin-page-heading"><div><span className="admin-workspace-kicker">Administration / {current.label}</span><h2>{current.label}</h2><p>{current.description}</p></div></div>
-      {['overview', 'users', 'credits', 'subscriptions', 'features'].includes(page) ? <CentralAdminPanel section={page} /> : <AdminPanel section={page} />}
+      {['verification', 'dressur'].includes(page) ? <AdminPanel section={page} /> : null}
     </section>
   );
 }
