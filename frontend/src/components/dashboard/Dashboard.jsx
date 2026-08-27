@@ -118,6 +118,9 @@ export default function Dashboard() {
   }, []);
 
   const handleNewMessage = useCallback((msg) => {
+    // `new-message` sert aussi à actualiser l’interface pour les messages sortants.
+    // Une notification utilisateur ne doit concerner que les messages réellement reçus.
+    if (msg?.fromMe === true) return;
     if (msg.profileId && activeProfileRef.current?.id !== msg.profileId) return;
 
     const isOnThisConversation = (
