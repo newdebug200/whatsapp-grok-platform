@@ -87,7 +87,17 @@ router.get('/me', authMiddleware, async (req, res) => {
       select: { id: true, email: true, name: true, role: true, created_at: true, credit_balance: true, is_blocked: true }
     });
     if (!account) return res.status(404).json({ error: 'Compte introuvable' });
-    res.json(account);
+    const central = await centralSync.getAccount(account.email);
+    if (central) {
+      const nextBlocked = ['suspended', 'expired', 'banned'].includes(String(central.status));
+      const updated = await prisma.account.update({
+        where: { id: account.id },
+        data: { name: central.name || account.name, credit_balance: Number(central.credits_balance || 0), is_blocked: nextBlocked },
+        select: { id: true, email: true, name: true, role: true, created_at: true, credit_balance: true, is_blocked: true }
+      });
+      return res.json({ ...updated, central_status: central.status, central_plan_id: central.plan_id, central_trial_ends_at: central.trial_ends_at, central_synced: true });
+    }
+    res.json({ ...account, central_synced: false, central_sync_error: 'Profil central indisponible' });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la récupération du compte' });
   }

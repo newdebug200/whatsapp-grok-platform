@@ -32,6 +32,17 @@ async function syncAccount(account) {
   } catch (error) { console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`); return null; }
 }
 
+async function getAccount(email) {
+  if (!email) return null;
+  try {
+    const response = await axios.get(`${ADMIN_API}/api/account.php`, { params: { email }, timeout: 8000 });
+    return response.data?.user || null;
+  } catch (error) {
+    console.warn(`[CentralSync] Profil central indisponible: ${error.message}`);
+    return null;
+  }
+}
+
 async function checkHealth() {
   try {
     const response = await axios.get(`${ADMIN_API}/api/health.php`, { timeout: 8000 });
@@ -79,4 +90,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, checkHealth, getCredits, consumeCredits, getPlans, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getPlans, getFeature };

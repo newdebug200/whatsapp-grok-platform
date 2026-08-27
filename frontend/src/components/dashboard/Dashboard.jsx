@@ -42,7 +42,7 @@ function playNotifSound() {
 }
 
 export default function Dashboard() {
-  const { account, token, logout, profiles, activeProfile, selectProfile, loadProfiles } = useAuth();
+  const { account, token, logout, profiles, activeProfile, selectProfile, loadProfiles, refreshAccount } = useAuth();
   const [socket, setSocket] = useState(null);
   const [waStatus, setWaStatus] = useState({ isConnected: false, qrCode: null, status: 'not_initialized' });
   const [selectedContact, setSelectedContact] = useState(null);
@@ -83,6 +83,11 @@ export default function Dashboard() {
     window.addEventListener('botora-sound-change', handler);
     return () => window.removeEventListener('botora-sound-change', handler);
   }, []);
+
+  // Resynchronise les données métier centrales à chaque changement d’écran.
+  useEffect(() => {
+    if (token && activePanel !== 'home') refreshAccount().catch(() => {});
+  }, [activePanel, token, refreshAccount]);
 
   // Load platform config + credit balance
   useEffect(() => {
