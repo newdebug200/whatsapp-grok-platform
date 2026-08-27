@@ -546,6 +546,13 @@ class MessageHandler {
 
       const aiResponse = response.data.choices[0].message.content;
       const totalTokens = response.data.usage?.total_tokens || 0;
+      let centralCreditResult = null;
+      if (creditsEnabled && accountId && totalTokens > 0) {
+        centralCreditResult = await centralSync.consumeCredits(accountId, totalTokens, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant' });
+        if (!centralCreditResult?.ok) {
+          throw new Error(centralCreditResult?.error || 'API centrale des crédits indisponible');
+        }
+      }
 
       const sentAI = await client.sendMessage(from, aiResponse);
       waManager.trackBotSentId(sentAI?.id?._serialized);
@@ -554,20 +561,10 @@ class MessageHandler {
         data: { contact_id: contact.id, content: aiResponse, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
       }).catch(() => {});
 
-      if (creditsEnabled && accountId && totalTokens > 0) {
-        try {
-          const creditRateCfg = await prisma.platformConfig.findUnique({ where: { key: 'credit_per_1000_tokens' } });
-          const creditRate = parseFloat(creditRateCfg?.value || '0.01');
-          const creditsToDeduct = parseFloat(((totalTokens / 1000) * creditRate).toFixed(4));
-          await prisma.$transaction([
-            prisma.account.update({ where: { id: accountId }, data: { credit_balance: { decrement: creditsToDeduct } } }),
-            prisma.creditTransaction.create({
-              data: { account_id: accountId, amount: -creditsToDeduct, type: 'debit', description: `Réponse IA — ${totalTokens} tokens`, tokens_used: totalTokens }
-            })
-          ]);
-          centralSync.reportActivity(accountId, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant' }, totalTokens, creditsToDeduct).catch(() => {});
-        } catch (deductErr) {
-          console.error('[Credits] Erreur déduction:', deductErr.message);
+      if (centralCreditResult?.ok && accountId) {
+        const centralBalance = Number(centralCreditResult.credits_balance);
+        if (Number.isFinite(centralBalance)) {
+          await prisma.account.update({ where: { id: accountId }, data: { credit_balance: centralBalance } }).catch(() => {});
         }
       }
     } catch (error) {

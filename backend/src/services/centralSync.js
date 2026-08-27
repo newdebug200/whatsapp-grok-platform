@@ -17,6 +17,30 @@ async function reportActivity(accountId, eventType, payload = {}, tokensUsed = n
   }
 }
 
+async function syncAccount(account) {
+  if (!SERVICE_KEY || !account?.email) return null;
+  try {
+    const response = await axios.post(`${ADMIN_API}/api/account-sync.php`, { email: account.email, name: account.name, phone: account.phone || null }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 10000 });
+    return response.data?.user || null;
+  } catch (error) { console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`); return null; }
+}
+
+async function consumeCredits(accountId, tokensUsed, eventType = 'ai.usage', payload = {}) {
+  if (!SERVICE_KEY || !accountId || !tokensUsed) return null;
+  try {
+    const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
+    if (!account?.email) return null;
+    const response = await axios.post(`${ADMIN_API}/api/consume-central.php`, { email: account.email, tokens_used: tokensUsed, event_type: eventType, payload }, { headers: { 'X-Botora-Service-Key': SERVICE_KEY, 'Content-Type': 'application/json' }, timeout: 10000 });
+    return response.data;
+  } catch (error) { console.warn(`[CentralSync] Consommation centrale impossible: ${error.message}`); return null; }
+}
+
+async function getPlans() {
+  if (!SERVICE_KEY) return [];
+  try { const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'plans' }, headers: { 'X-Botora-Service-Key': SERVICE_KEY }, timeout: 8000 }); return response.data?.plans || []; }
+  catch (error) { console.warn(`[CentralSync] Abonnements centraux indisponibles: ${error.message}`); return []; }
+}
+
 async function getFeature(key, fallback = true) {
   if (!SERVICE_KEY) return fallback;
   try {
@@ -31,4 +55,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, getFeature };
+module.exports = { reportActivity, syncAccount, consumeCredits, getPlans, getFeature };

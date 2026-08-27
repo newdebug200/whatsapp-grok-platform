@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const prisma = require('../prisma');
 const { authMiddleware, JWT_SECRET } = require('../middleware/auth');
+const centralSync = require('../services/centralSync');
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -40,6 +41,7 @@ router.post('/register', authLimiter, async (req, res) => {
     const account = await prisma.account.create({
       data: { email: email.toLowerCase(), password: hashedPassword, name, role }
     });
+    centralSync.syncAccount(account).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });
   } catch (error) {
@@ -62,6 +64,7 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!isValid) {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
+    centralSync.syncAccount(account).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });
   } catch (error) {
