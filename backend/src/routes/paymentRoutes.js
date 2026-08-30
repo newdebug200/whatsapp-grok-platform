@@ -149,7 +149,8 @@ router.post('/transactions/:id/verify', async (req, res) => {
   if (Date.now() - new Date(payment.created_at).getTime() > 24 * 60 * 60 * 1000) return res.status(410).json({ error: 'La vérification manuelle est disponible pendant 24 heures après la transaction.' });
   try {
     const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { email: true } });
-    const adminResult = await botoraAdminRequest('/api/payment-verify.php', { email: account.email, transaction_id: payment.external_id });
+    const transactionIdForVerification = payment.metadata ? JSON.parse(payment.metadata).fedapay_transaction_id || payment.external_id : payment.external_id;
+    const adminResult = await botoraAdminRequest('/api/payment-verify.php', { email: account.email, transaction_id: transactionIdForVerification });
     const statusValue = adminResponseStatus(adminResult);
     const status = normalizeStatus(statusValue || 'pending');
     const adminMessage = adminResponseMessage(adminResult) || (status === APPROVED ? 'Paiement approuvé : crédits ajoutés.' : `Paiement non approuvé (${status}).`);
