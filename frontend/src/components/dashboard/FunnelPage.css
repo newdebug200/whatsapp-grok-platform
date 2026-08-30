@@ -59,3 +59,76 @@
   .fp-header-spacer { display: none; }
   .fp-body { padding: 16px 12px 0; }
 }
+
+/* Harmonisation Botora — Entonnoir de contacts */
+.fp-page {
+  background: linear-gradient(180deg, var(--bg-primary, #f7fafb), var(--bg-secondary, #fff));
+}
+
+.fp-header {
+  min-height: 76px;
+  padding: 16px clamp(16px, 3vw, 36px);
+  box-sizing: border-box;
+  box-shadow: 0 2px 12px rgba(22, 48, 59, .06);
+}
+
+.fp-back {
+  color: var(--text-secondary, #667781);
+  border: 1px solid var(--border, #dce5e8);
+  background: var(--bg-primary, #fff);
+}
+
+.fp-title {
+  font-size: clamp(1.35rem, 2.5vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -.025em;
+}
+
+.fp-title-emoji { font-size: 1.35em; }
+.fp-body { width: min(100%, 1240px); margin: 0 auto; padding: 28px clamp(12px, 3vw, 36px) 40px; box-sizing: border-box; }
+
+/* The board currently contains legacy inline styles; these scoped overrides
+   keep its visual proportions aligned with the rest of the workspace. */
+.fp-body > div {
+  width: 100%;
+  border: 1px solid var(--border, #e3eaed);
+  border-radius: 20px !important;
+  box-shadow: 0 12px 32px rgba(22, 48, 59, .08) !important;
+}
+
+.fp-body > div > div:first-child {
+  padding: 24px 26px 20px !important;
+}
+
+.fp-body > div > div:first-child > div:first-child > div:first-child {
+  font-size: 1.15rem !important;
+  line-height: 1.3;
+}
+
+.fp-body > div > div:first-child > div:first-child > div:last-child {
+  font-size: .84rem !important;
+  line-height: 1.5;
+}
+
+.fp-body > div > div:nth-child(3) {
+  padding: 20px 22px 26px !important;
+}
+
+@media (max-width: 760px) {
+  .fp-header { min-height: 64px; }
+  .fp-title { margin: 0; font-size: 1.25rem; }
+  .fp-header-spacer { display: none; }
+  .fp-back { font-size: .8rem; }
+  .fp-body { padding: 16px 10px 28px; }
+  .fp-body > div > div:first-child { padding: 20px 18px 16px !important; }
+  .fp-body > div > div:nth-child(3) { padding: 16px 14px 20px !important; }
+}
+
+@media (max-width: 480px) {
+  .fp-header { gap: 8px; padding: 12px 10px; }
+  .fp-back { padding: 7px; }
+  .fp-back svg { width: 18px; height: 18px; }
+  .fp-title { font-size: 1.08rem; }
+}
+
+.fp-no-profile{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:360px;margin:0 auto;padding:32px;max-width:620px;text-align:center;border:1px solid rgba(10,163,127,.22);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(239,250,247,.96));box-shadow:0 18px 42px rgba(8,47,73,.1)}.fp-no-profile-icon{display:grid;place-items:center;width:64px;height:64px;margin-bottom:16px;border-radius:20px;background:linear-gradient(135deg,#0aa37f,#08745f);color:#fff;font-size:42px;line-height:1;box-shadow:0 10px 22px rgba(8,116,95,.25)}.fp-no-profile-eyebrow{color:#08745f;font-size:11px;font-weight:850;letter-spacing:.13em;text-transform:uppercase}.fp-no-profile h2{margin:9px 0 8px;color:#082f49;font-size:clamp(1.2rem,3vw,1.55rem)}.fp-no-profile p{max-width:490px;margin:0;color:#657980;font-size:14px;line-height:1.55}.fp-no-profile-action{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:#082f49;color:#fff;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 8px 18px rgba(8,47,73,.18);transition:.2s}.fp-no-profile-action:hover{background:#08745f;transform:translateY(-1px)}[data-theme="dark"] .fp-no-profile{border-color:rgba(90,229,197,.25);background:linear-gradient(145deg,#16262d,#102027);box-shadow:none}[data-theme="dark"] .fp-no-profile h2{color:#effffd}[data-theme="dark"] .fp-no-profile p{color:#b8c9cd}@media(max-width:520px){.fp-no-profile{min-height:300px;padding:24px 18px}.fp-no-profile p{font-size:13px}}

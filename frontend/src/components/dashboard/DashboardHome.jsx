@@ -12,7 +12,7 @@ const getColor = (id) => avatarColors[(id || 0) % avatarColors.length];
 // straight into the chat. Gives a "what needs attention" + "how are things
 // going" overview, with big section buttons to enter the rest of the app.
 export default function DashboardHome({
-  account, waStatus, creditBalance, isAdmin, campaignsEnabled, unreadCount,
+  account, waStatus, creditBalance, isAdmin, campaignsEnabled, unreadCount, platformConfig = {},
   onGoTo, onSelectContact, onLogout,
 }) {
   const [data, setData] = useState(null);
@@ -39,15 +39,30 @@ export default function DashboardHome({
   const needsAttention = data && (data.pausedContacts > 0 || data.sentimentAlerts > 0);
   const totalFunnel = data ? (data.funnelCounts.reduce((s, c) => s + c.count, 0) || 1) : 1;
   const maxDaily = data ? Math.max(1, ...data.dailyMessages.map(d => d.sent + d.received)) : 1;
+  const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
+  const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
 
   const sections = [
-    { key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null },
-    { key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊' },
-    { key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈' },
-    ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣' }] : []),
-    { key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️' },
-    { key: 'settings', label: 'Paramètres', desc: 'Compte et préférences', emoji: '🔧' },
-    ...(isAdmin ? [{ key: 'admin', label: 'Administration', desc: 'Gestion de la plateforme', emoji: '🛠️' }] : []),
+    ...(featureEnabled('whatsapp_discussions_enabled') ? [{ key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null }] : []),
+    ...(featureEnabled('funnel_enabled') ? [{ key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊', color: '#667eea' }] : []),
+    { key: 'subscriptions', label: 'Abonnements', desc: 'Voir les offres Botora', emoji: '◈', color: '#0aa37f' },
+    { key: 'credits', label: 'Recharger les crédits', desc: 'Payer avec FedaPay', emoji: '₣', color: '#0aa37f' },
+    ...(featureEnabled('stats_enabled') ? [{ key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈', color: '#34b7f1' }] : []),
+    ...(featureEnabled('sentiments_enabled') ? [{ key: 'sentiments', label: 'Sentiments clients', desc: 'Alertes et messages à traiter', emoji: '💛', color: '#e47738', badge: data?.sentimentAlerts > 0 ? data.sentimentAlerts : null }] : []),
+    ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣', color: '#f39c12' }] : []),
+    ...(featureEnabled('ia_enabled_global') ? [{ key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️', color: '#128c7e' }] : []),
+    { key: 'settings', label: 'Paramètres', desc: 'Compte et préférences', emoji: '🔧', color: '#8e9baa' },
+    ...(isAdmin ? [{ key: 'admin', label: 'Administration', desc: 'Gestion de la plateforme', emoji: '🛠️', color: '#9b59b6' }] : []),
+  ];
+
+  const settingsSections = [
+    ...(featureEnabled('ia_enabled_global') ? [{ key: 'settings-config', tab: 'config', label: 'Réglages du bot', desc: 'IA, comportement et connexion WhatsApp', emoji: '🤖', color: '#128c7e' }] : []),
+    ...(featureEnabled('faq_enabled') ? [{ key: 'settings-faq', tab: 'faq', label: 'FAQ', desc: 'Questions et réponses automatiques', emoji: '❓', color: '#667eea' }] : []),
+    ...(featureEnabled('quick_replies_enabled') ? [{ key: 'settings-templates', tab: 'templates', label: 'Réponses rapides', desc: 'Messages prêts à envoyer', emoji: '💬', color: '#34b7f1' }] : []),
+    { key: 'settings-tags', tab: 'tags', label: 'Tags', desc: 'Organiser et segmenter vos contacts', emoji: '🏷️', color: '#f39c12' },
+    ...(featureEnabled('sensitive_keywords_enabled') ? [{ key: 'settings-journal', tab: 'journal', label: 'Alertes', desc: 'Journal des alertes et sentiments', emoji: '🔔', color: '#e74c3c' }] : []),
+    { key: 'settings-storage', tab: 'storage', label: 'Données & stockage', desc: 'Libérer l’espace local', emoji: '🧹', color: '#e47738' },
+    { key: 'settings-account', tab: 'account', label: 'Mon compte', desc: 'Profil, sécurité et préférences', emoji: '👤', color: '#8e9baa' },
   ];
 
   return (
@@ -78,6 +93,8 @@ export default function DashboardHome({
           </button>
         </div>
       </div>
+
+      {maintenanceEnabled && <div className="dh-maintenance-banner"><strong>Mode maintenance</strong><span>Certaines fonctionnalités sont temporairement indisponibles. L’administrateur vous informera dès leur réactivation.</span></div>}
 
       <div className="dh-greeting">
         {account?.name ? `Bonjour ${account.name.split(' ')[0]} 👋` : 'Bienvenue'} — voici l'état de votre compte
@@ -115,10 +132,10 @@ export default function DashboardHome({
               <div className="dh-kpi-label">Réponses envoyées aujourd'hui</div>
             </div>
             {creditBalance !== null && (
-              <div className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`}>
+              <button className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`} onClick={() => onGoTo('credits')}>
                 <div className="dh-kpi-value">{creditBalance.toFixed(2)}</div>
-                <div className="dh-kpi-label">Crédits restants</div>
-              </div>
+                <div className="dh-kpi-label">Crédits restants · Recharger</div>
+              </button>
             )}
           </div>
 
@@ -235,19 +252,46 @@ export default function DashboardHome({
         </>
       )}
 
-      {/* Section buttons — the actual entry points into the app */}
-      <div className="dh-sections-title">Accéder à</div>
+      {/* Accès rapides à tous les espaces de Botora */}
+      <div className="dh-sections-heading">
+        <div>
+          <div className="dh-sections-title">Votre espace Botora</div>
+          <div className="dh-sections-subtitle">Accédez rapidement à chaque fonctionnalité de votre plateforme.</div>
+        </div>
+        <span className="dh-sections-count">{sections.length} espaces</span>
+      </div>
       <div className="dh-sections-grid">
         {sections.map(s => (
-          <button key={s.key} className="dh-section-card" onClick={() => onGoTo(s.key)}>
-            <span className="dh-section-emoji">{s.emoji}</span>
-            <span className="dh-section-label">
-              {s.label}
-              {s.badge && <span className="dh-section-badge">{s.badge}</span>}
-            </span>
+          <button key={s.key} className="dh-section-card" onClick={() => onGoTo(s.key)} style={{ '--dh-card-color': s.color }}>
+            <span className="dh-section-icon-wrap"><span className="dh-section-emoji">{s.emoji}</span></span>
+            <span className="dh-section-label">{s.label}{s.badge && <span className="dh-section-badge">{s.badge}</span>}</span>
             <span className="dh-section-desc">{s.desc}</span>
+            <span className="dh-section-open">Ouvrir <span aria-hidden="true">→</span></span>
           </button>
         ))}
+      </div>
+
+      <div className="dh-settings-heading">
+        <div>
+          <div className="dh-sections-title">Paramètres détaillés</div>
+          <div className="dh-sections-subtitle">Chaque espace de configuration est accessible directement depuis cet accueil.</div>
+        </div>
+        <span className="dh-settings-pill">{settingsSections.length} réglages</span>
+      </div>
+      <div className="dh-settings-grid">
+        {settingsSections.map(s => (
+          <button key={s.key} className="dh-settings-card" onClick={() => onGoTo(s.key)} style={{ '--dh-card-color': s.color }}>
+            <span className="dh-settings-icon">{s.emoji}</span>
+            <span className="dh-settings-copy"><strong>{s.label}</strong><small>{s.desc}</small></span>
+            <span className="dh-settings-arrow" aria-hidden="true">→</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="dh-info-heading"><div><div className="dh-sections-title">Découvrir Botora</div><div className="dh-sections-subtitle">Comprenez la plateforme et démarrez sereinement.</div></div><span className="dh-settings-pill">Guides</span></div>
+      <div className="dh-info-grid">
+        <button className="dh-info-card" onClick={() => onGoTo('about')}><span className="dh-info-icon">✦</span><span><strong>À propos</strong><small>L’esprit et la mission de Botora</small></span><span className="dh-settings-arrow">→</span></button>
+        <button className="dh-info-card" onClick={() => onGoTo('how-it-works')}><span className="dh-info-icon">?</span><span><strong>Comment ça marche ?</strong><small>Le guide en quatre étapes</small></span><span className="dh-settings-arrow">→</span></button>
       </div>
     </div>
   );

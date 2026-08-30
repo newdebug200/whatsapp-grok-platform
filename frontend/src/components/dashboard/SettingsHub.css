@@ -88,3 +88,12 @@
   display: flex;
   flex-direction: column;
 }
+
+/* Full-width settings navigation in the right workspace */
+.sh-wrapper { width: 100%; min-width: 0; }
+.sh-tabs { width: 100%; min-height: 64px; padding: 0 18px; justify-content: flex-start; box-shadow: 0 2px 10px rgba(27,43,55,.06); }
+.sh-tab { flex: 1 1 0; max-width: 150px; min-width: 92px; height: 64px; padding: 0 12px; }
+.sh-tab-label { font-size: .72rem; }
+.sh-content { min-width: 0; overflow: auto; }
+@media (max-width: 760px) { .sh-tabs { padding: 0 8px; } .sh-tab { flex: 0 0 auto; min-width: 82px; } }
+@media (max-width: 480px) { .sh-tab { min-width: 72px; padding: 0 7px; } .sh-tab-label { font-size: .62rem; } }

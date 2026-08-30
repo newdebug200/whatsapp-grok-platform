@@ -72,14 +72,18 @@ export function AuthProvider({ children }) {
     }
   }, [activeProfile, selectProfile]);
 
+  const refreshAccount = useCallback(async () => {
+    if (!token) return null;
+    const res = await axios.get(`${API_URL}/auth/me`);
+    setAccount(res.data);
+    return res.data;
+  }, [token]);
+
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      axios.get(`${API_URL}/auth/me`)
-        .then(res => {
-          setAccount(res.data);
-          return loadProfiles();
-        })
+      refreshAccount()
+        .then(() => loadProfiles())
         .catch((err) => {
           console.error('Erreur vérification token:', err.message);
           logout();
@@ -88,7 +92,7 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [refreshAccount]);
 
   const login = async (email, password) => {
     const res = await axios.post(`${API_URL}/auth/login`, { email, password });
@@ -137,7 +141,7 @@ export function AuthProvider({ children }) {
       account, token, loading,
       profiles, activeProfile,
       login, register, logout, deleteAccount,
-      selectProfile, loadProfiles
+      selectProfile, loadProfiles, refreshAccount
     }}>
       {children}
     </AuthContext.Provider>

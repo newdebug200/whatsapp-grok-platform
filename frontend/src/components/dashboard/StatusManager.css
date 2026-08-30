@@ -278,3 +278,23 @@
 }
 .btn-publish:hover:not(:disabled) { background: #1da851; }
 .btn-publish:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Compatibilité thème sombre */
+[data-theme="dark"] .status-header { border-bottom-color: var(--border); }
+[data-theme="dark"] .status-header h2,
+[data-theme="dark"] .status-card-content,
+[data-theme="dark"] .status-modal h3 { color: var(--text-primary); }
+[data-theme="dark"] .status-empty,
+[data-theme="dark"] .status-card-meta { color: var(--text-secondary); }
+[data-theme="dark"] .status-card { background: var(--bg-card); border-color: var(--border); box-shadow: 0 5px 18px rgba(0,0,0,.16); }
+[data-theme="dark"] .status-card:hover { box-shadow: 0 6px 22px rgba(0,0,0,.28); }
+[data-theme="dark"] .status-type-icon,
+[data-theme="dark"] .status-image-upload { background: var(--bg-hover); }
+[data-theme="dark"] .status-modal { background: var(--bg-card); }
+[data-theme="dark"] .type-tab,
+[data-theme="dark"] .btn-cancel { background: var(--bg-hover); border-color: var(--border); color: var(--text-secondary); }
+[data-theme="dark"] .type-tab.active { background: rgba(37,211,102,.14); color: #6ee7a0; border-color: var(--accent); }
+[data-theme="dark"] .status-textarea,
+[data-theme="dark"] .status-caption-input { background: var(--bg-input); border-color: var(--border); color: var(--text-primary); }
+[data-theme="dark"] .status-image-upload p { color: var(--text-secondary); }
+[data-theme="dark"] .btn-cancel:hover { background: var(--bg-primary); }

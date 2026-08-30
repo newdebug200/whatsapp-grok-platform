@@ -19,8 +19,10 @@ model Account {
   credit_balance     Float     @default(0)
   is_blocked         Boolean   @default(false)
 
-  whatsappProfiles   WhatsAppProfile[]
-  creditTransactions CreditTransaction[]
+  whatsappProfiles    WhatsAppProfile[]
+  creditTransactions  CreditTransaction[]
+  paymentTransactions PaymentTransaction[]
+  dressurQueueItems   DressurQueueItem[]
 }
 
 model WhatsAppProfile {
@@ -72,19 +74,19 @@ model BotConfig {
 }
 
 model Contact {
-  id                Int       @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   profile_id        Int
   phone_number      String
   wa_id             String?
   name              String?
-  created_at        DateTime  @default(now())
-  ia_paused         Boolean   @default(false)
-  sensitive_flagged Boolean   @default(false)
-  archived          Boolean   @default(false)
+  created_at        DateTime @default(now())
+  ia_paused         Boolean  @default(false)
+  sensitive_flagged Boolean  @default(false)
+  archived          Boolean  @default(false)
   notes             String?
-  funnel_stage      String    @default("prospect")
-  unread_count      Int       @default(0)
-  is_favorite       Boolean   @default(false)
+  funnel_stage      String   @default("prospect")
+  unread_count      Int      @default(0)
+  is_favorite       Boolean  @default(false)
 
   messages          Message[]
   profile           WhatsAppProfile  @relation(fields: [profile_id], references: [id])
@@ -177,7 +179,7 @@ model Campaign {
   delay_min_seconds Int       @default(20)
   delay_max_seconds Int       @default(60)
 
-  tag_id   Int?
+  tag_id Int?
 
   profile  WhatsAppProfile   @relation(fields: [profile_id], references: [id])
   tag      Tag?              @relation(fields: [tag_id], references: [id], onDelete: SetNull)
@@ -186,11 +188,11 @@ model Campaign {
 }
 
 model CampaignMessage {
-  id                  Int    @id @default(autoincrement())
+  id                  Int     @id @default(autoincrement())
   campaign_id         Int
   content             String
-  order_index         Int    @default(0)
-  delay_after_seconds Int    @default(0)
+  order_index         Int     @default(0)
+  delay_after_seconds Int     @default(0)
   media_url           String?
   media_type          String?
   media_path          String?
@@ -258,6 +260,59 @@ model PlatformConfig {
   value String
 }
 
+model DressurQueueItem {
+  id         Int       @id @default(autoincrement())
+  account_id Int
+  source_key String
+  numero     String
+  message    String
+  wa_id      String?
+  position   Int       @default(0)
+  status     String    @default("pending")
+  error      String?
+  sent_at    DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@unique([account_id, source_key])
+  @@index([account_id, status])
+}
+
+model PaymentTransaction {
+  id              Int                   @id @default(autoincrement())
+  account_id      Int
+  provider        String                @default("fedapay")
+  external_id     String                @unique
+  amount_xof      Int
+  credits         Float
+  status          String                @default("pending")
+  description     String?
+  metadata        String?
+  approved_at     DateTime?
+  last_checked_at DateTime?
+  created_at      DateTime              @default(now())
+  updated_at      DateTime              @updatedAt
+  account         Account               @relation(fields: [account_id], references: [id], onDelete: Cascade)
+  webhookEvents   PaymentWebhookEvent[]
+
+  @@index([account_id, created_at])
+  @@index([account_id, status])
+}
+
+model PaymentWebhookEvent {
+  id          Int                 @id @default(autoincrement())
+  payment_id  Int?
+  event_id    String              @unique
+  event_type  String
+  payload     String
+  received_at DateTime            @default(now())
+  payment     PaymentTransaction? @relation(fields: [payment_id], references: [id], onDelete: SetNull)
+
+  @@index([event_type, received_at])
+}
+
 model CreditTransaction {
   id          Int      @id @default(autoincrement())
   account_id  Int
@@ -268,4 +323,23 @@ model CreditTransaction {
   created_at  DateTime @default(now())
 
   account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+}
+
+model SubscriptionPlan {
+  id            Int      @id @default(autoincrement())
+  name          String
+  slug          String   @unique
+  description   String?
+  price         Float    @default(0)
+  currency      String   @default("XOF")
+  credits       Float    @default(0)
+  duration_days Int      @default(30)
+  max_profiles  Int      @default(1)
+  features      String?
+  is_active     Boolean  @default(true)
+  sort_order    Int      @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@index([is_active, sort_order])
 }

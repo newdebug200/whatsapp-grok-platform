@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const prisma = require('../prisma');
 const { authMiddleware, JWT_SECRET } = require('../middleware/auth');
+const centralSync = require('../services/centralSync');
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -36,9 +37,12 @@ router.post('/register', authLimiter, async (req, res) => {
     const accountCount = await prisma.account.count();
     const role = accountCount === 0 ? 'admin' : 'user';
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const centralUser = await centralSync.syncAccount({ email: email.toLowerCase(), password_plain: password, name, phone: null });
+    if (!centralUser?.password_hash) {
+      return res.status(502).json({ error: 'Le compte n’a pas été confirmé par l’API centrale. Inscription non validée.' });
+    }
     const account = await prisma.account.create({
-      data: { email: email.toLowerCase(), password: hashedPassword, name, role }
+      data: { email: email.toLowerCase(), password: centralUser.password_hash, name, role }
     });
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });
@@ -54,14 +58,20 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: 'Email et mot de passe requis' });
     }
-    const account = await prisma.account.findUnique({ where: { email: email.toLowerCase() } });
-    if (!account) {
-      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
-    }
-    const isValid = await bcrypt.compare(password, account.password);
+    const normalizedEmail = email.toLowerCase();
+    let account = await prisma.account.findUnique({ where: { email: normalizedEmail } });
+    let isValid = account ? await bcrypt.compare(password, account.password) : false;
     if (!isValid) {
-      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      const centralUser = await centralSync.authenticateAccount(normalizedEmail, password);
+      if (!centralUser?.password_hash) return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      account = await prisma.account.upsert({
+        where: { email: normalizedEmail },
+        update: { name: centralUser.name, password: centralUser.password_hash, is_blocked: false },
+        create: { email: normalizedEmail, name: centralUser.name, password: centralUser.password_hash, role: 'user' }
+      });
     }
+    if (account.is_blocked) return res.status(403).json({ error: 'Compte bloqué.' });
+    centralSync.syncAccount(account).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role } });
   } catch (error) {
@@ -77,7 +87,17 @@ router.get('/me', authMiddleware, async (req, res) => {
       select: { id: true, email: true, name: true, role: true, created_at: true, credit_balance: true, is_blocked: true }
     });
     if (!account) return res.status(404).json({ error: 'Compte introuvable' });
-    res.json(account);
+    const central = await centralSync.getAccount(account.email);
+    if (central) {
+      const nextBlocked = ['suspended', 'expired', 'banned'].includes(String(central.status));
+      const updated = await prisma.account.update({
+        where: { id: account.id },
+        data: { name: central.name || account.name, credit_balance: Number(central.credits_balance || 0), is_blocked: nextBlocked },
+        select: { id: true, email: true, name: true, role: true, created_at: true, credit_balance: true, is_blocked: true }
+      });
+      return res.json({ ...updated, central_status: central.status, central_plan_id: central.plan_id, central_trial_ends_at: central.trial_ends_at, central_synced: true });
+    }
+    res.json({ ...account, central_synced: false, central_sync_error: 'Profil central indisponible' });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la récupération du compte' });
   }

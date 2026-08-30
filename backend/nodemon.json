@@ -1,0 +1,13 @@
+{
+  "watch": ["src"],
+  "ignore": [
+    "prisma/**/*.db",
+    "prisma/**/*.sqlite",
+    "uploads/**",
+    ".wwebjs_auth/**",
+    "*.log",
+    "node_modules/**"
+  ],
+  "ext": "js,mjs,cjs,json",
+  "delay": 1000
+}

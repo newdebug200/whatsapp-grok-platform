@@ -5,13 +5,23 @@ import { fr } from 'date-fns/locale';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-export default function FlagJournal() {
+export default function FlagJournal({ noProfile = false, onGoConfig }) {
   const [flags, setFlags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => { loadFlags(); }, []);
+  useEffect(() => { if (!noProfile) loadFlags(); else setLoading(false); }, [noProfile]);
+
+  if (noProfile) return (
+    <div className="panel-content no-profile-panel">
+      <div className="no-profile-panel-icon">◌</div>
+      <span className="no-profile-panel-eyebrow">Journal indisponible</span>
+      <h2>Aucun profil WhatsApp n’est encore configuré</h2>
+      <p>Le journal des sujets sensibles apparaîtra après la connexion d’un profil WhatsApp.</p>
+      {onGoConfig && <button className="no-profile-panel-action" onClick={onGoConfig}>Configurer WhatsApp</button>}
+    </div>
+  );
 
   const loadFlags = async () => {
     setLoading(true);

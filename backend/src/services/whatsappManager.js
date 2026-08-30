@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 const messageHandler = require('./messageHandler');
+const centralSync = require('./centralSync');
 
 // ─── Lazy-load whatsapp-web.js ────────────────────────────────────────────────
 let Client = null;
@@ -35,6 +36,7 @@ class WhatsAppManager {
     this.runningCampaigns = new Map(); // campaignId → { cancelled: boolean }
     this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
     this._botSentIds = new Set(); // WA message IDs sent by Botora API — used to skip duplicates in message_create
+    this._incomingHandledIds = new Set(); // Prevent message + message_create double processing
     this.io = null;
     this.prisma = null;
   }
@@ -195,6 +197,7 @@ class WhatsAppManager {
   async _syncChatHistory(client, profileId, accountId) {
     if (!WWEB_AVAILABLE) return;
     try {
+      this.io?.to(`account_${accountId}`).emit('sync-start', { profileId, message: 'Session WhatsApp conservée. Synchronisation en cours…' });
       console.log(`[WA] Synchronisation historique — profil ${profileId}`);
       const chats = await client.getChats();
       let syncedMessages = 0;
@@ -289,10 +292,24 @@ class WhatsAppManager {
       }
 
       console.log(`[WA] Historique synchronisé — ${syncedChats} chat(s), ${syncedMessages} nouveau(x) message(s) — profil ${profileId}`);
-      this.io?.to(`account_${accountId}`).emit('sync-complete', { profileId, syncedChats, syncedMessages });
+      this.io?.to(`account_${accountId}`).emit('sync-complete', { profileId, syncedChats, syncedMessages, message: 'Session WhatsApp conservée. Synchronisation terminée.' });
     } catch (err) {
       console.warn('[WA] Sync historique impossible:', err.message);
+      this.io?.to(`account_${accountId}`).emit('sync-failed', { profileId, message: 'La session WhatsApp est conservée, mais la synchronisation doit être relancée.' });
     }
+  }
+
+  // ─── Reconnect an existing LocalAuth session without logging out ───────────
+
+  async reconnectClient(accountId, profileId) {
+    const existing = this._getEntryByProfileId(profileId);
+    if (existing) {
+      try { await this._destroyEntry(existing.key); } catch (err) {
+        console.warn('[WA] Nettoyage avant resynchronisation:', err.message);
+      }
+    }
+    this._cleanChromeLocks(profileId);
+    return this.initializeClient(accountId, profileId);
   }
 
   // ─── Initialize a WhatsApp client ─────────────────────────────────────────
@@ -381,7 +398,8 @@ class WhatsAppManager {
       const entry = this.clients.get(clientKey);
       if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
       this.io?.to(`account_${accountId}`).emit('status', {
-        isConnected: false, qrCode: qr, status: 'qr', profileId
+        isConnected: false, qrCode: qr, status: 'qr', profileId,
+        message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.'
       });
     });
 
@@ -434,6 +452,7 @@ class WhatsAppManager {
         }
       }
 
+      centralSync.reportActivity(accountId, 'whatsapp.profile_connected', { profile_id: profile.id, phone_number: profile.phone_number }).catch(() => {});
       this.io?.to(`account_${accountId}`).emit('profile-ready', {
         id: profile.id, phone_number: profile.phone_number,
         display_name: profile.display_name, is_connected: true
@@ -457,19 +476,33 @@ class WhatsAppManager {
     // ── Incoming message ──
     client.on('message', async (message) => {
       try {
-        if (message.fromMe) return;
-        if (this.campaignSendingWaIds.has(message.from)) return;
+        console.log(`[WA] Message reçu par listener — from=${message.from || 'inconnu'} body=${JSON.stringify((message.body || '').slice(0, 120))} fromMe=${message.fromMe}`);
+        if (message.fromMe) {
+          console.log('[WA] Message entrant ignoré: fromMe=true');
+          return;
+        }
+        if (!message.from || message.from === 'status@broadcast' || message.from.includes('@broadcast')) {
+          console.log(`[WA] Message entrant ignoré: statut/broadcast (${message.from || 'inconnu'})`);
+          return;
+        }
+        if (this.campaignSendingWaIds.has(message.from)) {
+          console.log(`[WA] Message entrant ignoré: campagne active (${message.from})`);
+          return;
+        }
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
           || this._findEntryByClient(client);
-        if (!entry?.entry?.profileId) return;
+        if (!entry?.entry?.profileId) {
+          console.warn(`[WA] Message entrant ignoré: aucun profil actif trouvé (profil demandé=${profileId})`);
+          return;
+        }
         const currentProfileId = entry.entry.profileId;
-
-        // Ignore messages replayed on reconnect:
-        // skip if message was sent before the session became ready
+        // Ignore uniquement les messages historiques antérieurs à ready.
+        // Les messages privés réels reçus pendant la reconnexion doivent être traités.
         const readyAt = entry.entry.readyAt || 0;
-        if (message.timestamp * 1000 < readyAt) return;
-        // Also skip anything arriving in the first 20s grace period after reconnect
-        if (Date.now() - readyAt < 20000) return;
+        if (readyAt && Number(message.timestamp) * 1000 < readyAt) {
+          console.log(`[WA] Message entrant ignoré: replay historique timestamp=${message.timestamp} readyAt=${readyAt}`);
+          return;
+        }
 
         // If a campaign is running for this profile, save message but skip AI
         const campaignActive = [...this.runningCampaigns.values()].some(h => h.profileId === currentProfileId);
@@ -506,9 +539,7 @@ class WhatsAppManager {
         // Skip messages older than session ready time (avoid replaying history on reconnect)
         const readyAt = entry.entry.readyAt || 0;
         if (msg.timestamp * 1000 < readyAt) return;
-        if (Date.now() - readyAt < 20000) return;
-
-        const waId = msg.to;
+                const waId = msg.to;
         const phoneNumber = '+' + waId.split('@')[0];
 
         // Find or create the contact this message was sent to
@@ -556,6 +587,7 @@ class WhatsAppManager {
     // ── Disconnected ──
     client.on('disconnected', async (reason) => {
       console.log(`[WA] Déconnecté — ${reason}`);
+      centralSync.reportActivity(accountId, 'whatsapp.profile_disconnected', { profile_id: profileId, reason: String(reason || 'unknown') }).catch(() => {});
       const found = this._findEntryByClient(client);
       const resolvedProfileId = found?.entry?.profileId;
       if (resolvedProfileId) {
@@ -569,13 +601,15 @@ class WhatsAppManager {
       if (found) { found.entry.status = 'disconnected'; found.entry.qrCode = null; this.clients.delete(found.key); }
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'disconnected',
-        profileId: resolvedProfileId || null
+        profileId: resolvedProfileId || null,
+        message: 'La session WhatsApp de ce profil est perdue. Scannez le QR code pour vous reconnecter.'
       });
     });
 
     // ── Auth failure ──
     client.on('auth_failure', (msg) => {
       console.error(`[WA] Auth failure:`, msg);
+      centralSync.reportActivity(accountId, 'whatsapp.auth_failure', { profile_id: profileId, message: String(msg || '') }).catch(() => {});
       const found = this._findEntryByClient(client);
       if (found) { found.entry.status = 'auth_failure'; found.entry.lastErrorAt = Date.now(); }
       this.io?.to(`account_${accountId}`).emit('status', {
@@ -668,19 +702,24 @@ class WhatsAppManager {
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
     const client = found.entry.client;
+    const reportSent = () => centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to, content_length: String(content || '').length }).catch(() => {});
 
     // ── Méthode 1 : getChatById → chat.sendMessage() ──────────────────────────
     // Pour les contacts avec chat existant (LID ou @c.us), c'est la méthode la plus
     // fiable. Elle utilise l'objet chat déjà chargé en mémoire par WhatsApp Web, ce
     // qui garantit que le message part vraiment via le réseau (sync vers le téléphone).
+    let chat = null;
     try {
-      const chat = await client.getChatById(to);
-      if (chat) {
-        await chat.sendMessage(content);
-        return;
-      }
+      chat = await client.getChatById(to);
     } catch (_) {
-      // Pas de chat existant ou ID invalide → on essaie les méthodes suivantes
+      // Pas de chat existant ou ID invalide : on utilise WPP.js une seule fois.
+    }
+    if (chat) {
+      // Ne pas basculer vers un autre transport si sendMessage() remonte une
+      // erreur après avoir accepté le message : cela provoquerait un doublon.
+      await chat.sendMessage(content);
+      reportSent();
+      return;
     }
 
     // ── Méthode 2 : WPP.js natif via pupPage ──────────────────────────────────
@@ -697,7 +736,7 @@ class WhatsAppManager {
         }
       }, to, content);
 
-      if (wppResult && wppResult.ok) return;
+      if (wppResult && wppResult.ok) { reportSent(); return; }
       if (wppResult && wppResult.error && wppResult.error !== 'WPP non disponible') {
         throw new Error(wppResult.error);
       }
@@ -708,6 +747,7 @@ class WhatsAppManager {
     // ── Méthode 3 : fallback wrapper whatsapp-web.js ──────────────────────────
     const result = await client.sendMessage(to, content);
     if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
+    reportSent();
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
@@ -833,6 +873,7 @@ class WhatsAppManager {
     const accountId = found.entry.accountId;
     const handle = { cancelled: false, profileId };
     this.runningCampaigns.set(campaignId, handle);
+    centralSync.reportActivity(accountId, 'campaign.started', { campaign_id: campaignId, profile_id: profileId }).catch(() => {});
 
     try {
       const campaign = await this.prisma.campaign.findUnique({
@@ -1037,17 +1078,20 @@ class WhatsAppManager {
             campaignId, done: finalDone, total: totalTargets, completed: true
           });
           console.log(`[Campaign ${campaignId}] Terminée — ${finalDone}/${totalTargets} envoyés`);
+          centralSync.reportActivity(accountId, 'campaign.completed', { campaign_id: campaignId, profile_id: profileId, done: finalDone, total: totalTargets }).catch(() => {});
         }
 
         this.runningCampaigns.delete(campaignId);
       })().catch(err => {
         console.error(`[Campaign ${campaignId}] Erreur runner:`, err.message);
+        centralSync.reportActivity(accountId, 'campaign.error', { campaign_id: campaignId, profile_id: profileId, error: err.message }).catch(() => {});
         this.runningCampaigns.delete(campaignId);
         this.prisma.campaign.update({ where: { id: campaignId }, data: { status: 'paused' } }).catch(() => {});
       });
 
     } catch (err) {
       console.error(`[Campaign ${campaignId}] Erreur démarrage:`, err.message);
+      centralSync.reportActivity(accountId, 'campaign.error', { campaign_id: campaignId, profile_id: profileId, error: err.message }).catch(() => {});
       this.runningCampaigns.delete(campaignId);
     }
   }

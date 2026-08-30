@@ -6,6 +6,7 @@
   --bg-input: #f0f2f5;
   --bg-message-sent: #d9fdd3;
   --bg-message-received: #ffffff;
+  --bg-card: #ffffff;
   --border: #e9edef;
   --text-primary: #111b21;
   --text-secondary: #667781;
@@ -15,8 +16,12 @@
   --chat-bg: #efeae2;
   --input-bg: #f0f2f5;
   --shadow: rgba(0,0,0,0.08);
-  --accent: #25d366;
-  --accent-dark: #075e54;
+  --accent: #0aa37f;
+  --accent-soft: #dff7ef;
+  --accent-teal: #13a9b5;
+  --brand-navy: #082f49;
+  --brand-mint: #63e6be;
+  --accent-dark: #08745f;
 }
 
 /* ===== DARK THEME ===== */
@@ -27,6 +32,7 @@
   --bg-input: #2a3942;
   --bg-message-sent: #005c4b;
   --bg-message-received: #202c33;
+  --bg-card: #1f2c34;
   --border: #2a3942;
   --text-primary: #e9edef;
   --text-secondary: #8696a0;
@@ -36,8 +42,12 @@
   --chat-bg: #0b141a;
   --input-bg: #2a3942;
   --shadow: rgba(0,0,0,0.3);
-  --accent: #00a884;
-  --accent-dark: #00a884;
+  --accent: #38d6ab;
+  --accent-soft: rgba(56,214,171,.15);
+  --accent-teal: #35c4ce;
+  --brand-navy: #d9f2ff;
+  --brand-mint: #6ee7c1;
+  --accent-dark: #0aa37f;
 }
 
 *, *::before, *::after {

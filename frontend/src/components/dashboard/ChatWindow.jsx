@@ -555,11 +555,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       <div className="chat-empty">
         <div className="chat-empty-content">
           <div className="chat-empty-icon">
-            <svg viewBox="0 0 60 60" fill="none">
-              <circle cx="30" cy="30" r="28" stroke="#25d366" strokeWidth="2"/>
-              <path d="M30 14C21.16 14 14 21.16 14 30c0 3.16.86 6.12 2.36 8.64L14 46l7.64-2.3C23.9 44.88 26.88 45.5 30 45.5 38.84 45.5 46 38.34 46 29.5S38.84 14 30 14z" fill="#25d366" opacity=".2"/>
-              <path d="M30 14C21.16 14 14 21.16 14 30c0 3.16.86 6.12 2.36 8.64L14 46l7.64-2.3C23.9 44.88 26.88 45.5 30 45.5 38.84 45.5 46 38.34 46 29.5S38.84 14 30 14z" stroke="#25d366" strokeWidth="1.5" fill="none"/>
-            </svg>
+            <img src="/icons/icon-192.png" alt="Logo Botora" />
           </div>
           <h3>Botora</h3>
           <p>Sélectionnez une discussion pour afficher les messages</p>

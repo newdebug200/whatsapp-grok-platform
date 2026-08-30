@@ -8,8 +8,13 @@ import Stats from './Stats';
 import Broadcast from './Broadcast';
 import TagManager from './TagManager';
 import SettingsHub from './SettingsHub';
+import AdminHub from './AdminHub';
+import { AboutPage, HowItWorksPage } from './InfoPages';
 import DashboardHome from './DashboardHome';
 import FunnelPage from './FunnelPage';
+import SubscriptionPlans from './SubscriptionPlans';
+import RechargeCredits from './RechargeCredits';
+import Sentiments from './Sentiments';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -37,7 +42,7 @@ function playNotifSound() {
 }
 
 export default function Dashboard() {
-  const { account, token, logout, profiles, activeProfile, selectProfile, loadProfiles } = useAuth();
+  const { account, token, logout, profiles, activeProfile, selectProfile, loadProfiles, refreshAccount } = useAuth();
   const [socket, setSocket] = useState(null);
   const [waStatus, setWaStatus] = useState({ isConnected: false, qrCode: null, status: 'not_initialized' });
   const [selectedContact, setSelectedContact] = useState(null);
@@ -47,6 +52,7 @@ export default function Dashboard() {
   const [mobileView, setMobileView] = useState('list');
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [appNavCollapsed, setAppNavCollapsed] = useState(() => localStorage.getItem('botora-sidebar-collapsed') === 'true');
   const [editingProfileId, setEditingProfileId] = useState(null);
   const [editName, setEditName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
@@ -77,6 +83,11 @@ export default function Dashboard() {
     window.addEventListener('botora-sound-change', handler);
     return () => window.removeEventListener('botora-sound-change', handler);
   }, []);
+
+  // Resynchronise les données métier centrales à chaque changement d’écran.
+  useEffect(() => {
+    if (token && activePanel !== 'home') refreshAccount().catch(() => {});
+  }, [activePanel, token, refreshAccount]);
 
   // Load platform config + credit balance
   useEffect(() => {
@@ -112,6 +123,9 @@ export default function Dashboard() {
   }, []);
 
   const handleNewMessage = useCallback((msg) => {
+    // `new-message` sert aussi à actualiser l’interface pour les messages sortants.
+    // Une notification utilisateur ne doit concerner que les messages réellement reçus.
+    if (msg?.fromMe === true) return;
     if (msg.profileId && activeProfileRef.current?.id !== msg.profileId) return;
 
     const isOnThisConversation = (
@@ -160,10 +174,13 @@ export default function Dashboard() {
     });
 
     s.on('status', (status) => setWaStatus(status));
-    s.on('qr', (qr) => setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false })));
-    s.on('ready', () => setWaStatus({ isConnected: true, qrCode: null, status: 'connected' }));
-    s.on('disconnected', () => setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' }));
-    s.on('auth_failure', () => setWaStatus({ isConnected: false, qrCode: null, status: 'auth_failure' }));
+    s.on('qr', (qr) => setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false, message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.' })));
+    s.on('ready', () => setWaStatus({ isConnected: true, qrCode: null, status: 'connected', message: 'Session WhatsApp conservée.' }));
+    s.on('sync-start', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'syncing', message: data.message || 'Session WhatsApp conservée. Synchronisation en cours…' })));
+    s.on('sync-complete', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'synced', message: data.message || 'Session WhatsApp conservée. Synchronisation terminée.' })));
+    s.on('sync-failed', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, status: 'sync-failed', message: data.message || 'La session WhatsApp est conservée, mais la synchronisation doit être relancée.' })));
+    s.on('disconnected', () => setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'La session WhatsApp de ce profil est perdue. Scannez le QR code pour vous reconnecter.' }));
+    s.on('auth_failure', () => setWaStatus({ isConnected: false, qrCode: null, status: 'auth_failure', message: 'La session WhatsApp est invalide. Scannez le QR code pour reconnecter ce profil.' }));
 
     s.on('profile-ready', async (profile) => {
       selectProfile(profile);
@@ -219,17 +236,21 @@ export default function Dashboard() {
     const profileId = !forceNew && activeProfileRef.current?.id ? activeProfileRef.current.id : null;
     socketRef.current?.emit('connect-whatsapp', profileId ? { profileId } : {});
   };
+  const handleResyncWhatsApp = () => {
+    const profileId = activeProfileRef.current?.id;
+    if (profileId) socketRef.current?.emit('resync-whatsapp', { profileId });
+  };
 
   const handleLogoutWhatsApp = async (profileId) => {
     const pid = profileId || activeProfile?.id;
     if (!pid) return;
     try {
       await axios.post(`${API_URL}/messages/logout`, { profileId: pid });
-      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' });
+      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'Session WhatsApp déconnectée.' });
       await loadProfiles();
     } catch (err) {
       console.error('Erreur déconnexion WhatsApp:', err.message);
-      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected' });
+      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'Session WhatsApp déconnectée.' });
     }
   };
 
@@ -246,6 +267,7 @@ export default function Dashboard() {
   const handleContactsUpdate = (updated) => setContacts(updated);
 
   const handleNavClick = (key) => {
+    if (key === 'admin' && !['admin', 'superadmin'].includes(account?.role)) return;
     setActivePanel(key);
     if (key === 'chat') setUnreadCount(0);
     if (key === 'bot') setSettingsInitialTab('config');
@@ -327,32 +349,38 @@ export default function Dashboard() {
     setEditingProfileId(null);
   };
 
-  const isAdmin = account?.role === 'admin';
-  const campaignsEnabled = isAdmin || platformConfig.campaigns_enabled !== 'false';
-  const creditsEnabled = platformConfig.credits_enabled === 'true';
-  const iaGlobalEnabled = isAdmin || platformConfig.ia_enabled_global !== 'false';
+  const isAdmin = ['admin', 'superadmin'].includes(account?.role);
+  const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
+  const discussionsEnabled = featureEnabled('whatsapp_discussions_enabled');
+  const campaignsEnabled = featureEnabled('campaigns_enabled');
+  const creditsEnabled = featureEnabled('credits_enabled');
+  const iaGlobalEnabled = featureEnabled('ia_enabled_global');
+  const funnelEnabled = featureEnabled('funnel_enabled');
+  const sentimentsEnabled = featureEnabled('sentiments_enabled');
+  const statsEnabled = featureEnabled('stats_enabled');
+  const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
 
   const navItems = [
-    {
+    ...(discussionsEnabled ? [{
       key: 'chat', label: 'Discussions',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-    },
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l-4 4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    }] : []),
     ...(campaignsEnabled ? [{
       key: 'broadcast', label: 'Campagnes',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     }] : []),
-    {
+    ...(creditsEnabled ? [{
+      key: 'credits', label: 'Recharger les crédits',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.75A2.75 2.75 0 0 1 5.75 4h12.5A2.75 2.75 0 0 1 21 6.75v10.5A2.75 2.75 0 0 1 18.25 20H5.75A2.75 2.75 0 0 1 3 17.25V6.75zm3.5 1.5h10.5v1.75H6.5V8.25zm0 4.5h6.25v1.75H6.5v-1.75z"/></svg>
+    }] : []),
+    ...(statsEnabled ? [{
       key: 'stats', label: 'Statistiques',
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
-    },
-    {
-      key: 'bot', label: 'Bot & WhatsApp',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.33C18.33 14.33 19 13.66 19 12.83C19 12 18.33 11.33 17.5 11.33C16.67 11.33 16 12 16 12.83C16 13.66 16.67 14.33 17.5 14.33M13 2.05V4.06C16.39 4.54 19 7.45 19 11C19 12.44 18.53 13.77 17.75 14.86L16.29 13.4C16.74 12.76 17 12 17 11.17C17 8.61 14.87 6.5 12.28 6.5H12V8.5L9 5.5L12 2.5V4.5H12.28C15.97 4.5 19 7.47 19 11.17C19 12.95 18.26 14.57 17.07 15.74L18.5 17.17C20.04 15.65 21 13.54 21 11.17C21 6.5 17.5 2.63 13 2.05M10 12.5C10 12.5 10 12.5 10 12.5C8.9 12.5 8 13.4 8 14.5C8 15.6 8.9 16.5 10 16.5C11.1 16.5 12 15.6 12 14.5C12 13.4 11.1 12.5 10 12.5M6.5 14.33C6.5 13.5 7.17 12.83 8 12.83C8.83 12.83 9.5 13.5 9.5 14.33C9.5 15.16 8.83 15.83 8 15.83C7.17 15.83 6.5 15.16 6.5 14.33M12 20C9.24 20 6.86 18.34 5.68 15.96L4.08 17.08C5.61 20.09 8.59 22 12 22C15.41 22 18.39 20.09 19.92 17.08L18.32 15.96C17.14 18.34 14.76 20 12 20Z"/></svg>
-    },
-    {
-      key: 'settings', label: 'Paramètres',
-      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.92c.04-.3.07-.62.07-.95s-.03-.66-.07-1l2.16-1.65c.19-.15.24-.42.12-.64l-2.05-3.55c-.12-.22-.39-.3-.61-.22l-2.55 1.03c-.52-.4-1.08-.73-1.7-.98l-.38-2.71C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.71c-.62.25-1.18.58-1.7.98L4.88 5.08c-.22-.08-.49 0-.61.22L2.22 8.85c-.13.22-.07.49.12.64l2.16 1.65c-.04.34-.07.67-.07 1s.03.65.07.97l-2.16 1.66c-.19.15-.24.42-.12.64l2.05 3.55c.12.22.39.3.61.22l2.55-1.02c.52.4 1.08.73 1.7.98l.38 2.71c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.71c.62-.25 1.18-.58 1.7-.98l2.55 1.02c.22.08.49 0 .61-.22l2.05-3.55c.12-.22.07-.49-.12-.64l-2.16-1.66z"/></svg>
-    },
+    }] : []),
+    ...(sentimentsEnabled ? [{
+      key: 'sentiments', label: 'Sentiments clients',
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-4 9a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 8 11zm4 7a6 6 0 0 1-5.19-3h2.3a3.75 3.75 0 0 0 5.78 0h2.3A6 6 0 0 1 12 18zm4-7a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 16 11z"/></svg>
+    }] : []),
   ];
 
   const toggleSound = () => {
@@ -367,17 +395,6 @@ export default function Dashboard() {
 
   const noProfile = !activeProfile;
 
-  if (activePanel === 'funnel') {
-    return (
-      <div className="dashboard dashboard-home-fullscreen">
-        <FunnelPage
-          onBack={goHome}
-          onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
-        />
-      </div>
-    );
-  }
-
   if (activePanel === 'home') {
     return (
       <div className="dashboard dashboard-home-fullscreen">
@@ -388,8 +405,13 @@ export default function Dashboard() {
           isAdmin={isAdmin}
           campaignsEnabled={campaignsEnabled}
           unreadCount={unreadCount}
+          platformConfig={platformConfig}
           onLogout={logout}
-          onGoTo={(key) => (key === 'admin' ? goToSettings('admin') : handleNavClick(key))}
+          onGoTo={(key) => {
+            if (key.startsWith('settings-')) return goToSettings(key.replace('settings-', ''));
+            if (key === 'admin') return isAdmin ? setActivePanel('admin') : goHome();
+            return handleNavClick(key);
+          }}
           onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
         />
         {botError && (
@@ -419,9 +441,86 @@ export default function Dashboard() {
     );
   }
 
+  const appNavItems = [
+    ...navItems,
+    ...(funnelEnabled ? [{ key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }] : []),
+    { key: 'subscriptions', label: 'Abonnements', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> }
+  ];
   return (
     <div className="dashboard">
-      <div className={`sidebar ${mobileView === 'chat' ? 'sidebar-hidden-mobile' : ''}`}>
+      {(
+        <aside className={`app-navigation ${appNavCollapsed ? 'app-navigation-collapsed' : ''}`} aria-label="Navigation principale">
+          <button className="app-navigation-brand" onClick={goHome} title="Retour au tableau de bord">
+            <img src="/icons/icon-192.png" alt="Botora" />
+            <span>Botora</span>
+          </button>
+          <button
+            className="app-navigation-collapse"
+            type="button"
+            onClick={() => setAppNavCollapsed(value => {
+              const next = !value;
+              localStorage.setItem('botora-sidebar-collapsed', String(next));
+              return next;
+            })}
+            aria-label={appNavCollapsed ? 'Ouvrir la sidebar' : 'Fermer la sidebar'}
+            aria-expanded={!appNavCollapsed}
+            title={appNavCollapsed ? 'Ouvrir la sidebar' : 'Fermer la sidebar'}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+              <path d={appNavCollapsed ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'} />
+            </svg>
+            <span>{appNavCollapsed ? 'Ouvrir' : 'Réduire'}</span>
+          </button>
+          <div className="app-navigation-profile">
+            <span className={`app-navigation-status ${waStatus.isConnected ? 'connected' : ''}`} />
+            <span>{profileLabel}</span>
+          </div>
+          <div className="app-navigation-links">
+            {appNavItems.map(item => (
+              <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => item.key === 'funnel' ? setActivePanel('funnel') : handleNavClick(item.key)}>
+                <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
+                {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
+              </button>
+            ))}
+          </div>
+          <div className="app-navigation-group">
+            <div className="app-navigation-heading">Paramètres</div>
+            {[
+              ['config', 'Réglages du bot', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65-2-3.46-2.49 1a7.3 7.3 0 0 0-1.69-.98L15 3h-4l-.36 2.93c-.6.25-1.17.58-1.69.98l-2.49-1-2 3.46 2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65 2 3.46 2.49-1c.52.4 1.09.73 1.69.98L11 21h4l.36-2.93a7.3 7.3 0 0 0 1.69-.98l2.49 1 2-3.46-2.11-1.65zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z"/></svg>],
+              ['faq', 'FAQ', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-2h2zm2.07-6.25-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41a2 2 0 1 0-4 0H8a4 4 0 1 1 8 0c0 .88-.36 1.68-.93 2.25z"/></svg>],
+              ['templates', 'Réponses rapides', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 12H7v-2h10zm0-4H7V8h10zm0-4H7V4h10z"/></svg>],
+              ['tags', 'Tags', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.78-.78.78-2.04 0-2.83zM5.5 7A1.5 1.5 0 1 1 5.5 4a1.5 1.5 0 0 1 0 3z"/></svg>],
+              ['journal', 'Alertes', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.93 6 11v5l-2 2v1h16v-1z"/></svg>],
+              ['storage', 'Données & stockage', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>],
+              ['account', 'Mon compte', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4z"/></svg>]
+            ].map(([tab, label, icon]) => (
+              <button key={tab} className={`app-navigation-sub-link ${activePanel === 'settings' && settingsInitialTab === tab ? 'active' : ''}`} onClick={() => goToSettings(tab)} title={label}>
+                <span className="app-navigation-sub-icon">{icon}</span><span>{label}</span>
+              </button>
+            ))}
+          </div>
+          {isAdmin && (
+            <div className="app-navigation-group app-navigation-admin-group">
+              <div className="app-navigation-heading">Administration</div>
+              <button className={`app-navigation-sub-link ${activePanel === 'admin' ? 'active' : ''}`} onClick={() => handleNavClick('admin')} title="Centre d’administration">
+                <span className="app-navigation-sub-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg></span><span>Centre de contrôle</span>
+              </button>
+            </div>
+          )}
+          <div className="app-navigation-footer">
+            <button onClick={goHome}>← Tableau de bord</button>
+            <button className="app-navigation-logout" onClick={logout} title="Déconnexion" aria-label="Déconnexion">
+              <svg className="app-navigation-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+                <path d="M21 19V5a2 2 0 0 0-2-2h-4" />
+              </svg>
+              <span>Déconnexion</span>
+            </button>
+          </div>
+        </aside>
+      )}
+      <div className={`sidebar ${activePanel !== 'chat' ? 'sidebar-context-hidden' : ''} chat-sidebar ${mobileView === 'chat' ? 'sidebar-hidden-mobile' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <button className="sidebar-logo sidebar-logo-btn" onClick={goHome} title="Retour au tableau de bord">
@@ -520,9 +619,6 @@ export default function Dashboard() {
                     <div className="dropdown-divider" />
                     <div className="dropdown-section-label">Compte</div>
                     <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
-                    {account?.role === 'admin' && (
-                      <button className="dropdown-item" onClick={() => goToSettings('admin')}>Administration</button>
-                    )}
                     <div className="dropdown-divider" />
                     <button className="dropdown-item danger" onClick={logout}>Déconnexion</button>
                   </div>
@@ -647,7 +743,7 @@ export default function Dashboard() {
                 onContactsUpdate={handleContactsUpdate}
                 waStatus={waStatus}
                 socket={socket}
-                onConnectWhatsApp={handleConnectWhatsApp}
+                onConnectWhatsApp={() => { goToSettings('config'); handleConnectWhatsApp(); }}
               />
             )
           )}
@@ -663,23 +759,42 @@ export default function Dashboard() {
             <SettingsHub
               waStatus={waStatus}
               onConnectWhatsApp={handleConnectWhatsApp}
+              onResyncWhatsApp={handleResyncWhatsApp}
               onLogoutWhatsApp={handleLogoutWhatsApp}
               activeProfile={activeProfile}
               account={account}
               initialTab={settingsInitialTab}
+              noProfile={noProfile}
+              onGoConfig={() => goToSettings('config')}
+              platformConfig={platformConfig}
             />
           )}
         </div>
       </div>
 
-      <div className={`main-area ${mobileView === 'list' ? 'main-hidden-mobile' : ''}`}>
-        <ChatWindow
-          contact={selectedContact}
-          socket={socket}
-          waStatus={waStatus}
-          onBack={handleBack}
-        />
-      </div>
+      <main className={`main-area feature-main-area ${mobileView === 'list' ? 'main-hidden-mobile' : ''}`}>
+        {activePanel === 'chat' ? (
+          <ChatWindow
+            contact={selectedContact}
+            socket={socket}
+            waStatus={waStatus}
+            onBack={handleBack}
+          />
+        ) : (
+          <div className="feature-page-shell">
+            {activePanel === 'admin' && isAdmin && <AdminHub account={account} onBack={goHome} />}
+            {activePanel === 'about' && <AboutPage onBack={goHome} />}
+            {activePanel === 'how-it-works' && <HowItWorksPage onBack={goHome} />}
+            {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
+            {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBalanceRefresh={refreshAccount} onBack={goHome} />}
+            {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
+            {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
+            {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
+            {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
+            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onResyncWhatsApp={handleResyncWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} noProfile={noProfile} onGoConfig={() => goToSettings('config')} platformConfig={platformConfig} />}
+          </div>
+        )}
+      </main>
 
       {(showMenu || showProfileMenu) && (
         <div className="overlay" onClick={() => { setShowMenu(false); setShowProfileMenu(false); }} />

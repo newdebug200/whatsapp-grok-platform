@@ -1,4 +1,5 @@
 const axios = require('axios');
+const centralSync = require('./centralSync');
 const fs = require('fs');
 const path = require('path');
 
@@ -39,11 +40,11 @@ class MessageHandler {
       const resp = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
           messages: [
             {
               role: 'system',
-              content: 'Tu es un analyseur de sentiment. Réponds UNIQUEMENT par un seul mot parmi: positif, neutre, negatif, colere. Pas d\'explication.'
+              content: 'Tu es un analyseur de sentiment client. Réponds UNIQUEMENT par un seul mot parmi: positif, neutre, negatif, colere, satisfait, frustre, inquiet, confus, reconnaissant, urgent. Utilise urgent uniquement si une action rapide est nécessaire. Pas d\'explication.'
             },
             { role: 'user', content: `Quel est le sentiment de ce message WhatsApp ? "${text.slice(0, 300)}"` }
           ],
@@ -53,9 +54,16 @@ class MessageHandler {
         { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 8000 }
       );
       const raw = resp.data.choices[0].message.content.trim().toLowerCase();
-      if (['positif', 'neutre', 'negatif', 'colere'].includes(raw)) return raw;
+      const allowed = ['positif', 'neutre', 'negatif', 'colere', 'satisfait', 'frustre', 'inquiet', 'confus', 'reconnaissant', 'urgent'];
+      if (allowed.includes(raw)) return raw;
       if (raw.includes('col')) return 'colere';
-      if (raw.includes('neg') || raw.includes('neg')) return 'negatif';
+      if (raw.includes('neg')) return 'negatif';
+      if (raw.includes('satisf') || raw.includes('content')) return 'satisfait';
+      if (raw.includes('frustr')) return 'frustre';
+      if (raw.includes('inqui') || raw.includes('préoccup')) return 'inquiet';
+      if (raw.includes('confus') || raw.includes('incompr')) return 'confus';
+      if (raw.includes('remerci') || raw.includes('reconna')) return 'reconnaissant';
+      if (raw.includes('urgent')) return 'urgent';
       if (raw.includes('pos')) return 'positif';
       return 'neutre';
     } catch (_) {
@@ -75,7 +83,7 @@ class MessageHandler {
       const resp = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
           messages: [
             { role: 'system', content: 'Tu es un assistant qui résume les interactions client de manière concise.' },
             { role: 'user', content: prompt }
@@ -161,7 +169,7 @@ class MessageHandler {
       }
 
       // ── Save message with unread=true (sentiment is filled in later, only if the bot actually responds) ──
-      prisma.message.create({
+      await prisma.message.create({
         data: {
           contact_id: dbContact.id,
           content: messageContent,
@@ -171,13 +179,13 @@ class MessageHandler {
           unread: true,
           media_path: mediaPath
         }
-      }).catch(() => {});
+      }).catch((err) => console.error('[WA] Enregistrement message entrant:', err.message));
 
-      // ── Increment unread count ──
-      prisma.contact.update({
+      // ── Increment unread count before notifying the UI ──
+      await prisma.contact.update({
         where: { id: dbContact.id },
         data: { unread_count: { increment: 1 } }
-      }).catch(() => {});
+      }).catch((err) => console.error('[WA] Mise à jour compteur non-lu:', err.message));
 
       waManager.addToCache(profileId, dbContact.id, 'received', messageContent);
 
@@ -191,6 +199,7 @@ class MessageHandler {
       });
       let isAdminAccount = false;
       if (profile) {
+        centralSync.reportActivity(profile.account_id, 'whatsapp.message_received', { profile_id: profileId, phone: phoneNumber, type: message.type || 'text', has_media: Boolean(message.hasMedia) }).catch(() => {});
         const account = await prisma.account.findUnique({
           where: { id: profile.account_id },
           select: { is_blocked: true, role: true }
@@ -199,28 +208,27 @@ class MessageHandler {
         if (!isAdminAccount && account?.is_blocked) return;
       }
 
-      if (!isAdminAccount) {
-        const iaGlobalCfg = await prisma.platformConfig.findUnique({ where: { key: 'ia_enabled_global' } });
-        if (iaGlobalCfg && iaGlobalCfg.value === 'false') return;
-      }
-
       // ── Verification trigger check ──
-      const verificationTriggerEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'verification_triggers_enabled' } });
-      if (!verificationTriggerEnabledCfg || verificationTriggerEnabledCfg.value !== 'false') {
-        if (!message.hasMedia && message.body) {
-          const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
-          const bodyTrimmed = message.body.trim().toLowerCase();
-          const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
-          if (matchedTrigger) {
-            await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
-            return;
-          }
+      // The active trigger is authoritative, as in work_valide. The general
+      // AI feature flag must not block this explicit verification service.
+      if (!message.hasMedia && message.body) {
+        const triggers = await prisma.verificationTrigger.findMany({ where: { profile_id: profileId, is_active: true } });
+        const bodyTrimmed = message.body.trim().toLowerCase();
+        const matchedTrigger = triggers.find(t => t.text.trim().toLowerCase() === bodyTrimmed);
+        console.log(`[Verification] Contrôle message — profil=${profileId} body=${JSON.stringify(bodyTrimmed)} actifs=${triggers.length} trouvé=${Boolean(matchedTrigger)}`);
+        if (matchedTrigger) {
+          await this._handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager);
+          return;
         }
       }
 
+      // Verification is an explicit service and must remain available even
+      // when the general AI reply feature is disabled by the administrator.
+      if (!isAdminAccount) {
+        if (!await centralSync.getFeature('ia_enabled_global', true)) return;
+      }
       // ── Sensitive keyword detection ──
-      const sensitiveEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'sensitive_keywords_enabled' } });
-      if (!sensitiveEnabledCfg || sensitiveEnabledCfg.value !== 'false') {
+      if (await centralSync.getFeature('sensitive_keywords_enabled', true)) {
         if (!message.hasMedia && message.body) {
           const keywords = await prisma.sensitiveKeyword.findMany({ where: { profile_id: profileId, is_active: true } });
           const bodyLower = message.body.toLowerCase();
@@ -237,6 +245,9 @@ class MessageHandler {
       }
 
       if (skipAI) return;
+      if (!isAdminAccount) {
+        if (!await centralSync.getFeature('auto_replies_enabled', true)) return;
+      }
 
       const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
 
@@ -266,18 +277,28 @@ class MessageHandler {
 
   async _handleVerificationTrigger(message, client, prisma, profileId, phoneNumber, waId, dbContact, waManager) {
     try {
-      // 1. Resolve sender's LID
-      let senderLid;
-      if (waId.endsWith('@lid')) {
-        senderLid = waId.split('@')[0];
-      } else {
-        try {
-          const numId = await client.getNumberId(waId.split('@')[0]);
-          senderLid = numId ? numId.user : waId.split('@')[0];
-        } catch (_) {
-          senderLid = waId.split('@')[0];
-        }
-      }
+      // 1. Resolve every identifier that Dressur may accept.
+      // WhatsApp can expose a phone number (@c.us) or a privacy LID (@lid).
+      const candidates = [];
+      const addCandidate = (value) => {
+        const cleaned = String(value || '').replace(/@(?:c\.us|lid|g\.us)$/i, '').trim();
+        if (cleaned && !candidates.includes(cleaned)) candidates.push(cleaned);
+      };
+      addCandidate(waId);
+      addCandidate(phoneNumber);
+      if (waId.endsWith('@lid')) addCandidate(waId.split('@')[0]);
+      try {
+        const waContact = await client.getContactById(waId);
+        addCandidate(waContact?.id?._serialized);
+        addCandidate(waContact?.id?.user);
+        addCandidate(waContact?.number);
+      } catch (_) {}
+      try {
+        const numId = await client.getNumberId(waId.split('@')[0]);
+        addCandidate(numId?.user);
+      } catch (_) {}
+      if (candidates.length === 0) addCandidate(waId.split('@')[0]);
+      console.log(`[Verification] Identifiants testés: ${candidates.join(', ')}`);
 
       // 2. Sync LIDs for numbers that don't have one yet in dressur.site
       try {
@@ -316,12 +337,31 @@ class MessageHandler {
         console.warn('[Verification] Sync LID ignoré:', syncErr.message);
       }
 
-      // 3. Check if sender's number is activatable and reply with exact API response
-      const apiRes = await axios.get(
-        `https://dressur.site/crud/user/find_whatsapp_is_activatable/${senderLid}`,
-        { timeout: 10000, responseType: 'text' }
-      );
-      const replyText = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
+      // 3. Try the known number/LID identifiers before replying.
+      let replyText = '';
+      let resolvedIdentifier = '';
+      for (const identifier of candidates) {
+        try {
+          const apiRes = await axios.get(
+            `https://dressur.site/crud/user/find_whatsapp_is_activatable/${encodeURIComponent(identifier)}`,
+            { timeout: 10000, responseType: 'text', validateStatus: (status) => status < 500 }
+          );
+          const candidateReply = (typeof apiRes.data === 'string' ? apiRes.data : JSON.stringify(apiRes.data)).trim();
+          if (apiRes.status >= 200 && apiRes.status < 300 && candidateReply) {
+            replyText = candidateReply;
+            resolvedIdentifier = identifier;
+            break;
+          }
+        } catch (lookupErr) {
+          console.warn(`[Verification] Échec identifiant ${identifier}:`, lookupErr.message);
+        }
+      }
+      if (!replyText) {
+        replyText = 'Nous n’avons pas pu obtenir la réponse de vérification pour ce numéro. Veuillez réessayer dans quelques instants.';
+        console.warn(`[Verification] Aucune réponse Dressur pour ${phoneNumber}`);
+      } else {
+        console.log(`[Verification] Réponse Dressur obtenue avec ${resolvedIdentifier}`);
+      }
       const sentVerif = await client.sendMessage(waId, replyText);
       waManager.trackBotSentId(sentVerif?.id?._serialized);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
@@ -398,28 +438,29 @@ class MessageHandler {
       let isAdminAccount = false;
 
       try {
-        const creditsEnabledCfg = await prisma.platformConfig.findUnique({ where: { key: 'credits_enabled' } });
-        creditsEnabled = creditsEnabledCfg?.value === 'true';
-
+        creditsEnabled = await centralSync.getFeature('credits_enabled', true);
         const profileRow = await prisma.whatsAppProfile.findUnique({ where: { id: profileId }, select: { account_id: true } });
         accountId = profileRow?.account_id;
-
         if (accountId) {
-          const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { credit_balance: true, role: true } });
+          const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { role: true } });
           isAdminAccount = accountRow?.role === 'admin';
           if (creditsEnabled && !isAdminAccount) {
-            const currentBalance = accountRow?.credit_balance ?? 0;
+            const centralCredits = await centralSync.getCredits(accountId);
+            if (!centralCredits?.ok) {
+              waManager.emitToProfileAccount(profileId, 'bot-error', { profileId, contactPhone: contact.phone_number || from, error: "⚠️ Le service central des crédits est indisponible. Réessayez dans quelques instants." });
+              return;
+            }
+            const currentBalance = Number(centralCredits.balance || 0);
+            await prisma.account.update({ where: { id: accountId }, data: { credit_balance: currentBalance } }).catch(() => {});
             if (currentBalance <= 0) {
-              waManager.emitToProfileAccount(profileId, 'bot-error', {
-                profileId, contactPhone: contact.phone_number || from,
-                error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger."
-              });
+              waManager.emitToProfileAccount(profileId, 'bot-error', { profileId, contactPhone: contact.phone_number || from, error: "⚠️ Votre solde de crédits est épuisé. Contactez l'administrateur pour recharger." });
               return;
             }
           }
         }
       } catch (creditCheckErr) {
-        console.error('[Credits] Erreur vérification solde:', creditCheckErr.message);
+        console.error('[Credits] Erreur vérification centrale:', creditCheckErr.message);
+        if (accountId && creditsEnabled && !isAdminAccount) return;
       }
 
       // ── From here on we're committed to generating and sending a reply,
@@ -496,7 +537,7 @@ class MessageHandler {
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
           messages: [{ role: 'system', content: systemPrompt }, ...historyMessages, { role: 'user', content: messageText }],
           temperature: 0.2,
           max_tokens: 400
@@ -506,6 +547,13 @@ class MessageHandler {
 
       const aiResponse = response.data.choices[0].message.content;
       const totalTokens = response.data.usage?.total_tokens || 0;
+      let centralCreditResult = null;
+      if (creditsEnabled && accountId && totalTokens > 0) {
+        centralCreditResult = await centralSync.consumeCredits(accountId, totalTokens, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant' });
+        if (!centralCreditResult?.ok) {
+          throw new Error(centralCreditResult?.error || 'API centrale des crédits indisponible');
+        }
+      }
 
       const sentAI = await client.sendMessage(from, aiResponse);
       waManager.trackBotSentId(sentAI?.id?._serialized);
@@ -514,19 +562,10 @@ class MessageHandler {
         data: { contact_id: contact.id, content: aiResponse, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
       }).catch(() => {});
 
-      if (creditsEnabled && accountId && totalTokens > 0) {
-        try {
-          const creditRateCfg = await prisma.platformConfig.findUnique({ where: { key: 'credit_per_1000_tokens' } });
-          const creditRate = parseFloat(creditRateCfg?.value || '1');
-          const creditsToDeduct = parseFloat(((totalTokens / 1000) * creditRate).toFixed(4));
-          await prisma.$transaction([
-            prisma.account.update({ where: { id: accountId }, data: { credit_balance: { decrement: creditsToDeduct } } }),
-            prisma.creditTransaction.create({
-              data: { account_id: accountId, amount: -creditsToDeduct, type: 'debit', description: `Réponse IA — ${totalTokens} tokens`, tokens_used: totalTokens }
-            })
-          ]);
-        } catch (deductErr) {
-          console.error('[Credits] Erreur déduction:', deductErr.message);
+      if (centralCreditResult?.ok && accountId) {
+        const centralBalance = Number(centralCreditResult.credits_balance);
+        if (Number.isFinite(centralBalance)) {
+          await prisma.account.update({ where: { id: accountId }, data: { credit_balance: centralBalance } }).catch(() => {});
         }
       }
     } catch (error) {

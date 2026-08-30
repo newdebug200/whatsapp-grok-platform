@@ -43,7 +43,7 @@ const PERSONALITIES = [
   { value: 'support',      label: '🛠️ Support technique', desc: 'Patient, précis, étape par étape' },
 ];
 
-export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp }) {
+export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, onResyncWhatsApp }) {
   const [config, setConfig] = useState({
     bot_name: 'Botora',
     bot_info: '',
@@ -66,6 +66,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const [waError, setWaError] = useState('');
   const [cooldownLeft, setCooldownLeft] = useState(0);
 
@@ -189,12 +190,17 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     onConnectWhatsApp();
   };
 
-  const handleDisconnect = async () => {
+    const handleDisconnect = async () => {
     setDisconnecting(true);
     try { await onLogoutWhatsApp(); }
     finally { setDisconnecting(false); }
   };
-
+  const handleResync = async () => {
+    if (resyncing || !onResyncWhatsApp) return;
+    setResyncing(true);
+    setWaError('');
+    try { await onResyncWhatsApp(); } finally { setTimeout(() => setResyncing(false), 1200); }
+  };
   const isConnectDisabled = connecting || cooldownLeft > 0;
   const connectLabel = () => {
     if (connecting) return 'Connexion...';
@@ -220,13 +226,18 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
       {/* ── WhatsApp ── */}
       <div className="wa-section">
         <div className="section-label">WhatsApp</div>
-        <div className={`wa-status-row ${waStatus.isConnected ? 'connected' : 'disconnected'}`}>
+        <div className={`wa-status-row ${waStatus.status === 'syncing' || waStatus.status === 'synced' || waStatus.status === 'sync-failed' ? 'connected' : 'disconnected'}`}>
           <span className="wa-dot" />
-          <span>{waStatus.isConnected ? 'Connecté' : 'Non connecté'}</span>
+          <span>{waStatus.status === 'syncing' ? 'Session conservée · synchronisation…' : waStatus.isConnected ? 'Connecté · session conservée' : waStatus.status === 'qr' || waStatus.status === 'auth_failure' || waStatus.status === 'disconnected' ? 'Session WhatsApp perdue' : 'Non connecté'}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             {!waStatus.isConnected && (
               <button className="btn-connect" onClick={handleConnect} disabled={isConnectDisabled}>
                 {connectLabel()}
+              </button>
+            )}
+            {waStatus.status === 'sync-failed' && (
+              <button className="btn-connect" onClick={handleResync} disabled={resyncing}>
+                {resyncing ? 'Relance...' : 'Relancer la synchronisation'}
               </button>
             )}
             {waStatus.isConnected && (
@@ -236,6 +247,22 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             )}
           </div>
         </div>
+
+        {waStatus.status === 'syncing' && (
+          <div className="wa-session-notice wa-session-syncing" role="status">
+            <div className="wa-session-spinner" />
+            <div><strong>Session WhatsApp conservée</strong><span>Synchronisation des conversations et des données en cours…</span></div>
+          </div>
+        )}
+        {waStatus.status === 'synced' && waStatus.message && (
+          <div className="wa-session-notice wa-session-synced" role="status">✓ {waStatus.message}</div>
+        )}
+        {waStatus.status === 'sync-failed' && (
+          <div className="wa-session-notice wa-session-warning" role="alert">⚠ {waStatus.message}</div>
+        )}
+        {(!waStatus.isConnected && (waStatus.status === 'disconnected' || waStatus.status === 'auth_failure')) && waStatus.message && (
+          <div className="wa-session-notice wa-session-lost" role="alert">⚠ {waStatus.message}</div>
+        )}
 
         {connecting && !waStatus.qrCode && (
           <div className="qr-waiting">

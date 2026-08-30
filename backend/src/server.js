@@ -35,6 +35,9 @@ const platformConfigRoutes = require('./routes/platformConfigRoutes');
 const statusRoutes = require('./routes/statusRoutes');
 const funnelRoutes = require('./routes/funnelRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const adminCentralRoutes = require('./routes/adminCentralRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -45,6 +48,8 @@ const io = new Server(server, {
 const prisma = new PrismaClient();
 
 app.use(cors());
+// FedaPay signatures require the exact raw JSON body.
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRoutes);
@@ -61,8 +66,20 @@ app.use('/api/platform-config', platformConfigRoutes);
 app.use('/api/statuses', statusRoutes);
 app.use('/api/funnel', funnelRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/admin-central', adminCentralRoutes);
 
 app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
+app.get('/api/central-health', async (_req, res) => {
+  try {
+    const centralSync = require('./services/centralSync');
+    const result = await centralSync.checkHealth();
+    res.status(result.ok ? 200 : 503).json(result);
+  } catch (error) {
+    res.status(503).json({ ok: false, error: error.message });
+  }
+});
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -84,6 +101,21 @@ io.on('connection', (socket) => {
   socket.on('get-status', () => {
     const status = whatsappManager.getStatus(accountId);
     socket.emit('status', status);
+  });
+
+  socket.on('resync-whatsapp', async (data = {}) => {
+    const profileId = data?.profileId ? Number(data.profileId) : null;
+    if (!profileId) {
+      socket.emit('status', { status: 'error', message: 'Profil WhatsApp requis pour relancer la synchronisation.' });
+      return;
+    }
+    console.log(`Demande resynchronisation WhatsApp — compte ${accountId}, profil ${profileId}`);
+    try {
+      await whatsappManager.reconnectClient(accountId, profileId);
+    } catch (err) {
+      console.error('Erreur resynchronisation WhatsApp:', err.message);
+      socket.emit('status', { isConnected: false, qrCode: null, status: 'error', profileId, message: 'Impossible de relancer la synchronisation. Réessayez.' });
+    }
   });
 
   socket.on('connect-whatsapp', (data = {}) => {

@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import BotConfig from './BotConfig';
 import FAQManager from './FAQManager';
 import Settings from './Settings';
-import AdminPanel from './AdminPanel';
 import FlagJournal from './FlagJournal';
+import StorageManager from './StorageManager';
 import QuickReplyManager from './QuickReplyManager';
 import TagManager from './TagManager';
 import './SettingsHub.css';
+import './SettingsShared.css';
 
 const BOT_TABS = [
   {
@@ -29,6 +30,10 @@ const BOT_TABS = [
     key: 'journal', label: 'Alertes',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
   },
+  {
+    key: 'storage', label: 'Données & stockage',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
+  },
 ];
 // Note: "Prospects" (the funnel/entonnoir) used to live here as a sub-tab under
 // Bot & WhatsApp. It's now a top-level sidebar item (see Dashboard.jsx) for
@@ -41,19 +46,19 @@ const ACCOUNT_TABS = [
   },
 ];
 
-const ADMIN_TAB = {
-  key: 'admin', label: 'Admin',
-  icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4c1.4 0 2.8 1.1 2.8 2.5v.5h.7c.4 0 .5.1.5.5v4c0 .4-.1.5-.5.5H8.5c-.4 0-.5-.1-.5-.5v-4c0-.4.1-.5.5-.5h.7v-.5C9.2 6.1 10.6 5 12 5zm0 1.2c-.8 0-1.3.6-1.3 1.3v.5h2.6v-.5c0-.7-.5-1.3-1.3-1.3zm0 4.1c-.6 0-1 .4-1 1s.4 1 1 1 1-.4 1-1-.4-1-1-1z"/></svg>
-};
-
-export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab }) {
+export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, noProfile, onGoConfig, platformConfig = {} }) {
   const [tab, setTab] = useState(initialTab || 'config');
 
   useEffect(() => {
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
-  const accountTabs = [...ACCOUNT_TABS, ...(account?.role === 'admin' ? [ADMIN_TAB] : [])];
+  const accountTabs = ACCOUNT_TABS;
+  const featureEnabled = (key) => account?.role === 'admin' || platformConfig[key] !== 'false';
+  const visibleBotTabs = BOT_TABS.filter(tab => ({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key] ? featureEnabled(({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key])) : true));
+  useEffect(() => {
+    if (tab !== 'account' && !visibleBotTabs.some(item => item.key === tab)) setTab('account');
+  }, [tab, visibleBotTabs]);
 
   const renderTab = (t) => (
     <button
@@ -70,7 +75,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
   return (
     <div className="sh-wrapper">
       <div className="sh-tabs">
-        {BOT_TABS.map(renderTab)}
+        {visibleBotTabs.map(renderTab)}
         <div className="sh-tab-separator" />
         {accountTabs.map(renderTab)}
       </div>
@@ -79,6 +84,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
           <BotConfig
             waStatus={waStatus}
             onConnectWhatsApp={onConnectWhatsApp}
+            onResyncWhatsApp={onResyncWhatsApp}
             onLogoutWhatsApp={onLogoutWhatsApp}
             activeProfile={activeProfile}
           />
@@ -86,9 +92,10 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onLogoutWhats
         {tab === 'faq' && <FAQManager />}
         {tab === 'templates' && <QuickReplyManager />}
         {tab === 'tags' && <TagManager activeProfile={activeProfile} />}
-        {tab === 'journal' && <FlagJournal />}
+        {tab === 'journal' && <FlagJournal noProfile={noProfile} onGoConfig={onGoConfig} />}
+        {tab === 'storage' && <StorageManager isAdmin={account?.role === 'admin'} noProfile={noProfile} onGoConfig={onGoConfig} />}
         {tab === 'account' && <Settings />}
-        {tab === 'admin' && account?.role === 'admin' && <AdminPanel />}
+
       </div>
     </div>
   );

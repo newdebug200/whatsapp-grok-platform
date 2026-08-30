@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
@@ -13,7 +15,8 @@ const STAGE_LABELS = {
   client: 'Client',
   fidele: 'Fidèle'
 };
-const NEGATIVE_SENTIMENTS = ['colere', 'negatif'];
+const NEGATIVE_SENTIMENTS = ['colere', 'negatif', 'frustre', 'inquiet', 'confus', 'urgent'];
+const SENTIMENT_CATEGORIES = ['positif', 'neutre', 'negatif', 'colere', 'satisfait', 'frustre', 'inquiet', 'confus', 'reconnaissant', 'urgent'];
 
 // GET /api/dashboard/overview — lightweight aggregate for the admin dashboard home.
 // Only counts + small "top N" lists are returned (no full contact/message payloads),
@@ -141,6 +144,133 @@ router.get('/overview', async (req, res) => {
   } catch (error) {
     console.error('Erreur GET dashboard overview:', error);
     res.status(500).json({ error: 'Erreur lors du chargement du tableau de bord' });
+  }
+});
+
+// GET /api/dashboard/sentiments — dedicated sentiment treatment workspace.
+router.get('/sentiments', async (req, res) => {
+  try {
+    const profileId = req.profileId;
+    const requestedFilter = req.query.filter || 'negative';
+    const filterSentiments = {
+      negative: NEGATIVE_SENTIMENTS,
+      angry: ['colere'],
+      frustrated: ['frustre'],
+      worried: ['inquiet'],
+      confused: ['confus'],
+      urgent: ['urgent'],
+    };
+    const selectedSentiments = requestedFilter === 'all' ? SENTIMENT_CATEGORIES : (filterSentiments[requestedFilter] || NEGATIVE_SENTIMENTS);
+    const where = {
+      contact: { profile_id: profileId, archived: false },
+      sentiment: { in: selectedSentiments },
+      ...(req.query.unread !== 'false' ? { unread: true } : {}),
+    };
+    const [messages, counts] = await Promise.all([
+      prisma.message.findMany({
+        where,
+        select: {
+          id: true, content: true, sentiment: true, unread: true, created_at: true,
+          contact: { select: { id: true, name: true, phone_number: true, ia_paused: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 100,
+      }),
+      prisma.message.groupBy({
+        by: ['sentiment'],
+        where: { contact: { profile_id: profileId, archived: false }, sentiment: { in: SENTIMENT_CATEGORIES } },
+        _count: { _all: true },
+      }),
+    ]);
+    const countMap = Object.fromEntries(counts.map(item => [item.sentiment, item._count._all]));
+    const categoryCounts = Object.fromEntries(SENTIMENT_CATEGORIES.map(category => [category, countMap[category] || 0]));
+    res.json({ messages, counts: { ...categoryCounts, all: SENTIMENT_CATEGORIES.reduce((sum, category) => sum + categoryCounts[category], 0), priority: NEGATIVE_SENTIMENTS.reduce((sum, category) => sum + categoryCounts[category], 0) } });
+  } catch (error) {
+    console.error('Erreur GET dashboard sentiments:', error);
+    res.status(500).json({ error: 'Erreur lors du chargement des sentiments' });
+  }
+});
+
+const uploadsDirectory = path.join(__dirname, '../../uploads');
+const getFileSize = (filename) => {
+  try { return fs.statSync(path.join(uploadsDirectory, path.basename(filename))).size; } catch (_) { return 0; }
+};
+
+// GET /api/dashboard/storage — storage items that can be cleaned for the active profile.
+router.get('/storage', async (req, res) => {
+  try {
+    const profileId = req.profileId;
+    const accountId = req.accountId;
+    const account = await prisma.account.findUnique({ where: { id: accountId }, select: { role: true } });
+    const isAdmin = account?.role === 'admin';
+    const [messageMedia, campaignMedia, queueCount, archivedMessages] = await Promise.all([
+      (prisma.message?.findMany ? prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])).catch((error) => {
+        console.warn('Stockage: médias des messages indisponibles:', error.message);
+        return [];
+      }),
+      (prisma.campaignMessage?.findMany ? prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])).catch((error) => {
+        console.warn('Stockage: médias des campagnes indisponibles:', error.message);
+        return [];
+      }),
+      (prisma.dressurQueueItem?.count ? prisma.dressurQueueItem.count({ where: { account_id: accountId } }) : Promise.resolve(0)).catch((error) => {
+        console.warn('Stockage: file locale indisponible, nettoyage ignoré:', error.message);
+        return 0;
+      }),
+      prisma.message.count({ where: { contact: { profile_id: profileId, archived: true } } }).catch((error) => {
+        console.warn('Stockage: comptage des messages archivés indisponible:', error.message);
+        return 0;
+      }),
+    ]);
+    const mediaFiles = [...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean);
+    const uniqueMedia = [...new Set(mediaFiles)];
+    res.json({
+      media: { files: uniqueMedia.length, bytes: uniqueMedia.reduce((sum, filename) => sum + getFileSize(filename), 0) },
+      // La file Dressursite est réservée à l’administration.
+      localQueue: isAdmin ? { items: queueCount } : null,
+      archivedMessages: { items: archivedMessages },
+    });
+  } catch (error) {
+    console.error('Erreur GET dashboard storage:', error);
+    res.status(500).json({ error: 'Erreur lors du calcul du stockage' });
+  }
+});
+
+// DELETE /api/dashboard/storage/:kind — destructive cleanup, scoped to the active profile.
+router.delete('/storage/:kind', async (req, res) => {
+  try {
+    const profileId = req.profileId;
+    const accountId = req.accountId;
+    const { kind } = req.params;
+    if (kind === 'media') {
+      const [messageMedia, campaignMedia] = await Promise.all([
+        (prisma.message?.findMany ? prisma.message.findMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])),
+        (prisma.campaignMessage?.findMany ? prisma.campaignMessage.findMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, select: { media_path: true } }) : Promise.resolve([])),
+      ]);
+      const filenames = [...new Set([...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean))];
+      for (const filename of filenames) {
+        try { fs.unlinkSync(path.join(uploadsDirectory, path.basename(filename))); } catch (_) {}
+      }
+      await Promise.all([
+        prisma.message.updateMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, data: { media_path: null } }),
+        prisma.campaignMessage.updateMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, data: { media_path: null } }),
+      ]);
+      return res.json({ ok: true, deleted: filenames.length });
+    }
+    if (kind === 'local-queue') {
+      const account = await prisma.account.findUnique({ where: { id: accountId }, select: { role: true } });
+      if (account?.role !== 'admin') return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+      if (!prisma.dressurQueueItem?.deleteMany) return res.json({ ok: true, deleted: 0, unavailable: true });
+      const result = await prisma.dressurQueueItem.deleteMany({ where: { account_id: accountId } });
+      return res.json({ ok: true, deleted: result.count });
+    }
+    if (kind === 'archived-messages') {
+      const result = await prisma.message.deleteMany({ where: { contact: { profile_id: profileId, archived: true } } });
+      return res.json({ ok: true, deleted: result.count });
+    }
+    return res.status(400).json({ error: 'Type de nettoyage inconnu' });
+  } catch (error) {
+    console.error('Erreur DELETE dashboard storage:', error);
+    res.status(500).json({ error: 'Erreur lors du nettoyage' });
   }
 });
 
