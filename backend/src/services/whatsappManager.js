@@ -161,23 +161,29 @@ class WhatsAppManager {
   }
 
   async _resolvePrivateContactName(contact, phoneNumber, waId) {
-    const candidates = [contact?.name, contact?.pushname, contact?.shortName, contact?.verifiedName];
+    const candidates = [contact?.name, contact?.pushname, contact?.notifyName, contact?.shortName, contact?.verifiedName];
     return candidates.find((name) => this._isUsableContactName(name, phoneNumber, waId)) || null;
   }
 
-  async _resolveChatContactName(chat, phoneNumber, waId) {
+  async _resolveChatContactName(client, chat, phoneNumber, waId) {
     if (chat?.isGroup) {
       const groupName = chat.name || chat.formattedTitle;
       return this._isUsableContactName(groupName, phoneNumber, waId)
         ? groupName.trim()
         : `Groupe ${String(waId || '').split('@')[0]}`;
     }
+
+    let contact = null;
     try {
-      const contact = await chat.getContact();
-      return this._resolvePrivateContactName(contact, phoneNumber, waId);
+      contact = await client.getContactById(waId);
     } catch (_) {
-      return this._isUsableContactName(chat?.name, phoneNumber, waId) ? chat.name.trim() : null;
+      try { contact = await chat.getContact(); } catch (_) {}
     }
+    const contactName = await this._resolvePrivateContactName(contact, phoneNumber, waId);
+    if (contactName) return contactName;
+
+    const chatName = chat?.name || chat?.formattedTitle;
+    return this._isUsableContactName(chatName, phoneNumber, waId) ? chatName.trim() : null;
   }
 
   async _importContacts(client, profileId) {
@@ -243,13 +249,13 @@ class WhatsAppManager {
           let phoneNumber, contactName;
           if (isGroup) {
             phoneNumber = `group_${chat.id.user}`;
-            contactName = await this._resolveChatContactName(chat, phoneNumber, waId);
+            contactName = await this._resolveChatContactName(client, chat, phoneNumber, waId);
           } else {
             if (chat.id.server !== 'c.us') continue;
             const digits = chat.id.user.replace(/\D/g, '');
             if (digits.length < 7 || digits.length > 15) continue;
             phoneNumber = `+${chat.id.user}`;
-            contactName = await this._resolveChatContactName(chat, phoneNumber, waId);
+            contactName = await this._resolveChatContactName(client, chat, phoneNumber, waId);
           }
 
           const dbContact = await this.prisma.contact.upsert({
@@ -605,17 +611,21 @@ class WhatsAppManager {
                 const waId = msg.to;
         const phoneNumber = '+' + waId.split('@')[0];
 
-        // Find or create the contact this message was sent to
+        // Find the WhatsApp contact before creating/updating the local record.
+        let waContact = null;
+        try { waContact = await client.getContactById(waId); } catch (_) {}
+        const contactName = await this._resolvePrivateContactName(waContact, phoneNumber, waId);
         let dbContact = await this.prisma.contact.findUnique({
           where: { profile_id_phone_number: { profile_id: currentProfileId, phone_number: phoneNumber } }
         });
         if (!dbContact) {
           dbContact = await this.prisma.contact.create({
-            data: { profile_id: currentProfileId, phone_number: phoneNumber, wa_id: waId }
+            data: { profile_id: currentProfileId, phone_number: phoneNumber, wa_id: waId, ...(contactName ? { name: contactName } : {}) }
           });
-        } else if (!dbContact.wa_id) {
+        } else if (!dbContact.wa_id || (contactName && dbContact.name !== contactName)) {
           dbContact = await this.prisma.contact.update({
-            where: { id: dbContact.id }, data: { wa_id: waId }
+            where: { id: dbContact.id },
+            data: { ...(dbContact.wa_id ? {} : { wa_id: waId }), ...(contactName ? { name: contactName } : {}) }
           });
         }
 

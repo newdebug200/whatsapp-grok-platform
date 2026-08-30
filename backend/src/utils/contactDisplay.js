@@ -22,6 +22,7 @@ function resolveContactName(contact, phoneNumber, waId) {
   const candidates = [
     contact?.name,
     contact?.pushname,
+    contact?.notifyName,
     contact?.shortName,
     contact?.verifiedName
   ];
