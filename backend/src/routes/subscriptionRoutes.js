@@ -6,26 +6,31 @@ const centralSync = require('../services/centralSync');
 
 router.use(authMiddleware);
 
-// Les utilisateurs ne voient que les offres actives et leur ordre de publication.
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const plans = await centralSync.getPlans();
-    if (!plans.length) return res.status(503).json({ error: 'Les abonnements centraux sont momentanément indisponibles.' });
-    res.json(plans.filter(plan => Number(plan.is_active) === 1).map(plan => ({
-      id: plan.id,
-      name: plan.name,
-      slug: plan.slug,
-      price: Number(plan.price_xof ?? 0),
-      currency: 'XOF',
-      credits: Number(plan.credits_per_month || 0),
-      max_profiles: Number(plan.max_profiles || 1),
-      trial_days: Number(plan.trial_days || 0),
-      features: [plan.ia_enabled ? 'Bot IA' : null, plan.campaigns_enabled ? 'Campagnes' : null].filter(Boolean),
-      is_active: true,
-    })));
+    const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { email: true } });
+    if (!account) return res.status(404).json({ error: 'Compte introuvable.' });
+    const [offer, central] = await Promise.all([centralSync.getSubscriptionOffer(), centralSync.getAccount(account.email)]);
+    if (!offer) return res.status(503).json({ error: 'L’offre annuelle est momentanément indisponible.' });
+    const access = central ? {
+      access_allowed: Boolean(central.access_allowed),
+      access_type: central.access_type || 'none',
+      access_ends_at: central.access_ends_at || null,
+      trial_ends_at: central.trial_ends_at || null,
+      subscription_ends_at: central.subscription_ends_at || null,
+      trial_days_left: central.trial_days_left ?? null,
+      subscription_days_left: central.subscription_days_left ?? null
+    } : { access_allowed: true, access_type: 'unknown', access_ends_at: null };
+    res.json({
+      offer: {
+        id: 'annual', name: 'Botora annuel', price: Number(offer.price_xof || 0), currency: 'XOF',
+        duration_days: Number(offer.duration_days || 365), is_active: Boolean(offer.is_active)
+      },
+      access
+    });
   } catch (error) {
-    console.error('Erreur GET subscriptions centrales:', error);
-    res.status(502).json({ error: 'API centrale des abonnements indisponible.' });
+    console.error('Erreur GET subscription:', error);
+    res.status(502).json({ error: 'L’offre annuelle est momentanément indisponible.' });
   }
 });
 

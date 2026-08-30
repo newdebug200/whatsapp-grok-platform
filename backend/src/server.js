@@ -19,8 +19,10 @@ const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 const cron = require('node-cron');
 const { JWT_SECRET } = require('./middleware/auth');
+const { subscriptionAccessMiddleware } = require('./middleware/subscriptionAccess');
 
 const whatsappManager = require('./services/whatsappManager');
+const centralSync = require('./services/centralSync');
 const authRoutes = require('./routes/authRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const faqRoutes = require('./routes/faqRoutes');
@@ -52,6 +54,7 @@ app.use(cors());
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 
+app.use('/api', subscriptionAccessMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/faq', faqRoutes);
@@ -81,14 +84,29 @@ app.get('/api/central-health', async (_req, res) => {
   }
 });
 
-io.use((socket, next) => {
+async function checkSocketAccess(accountId) {
+  const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
+  if (!account?.email) return { allowed: false, access_type: 'expired' };
+  const central = await centralSync.getAccount(account.email);
+  if (!central) return { allowed: true };
+  return { allowed: central.access_allowed !== false, access_type: central.access_type || 'expired', access_ends_at: central.access_ends_at || null };
+}
+
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('Authentication error'));
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     socket.accountId = decoded.accountId;
+    const access = await checkSocketAccess(socket.accountId);
+    if (!access.allowed) {
+      const error = new Error('SUBSCRIPTION_REQUIRED');
+      error.data = access;
+      return next(error);
+    }
     next();
   } catch (err) {
+    if (err.message === 'SUBSCRIPTION_REQUIRED') return next(err);
     next(new Error('Authentication error'));
   }
 });
@@ -97,6 +115,15 @@ io.on('connection', (socket) => {
   const accountId = socket.accountId;
   console.log(`Socket connecté — compte ${accountId} (${socket.id})`);
   socket.join(`account_${accountId}`);
+  const accessInterval = setInterval(async () => {
+    try {
+      const access = await checkSocketAccess(accountId);
+      if (!access.allowed) {
+        socket.emit('subscription-required', access);
+        socket.disconnect(true);
+      }
+    } catch (_) {}
+  }, 60000);
 
   socket.on('get-status', () => {
     const status = whatsappManager.getStatus(accountId);
@@ -171,6 +198,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    clearInterval(accessInterval);
     console.log(`Socket déconnecté — compte ${accountId} (${socket.id})`);
   });
 });

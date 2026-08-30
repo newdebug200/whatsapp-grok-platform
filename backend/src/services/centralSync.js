@@ -77,6 +77,23 @@ async function getPlans() {
   catch (error) { console.warn(`[CentralSync] Abonnements centraux indisponibles: ${error.message}`); return []; }
 }
 
+async function getSubscriptionOffer() {
+  try {
+    const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'subscription' }, timeout: 8000 });
+    return response.data?.subscription || null;
+  } catch (error) { console.warn(`[CentralSync] Offre annuelle indisponible: ${error.message}`); return null; }
+}
+
+async function createSubscription(email, callbackUrl) {
+  const response = await axios.post(`${ADMIN_API}/api/subscription-create.php`, { email, callback_url: callbackUrl }, { headers: { 'Content-Type': 'application/json' }, timeout: 25000 });
+  return response.data || null;
+}
+
+async function verifySubscription(email, paymentId, transactionId) {
+  const response = await axios.post(`${ADMIN_API}/api/subscription-verify.php`, { email, payment_id: paymentId, transaction_id: transactionId }, { headers: { 'Content-Type': 'application/json' }, timeout: 25000 });
+  return response.data || null;
+}
+
 async function getFeature(key, fallback = true) {
   try {
     if (Date.now() - featureCache.at > 60000) {
@@ -90,4 +107,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getPlans, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getPlans, getSubscriptionOffer, createSubscription, verifySubscription, getFeature };

@@ -53,7 +53,10 @@ const messages = {
   'Erreur lors de la sauvegarde des notes': { fr: 'Erreur lors de la sauvegarde des notes', en: 'Error saving notes' },
   'Erreur lors du chargement de la mémoire': { fr: 'Erreur lors du chargement de la mémoire', en: 'Error loading memory' },
   'contactId, mimeType et data requis': { fr: 'contactId, mimeType et data requis', en: 'contactId, mimeType and data are required' },
-  'Erreur lors de la suppression de la mémoire': { fr: 'Erreur lors de la suppression de la mémoire', en: 'Error deleting memory' }
+  'Erreur lors de la suppression de la mémoire': { fr: 'Erreur lors de la suppression de la mémoire', en: 'Error deleting memory' },
+  "Votre période d'essai ou votre abonnement est terminé. Souscrivez pour continuer.": { fr: "Votre période d'essai ou votre abonnement est terminé. Souscrivez pour continuer.", en: 'Your trial or subscription has ended. Subscribe to continue.' },
+  'Votre accès est suspendu. Contactez le support.': { fr: 'Votre accès est suspendu. Contactez le support.', en: 'Your access is suspended. Contact support.' },
+  'Cette licence a été bannie. Contactez le support.': { fr: 'Cette licence a été bannie. Contactez le support.', en: 'This license has been banned. Contact support.' }
 };
 
 function normalizeLanguage(language) {

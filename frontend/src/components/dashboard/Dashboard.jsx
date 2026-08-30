@@ -106,6 +106,10 @@ export default function Dashboard() {
     }
   }, [account]);
 
+  useEffect(() => {
+    if (account?.central_access_allowed === false) setActivePanel('subscriptions');
+  }, [account?.central_access_allowed]);
+
   // Refresh credit balance periodically
   useEffect(() => {
     if (!token) return;
@@ -173,6 +177,11 @@ export default function Dashboard() {
 
     s.on('connect_error', (err) => {
       console.error('Erreur socket:', err.message);
+      if (err.message === 'SUBSCRIPTION_REQUIRED' || err.data?.access_type === 'expired') setActivePanel('subscriptions');
+    });
+    s.on('subscription-required', () => {
+      setActivePanel('subscriptions');
+      s.disconnect();
     });
 
     s.on('status', (status) => setWaStatus(status));

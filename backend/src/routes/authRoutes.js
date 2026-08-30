@@ -90,13 +90,12 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!account) return res.status(404).json({ error: 'Compte introuvable' });
     const central = await centralSync.getAccount(account.email);
     if (central) {
-      const nextBlocked = ['suspended', 'expired', 'banned'].includes(String(central.status));
       const updated = await prisma.account.update({
         where: { id: account.id },
-        data: { name: central.name || account.name, credit_balance: Number(central.credits_balance || 0), is_blocked: nextBlocked },
+        data: { name: central.name || account.name, credit_balance: Number(central.credits_balance || 0) },
         select: { id: true, email: true, name: true, role: true, language: true, created_at: true, credit_balance: true, is_blocked: true }
       });
-      return res.json({ ...updated, central_status: central.status, central_plan_id: central.plan_id, central_trial_ends_at: central.trial_ends_at, central_synced: true });
+      return res.json({ ...updated, central_status: central.status, central_plan_id: central.plan_id, central_access_allowed: central.access_allowed === undefined ? true : Boolean(central.access_allowed), central_access_type: central.access_type || 'none', central_access_ends_at: central.access_ends_at || null, central_trial_ends_at: central.trial_ends_at, central_subscription_ends_at: central.subscription_ends_at || null, central_trial_days_left: central.trial_days_left ?? null, central_subscription_days_left: central.subscription_days_left ?? null, central_server_time: central.server_time || null, central_synced: true });
     }
     res.json({ ...account, central_synced: false, central_sync_error: 'Profil central indisponible' });
   } catch (error) {

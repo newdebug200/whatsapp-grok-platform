@@ -10,6 +10,7 @@ try {
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware } = require('../middleware/auth');
+const centralSync = require('../services/centralSync');
 
 const FEDAPAY_API_URL = (process.env.FEDAPAY_API_URL || 'https://api.fedapay.com/v1').replace(/\/$/, '');
 const BOTORA_ADMIN_API_URL = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
@@ -108,6 +109,55 @@ router.post('/webhook', async (req, res) => {
 });
 
 router.use(authMiddleware);
+
+router.post('/subscription/checkout', async (req, res) => {
+  try {
+    const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { id: true, name: true, email: true } });
+    if (!account) return res.status(404).json({ error: 'Compte introuvable.' });
+    const offer = await centralSync.getSubscriptionOffer();
+    if (!offer || !Boolean(offer.is_active) || Number(offer.price_xof || 0) <= 0) return res.status(503).json({ error: 'L’offre annuelle est indisponible pour le moment.' });
+    const amount = Math.round(Number(offer.price_xof));
+    const durationDays = Math.max(1, Number(offer.duration_days || 365));
+    const merchantReference = `BOTORA-SUB-${account.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const payment = await prisma.subscriptionPayment.create({ data: { account_id: account.id, external_id: merchantReference, amount_xof: amount, duration_days: durationDays, status: 'pending', description: 'Abonnement Botora annuel' } });
+    try {
+      const created = await centralSync.createSubscription(account.email, callbackUrl());
+      const providerId = String(created?.transactionId || '');
+      if (!created?.ok || !providerId || !created.paymentUrl) throw new Error(created?.error || 'Réponse de paiement abonnement invalide');
+      await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { external_id: providerId, metadata: JSON.stringify({ merchant_reference: merchantReference, admin_payment_id: created.paymentId }) } });
+      return res.json({ paymentId: payment.id, transactionId: providerId, paymentUrl: created.paymentUrl, amount: created.amount || amount, duration_days: durationDays });
+    } catch (error) {
+      await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { status: 'creation_failed', metadata: JSON.stringify({ error: error.response?.data || error.message }) } });
+      throw error;
+    }
+  } catch (error) {
+    console.error('[Subscription] Checkout error:', error.response?.data || error.message);
+    res.status(502).json({ error: error.response?.data?.error || 'Impossible de créer le paiement de l’abonnement.' });
+  }
+});
+
+router.get('/subscription/transactions', async (req, res) => {
+  const rows = await prisma.subscriptionPayment.findMany({ where: { account_id: req.accountId }, orderBy: { created_at: 'desc' }, take: 20 });
+  res.json(rows);
+});
+
+router.post('/subscription/:id/verify', async (req, res) => {
+  const payment = await prisma.subscriptionPayment.findFirst({ where: { id: Number(req.params.id), account_id: req.accountId } });
+  if (!payment) return res.status(404).json({ error: 'Paiement abonnement introuvable.' });
+  if (payment.status === APPROVED) return res.json({ status: APPROVED, approved: true, alreadyActivated: true });
+  try {
+    const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { email: true } });
+    let metadata = {};
+    try { metadata = payment.metadata ? JSON.parse(payment.metadata) : {}; } catch (_) {}
+    const result = await centralSync.verifySubscription(account.email, Number(metadata.admin_payment_id || 0), payment.external_id);
+    const status = normalizeStatus(result?.status || (result?.approved ? APPROVED : 'pending'));
+    await prisma.subscriptionPayment.update({ where: { id: payment.id }, data: { status, last_checked_at: new Date(), ...(status === APPROVED ? { approved_at: new Date() } : {}) } });
+    return res.json({ ...result, status, approved: status === APPROVED });
+  } catch (error) {
+    console.error('[Subscription] Verify error:', error.response?.data || error.message);
+    res.status(502).json({ error: error.response?.data?.error || 'Vérification du paiement d’abonnement temporairement indisponible.' });
+  }
+});
 
 router.get('/config', (_req, res) => res.json({ minCredits: MIN_CREDITS, xofPerCredit: XOF_PER_CREDIT, tokensPerCredit: TOKENS_PER_CREDIT, currency: 'XOF', feesNotice: 'Les frais FedaPay, estimés entre 1,5 % et 4 %, restent à la charge du client.' }));
 

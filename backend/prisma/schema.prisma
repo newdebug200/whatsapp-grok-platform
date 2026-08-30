@@ -22,8 +22,9 @@ model Account {
 
   whatsappProfiles    WhatsAppProfile[]
   creditTransactions  CreditTransaction[]
-  paymentTransactions PaymentTransaction[]
-  dressurQueueItems   DressurQueueItem[]
+  paymentTransactions  PaymentTransaction[]
+  subscriptionPayments SubscriptionPayment[]
+  dressurQueueItems    DressurQueueItem[]
 }
 
 model WhatsAppProfile {
@@ -312,6 +313,27 @@ model PaymentWebhookEvent {
   payment     PaymentTransaction? @relation(fields: [payment_id], references: [id], onDelete: SetNull)
 
   @@index([event_type, received_at])
+}
+
+model SubscriptionPayment {
+  id              Int      @id @default(autoincrement())
+  account_id      Int
+  provider        String   @default("fedapay")
+  external_id     String   @unique
+  amount_xof      Int
+  duration_days   Int      @default(365)
+  status          String   @default("pending")
+  description     String?
+  metadata        String?
+  approved_at     DateTime?
+  last_checked_at DateTime?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@index([account_id, created_at])
+  @@index([account_id, status])
 }
 
 model CreditTransaction {
