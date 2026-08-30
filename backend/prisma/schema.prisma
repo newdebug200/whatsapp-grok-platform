@@ -24,6 +24,7 @@ model Account {
   creditTransactions  CreditTransaction[]
   paymentTransactions  PaymentTransaction[]
   subscriptionPayments SubscriptionPayment[]
+  apiKeys              ApiKey[]
   dressurQueueItems    DressurQueueItem[]
 }
 
@@ -334,6 +335,22 @@ model SubscriptionPayment {
 
   @@index([account_id, created_at])
   @@index([account_id, status])
+}
+
+model ApiKey {
+  id           Int       @id @default(autoincrement())
+  account_id   Int
+  name         String
+  prefix       String
+  key_hash     String    @unique
+  last_used_at DateTime?
+  revoked_at   DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@index([account_id, revoked_at])
 }
 
 model CreditTransaction {

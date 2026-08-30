@@ -40,6 +40,8 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const adminCentralRoutes = require('./routes/adminCentralRoutes');
+const apiKeyRoutes = require('./routes/apiKeyRoutes');
+const apiSendRoutes = require('./routes/apiSendRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -56,6 +58,8 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use('/api', subscriptionAccessMiddleware);
 app.use('/api/auth', authRoutes);
+app.use('/api/api-keys', apiKeyRoutes);
+app.use('/api/v1', apiSendRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/config', configRoutes);

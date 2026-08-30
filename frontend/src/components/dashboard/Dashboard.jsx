@@ -15,6 +15,7 @@ import FunnelPage from './FunnelPage';
 import SubscriptionPlans from './SubscriptionPlans';
 import RechargeCredits from './RechargeCredits';
 import Sentiments from './Sentiments';
+import ApiAccess from './ApiAccess';
 import { useLanguage } from '../../context/LanguageContext';
 import './Dashboard.css';
 
@@ -455,7 +456,8 @@ export default function Dashboard() {
   const appNavItems = [
     ...navItems,
     ...(funnelEnabled ? [{ key: 'funnel', label: t('Funnel'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }] : []),
-    { key: 'subscriptions', label: t('Subscriptions'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> }
+    { key: 'subscriptions', label: t('Subscriptions'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> },
+    { key: 'api', label: t('API access'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7a5 5 0 0 1 9.9-1H20v4h-3.1A5 5 0 0 1 7 7zm5-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM4 14h13v3H4v-3zm0 5h9v3H4v-3z"/></svg> }
   ];
   return (
     <div className="dashboard">
@@ -797,6 +799,7 @@ export default function Dashboard() {
             {activePanel === 'about' && <AboutPage onBack={goHome} />}
             {activePanel === 'how-it-works' && <HowItWorksPage onBack={goHome} />}
             {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
+            {activePanel === 'api' && <ApiAccess onBack={goHome} />}
             {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBalanceRefresh={refreshAccount} onBack={goHome} />}
             {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
