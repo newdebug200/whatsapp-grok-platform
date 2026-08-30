@@ -94,6 +94,19 @@ async function verifySubscription(email, paymentId, transactionId) {
   return response.data || null;
 }
 
+async function syncApiKeyEvent(accountId, key, event) {
+  if (!accountId || !key?.key_uid || !event) return false;
+  try {
+    const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
+    if (!account?.email) return false;
+    await axios.post(`${ADMIN_API}/api/api-key-history.php`, { account_email: account.email, key_uid: key.key_uid, name: key.name || undefined, prefix: key.prefix || undefined, event }, { headers: { 'Content-Type': 'application/json' }, timeout: 8000 });
+    return true;
+  } catch (error) {
+    console.warn(`[CentralSync] Historique clé API non remonté (${event}): ${error.message}`);
+    return false;
+  }
+}
+
 async function getFeature(key, fallback = true) {
   try {
     if (Date.now() - featureCache.at > 60000) {
@@ -107,4 +120,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getPlans, getSubscriptionOffer, createSubscription, verifySubscription, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getPlans, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getFeature };

@@ -2,6 +2,8 @@
 
 ## Authentification
 
+Les clés actives sont gérées et validées par **WhatsApp Cloud Platform**, car c’est cette plateforme qui possède le profil WhatsApp connecté et exécute l’envoi. Botora Admin reçoit uniquement l’historique administratif (nom, préfixe, compte, dates et statut) ; la clé complète et son hash ne sont jamais transmis ni affichés dans le back-office.
+
 Créez une clé dans **Accès API**. La valeur complète de la clé est affichée une seule fois. Envoyez-la avec l’un des deux formats suivants :
 
 ```http

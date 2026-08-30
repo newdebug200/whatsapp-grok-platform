@@ -18,10 +18,11 @@ async function apiKeyAuth(req, res, next) {
     if (!apiKey || apiKey.account.is_blocked) return res.status(401).json({ code: 'API_KEY_INVALID', error: 'Clé API invalide ou révoquée.' });
     const central = await centralSync.getAccount(apiKey.account.email);
     if (central && central.access_allowed === false) return res.status(403).json({ code: 'SUBSCRIPTION_REQUIRED', error: 'Votre abonnement est requis pour utiliser l’API.', access_type: central.access_type || 'expired', access_ends_at: central.access_ends_at || null });
-    req.apiKey = { id: apiKey.id, name: apiKey.name, prefix: apiKey.prefix };
+    req.apiKey = { id: apiKey.id, key_uid: apiKey.key_uid, name: apiKey.name, prefix: apiKey.prefix };
     req.accountId = apiKey.account.id;
     req.accountEmail = apiKey.account.email;
     prisma.apiKey.update({ where: { id: apiKey.id }, data: { last_used_at: new Date() } }).catch(() => {});
+    centralSync.syncApiKeyEvent(req.accountId, apiKey, 'used').catch(() => {});
     next();
   } catch (error) {
     console.error('[API key] Authentication error:', error.message);

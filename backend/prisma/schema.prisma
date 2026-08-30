@@ -338,7 +338,8 @@ model SubscriptionPayment {
 }
 
 model ApiKey {
-  id           Int       @id @default(autoincrement())
+    id           Int      @id @default(autoincrement())
+  key_uid      String   @unique @default(cuid())
   account_id   Int
   name         String
   prefix       String
