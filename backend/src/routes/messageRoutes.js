@@ -112,7 +112,8 @@ router.get('/conversations', profileMiddleware, async (req, res) => {
       const dateB = b.messages[0]?.created_at || b.created_at;
       return new Date(dateB) - new Date(dateA);
     });
-    res.json(sorted);
+    const enriched = await whatsappManager.enrichConversationContacts(req.profileId, sorted);
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du chargement des conversations' });
   }

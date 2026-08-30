@@ -157,7 +157,13 @@ io.on('connection', (socket) => {
         include: { messages: { orderBy: { created_at: 'desc' }, take: 1 } },
         orderBy: { created_at: 'desc' }
       });
-      socket.emit('initial-contacts', contacts);
+      const enrichedContacts = await whatsappManager.enrichConversationContacts(profileId, contacts);
+      enrichedContacts.sort((a, b) => {
+        const dateA = a.messages?.[0]?.created_at || a.created_at;
+        const dateB = b.messages?.[0]?.created_at || b.created_at;
+        return new Date(dateB) - new Date(dateA);
+      });
+      socket.emit('initial-contacts', enrichedContacts);
     } catch (error) {
       console.error('Erreur get-initial-data:', error.message);
       socket.emit('initial-contacts', []);

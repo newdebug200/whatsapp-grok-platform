@@ -768,6 +768,51 @@ class WhatsAppManager {
     return found.entry.client;
   }
 
+  // Refresh names for conversations already stored locally. This is required
+  // because WhatsApp may expose the contact name only after the chat is opened
+  // or after getContactById() is called on the active client.
+  async enrichConversationContacts(profileId, contacts) {
+    const client = this.getClient(profileId);
+    if (!client || !Array.isArray(contacts)) return contacts;
+
+    const enriched = [];
+    for (const contact of contacts) {
+      const storedWaId = String(contact?.wa_id || '').trim();
+      const phoneDigits = String(contact?.phone_number || '').replace(/\D/g, '');
+      const storedDigits = storedWaId.replace(/\D/g, '');
+      const waId = storedWaId.includes('@')
+        ? storedWaId
+        : (storedDigits.length >= 7 && storedDigits.length <= 15 ? `${storedDigits}@c.us` : '')
+          || (phoneDigits.length >= 7 && phoneDigits.length <= 15 ? `${phoneDigits}@c.us` : '');
+      if (!waId || waId.includes('@g.us')) {
+        enriched.push(contact);
+        continue;
+      }
+
+      let waContact = null;
+      try { waContact = await client.getContactById(waId); } catch (_) {}
+      let name = await this._resolvePrivateContactName(waContact, contact.phone_number, waId);
+
+      if (!name) {
+        try {
+          const chat = await client.getChatById(waId);
+          name = await this._resolveChatContactName(client, chat, contact.phone_number, waId);
+        } catch (_) {}
+      }
+
+      if (name || !storedWaId) {
+        try {
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: { ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) }
+          });
+        } catch (_) {}
+      }
+      enriched.push({ ...contact, ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) });
+    }
+    return enriched;
+  }
+
   // ─── Send message ─────────────────────────────────────────────────────────
 
   async sendMessage(profileId, to, content) {
