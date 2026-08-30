@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS "Account" (
   "reset_token"        TEXT,
   "reset_token_expiry" DATETIME,
   "credit_balance"     REAL     NOT NULL DEFAULT 0,
-  "is_blocked"         INTEGER  NOT NULL DEFAULT 0
+  "is_blocked"         INTEGER NOT NULL DEFAULT 0,
+  "language"           TEXT    NOT NULL DEFAULT 'fr'
 );
 
 CREATE TABLE IF NOT EXISTS "WhatsAppProfile" (
@@ -282,6 +283,7 @@ const migrations = [
   'ALTER TABLE "Account" ADD COLUMN "is_blocked"              INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "Account" ADD COLUMN "reset_token"             TEXT',
   'ALTER TABLE "Account" ADD COLUMN "reset_token_expiry"      DATETIME',
+  'ALTER TABLE "Account" ADD COLUMN "language"                TEXT    NOT NULL DEFAULT \'fr\'',
   // BotConfig
   'ALTER TABLE "BotConfig" ADD COLUMN "business_hours_enabled"  INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "BotConfig" ADD COLUMN "open_days"               TEXT    NOT NULL DEFAULT \'1,2,3,4,5\'',

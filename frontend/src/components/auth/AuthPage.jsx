@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import './AuthPage.css';
 
 export default function AuthPage() {
   const { login, register } = useAuth();
+  const { t } = useLanguage();
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ email: '', password: '', name: '' });
   const [error, setError] = useState('');
@@ -58,49 +60,49 @@ export default function AuthPage() {
           <div className="auth-logo">
             <img src="/icons/icon-192.png" alt="Botora" className="auth-logo-img" />
           </div>
-          <p className="auth-kicker">PLATEFORME INTELLIGENTE</p>
+          <p className="auth-kicker">{t('SMART PLATFORM')}</p>
           <h1 className="auth-title">Botora</h1>
-          <p className="auth-subtitle">L’intelligence de vos conversations WhatsApp</p>
+          <p className="auth-subtitle">{t('The intelligence behind your WhatsApp conversations')}</p>
         </div>
 
         <div className="auth-card">
           <div className="auth-card-heading">
-            <h2>{mode === 'login' ? 'Ravi de vous revoir' : 'Commencez avec Botora'}</h2>
-            <p>{mode === 'login' ? 'Accédez à votre espace de travail.' : 'Créez votre espace en quelques secondes.'}</p>
+            <h2>{mode === 'login' ? t('Welcome back') : t('Get started with Botora')}</h2>
+            <p>{mode === 'login' ? t('Access your workspace.') : t('Create your workspace in seconds.')}</p>
           </div>
           <div className="auth-tabs">
             <button
               className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
               onClick={() => { setMode('login'); setError(''); }}
             >
-              Connexion
+              {t('Login')}
             </button>
             <button
               className={`auth-tab ${mode === 'register' ? 'active' : ''}`}
               onClick={() => { setMode('register'); setError(''); }}
             >
-              Créer un compte
+              {t('Create an account')}
             </button>
           </div>
 
           <form className="auth-form" onSubmit={handleSubmit}>
             {mode === 'register' && (
               <div className="form-group">
-                <label htmlFor="auth-name">Nom complet</label>
+                <label htmlFor="auth-name">{t('Full name')}</label>
                 <input
                   id="auth-name"
                   type="text"
                   name="name"
                   value={form.name}
                   onChange={handleChange}
-                  placeholder="Votre nom"
+                  placeholder={t('Your name')}
                   autoComplete="name"
                 />
               </div>
             )}
 
             <div className="form-group">
-              <label htmlFor="auth-email">Adresse email</label>
+              <label htmlFor="auth-email">{t('Email address')}</label>
               <input
                 id="auth-email"
                 type="email"
@@ -113,25 +115,25 @@ export default function AuthPage() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="auth-password">Mot de passe</label>
+              <label htmlFor="auth-password">{t('Password')}</label>
               <input
                 id="auth-password"
                 type="password"
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                placeholder={mode === 'register' ? 'Min. 8 caractères' : '••••••••'}
+                placeholder={mode === 'register' ? t('Min. 8 characters') : '••••••••'}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
             </div>
 
             {error && <div className="auth-error">{error}</div>}
 
-            {mode === 'register' && <p className="auth-helper">Votre mot de passe doit contenir au moins 8 caractères.</p>}
+            {mode === 'register' && <p className="auth-helper">{t('Your password must contain at least 8 characters.')}</p>}
             <button type="submit" className="auth-submit" disabled={loading}>
               {loading
-                ? 'Chargement...'
-                : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+                ? t('Loading...')
+                : mode === 'login' ? t('Log in') : t('Create my account')}
             </button>
           </form>
         </div>

@@ -3,8 +3,9 @@ const { PrismaClient } = require('@prisma/client');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'botora-secret-key-change-in-prod';
 const prisma = new PrismaClient();
+const { normalizeLanguage, translate } = require('../utils/i18n');
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Non autorisé - token manquant' });
@@ -14,6 +15,22 @@ function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.accountId = decoded.accountId;
+    const account = await prisma.account.findUnique({
+      where: { id: req.accountId },
+      select: { language: true }
+    });
+    req.language = normalizeLanguage(account?.language);
+    const json = res.json.bind(res);
+    res.json = (payload) => {
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        const localized = { ...payload };
+        const responseLanguage = res.locals.responseLanguage || req.language;
+        if (typeof localized.error === 'string') localized.error = translate(localized.error, responseLanguage);
+        if (typeof localized.message === 'string') localized.message = translate(localized.message, responseLanguage);
+        return json(localized);
+      }
+      return json(payload);
+    };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Token invalide ou expiré' });

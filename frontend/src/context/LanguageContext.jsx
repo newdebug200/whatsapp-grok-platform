@@ -1,0 +1,114 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import { useAuth } from './AuthContext';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const LANGUAGE_KEY = 'botora-language';
+const SUPPORTED_LANGUAGES = ['fr', 'en'];
+
+const translations = {
+  fr: {
+    'Dashboard': 'Tableau de bord', 'Conversations': 'Discussions', 'Campaigns': 'Campagnes', 'Credits': 'Crédits',
+    'Recharge credits': 'Recharger les crédits', 'Statistics': 'Statistiques', 'Customer sentiment': 'Sentiments clients',
+    'Funnel': 'Entonnoir', 'Subscriptions': 'Abonnements', 'Settings': 'Paramètres', 'Administration': 'Administration',
+    'Control center': 'Centre de contrôle', 'Account': 'Mon compte', 'Logout': 'Déconnexion', 'Search': 'Recherche',
+    'Search a contact or message…': 'Rechercher un contact, un message…', 'No results': 'Aucun résultat',
+    'Navigation': 'Navigation', 'Profile': 'Profil', 'WhatsApp connected': 'WhatsApp connecté', 'WhatsApp disconnected': 'WhatsApp non connecté',
+    'Discussions': 'Discussions', 'All': 'Toutes', 'Unread': 'Non lues', 'Favorites': 'Favoris', 'Groups': 'Groupes', 'Archived': 'Archivées',
+    'No unread messages': 'Aucun message non lu', 'No favorites — right-click a conversation to add one': 'Aucun favori — clic droit sur une discussion pour en ajouter',
+    'No groups': 'Aucun groupe', 'No archived conversations': 'Aucune discussion archivée', 'No results found': 'Aucun résultat', 'No conversations': 'Aucune conversation',
+    'Connect WhatsApp': 'Connecter WhatsApp', 'WhatsApp not connected': 'WhatsApp non connecté', 'Connect': 'Connecter',
+    'Active AI': 'IA active', 'Human': 'Humain', 'Notes': 'Notes', 'Archived conversation': 'Discussion archivée',
+    'Settings bot': 'Réglages bot', 'Quick replies': 'Réponses rapides', 'Alerts': 'Alertes', 'Data & storage': 'Données & stockage',
+    'My account': 'Mon compte', 'Appearance': 'Apparence', 'Theme': 'Thème', 'Light mode enabled': 'Mode clair activé', 'Dark mode enabled': 'Mode sombre activé',
+    'Light': 'Clair', 'Dark': 'Sombre', 'Notifications': 'Notifications', 'Notification sound': 'Son de notification',
+    'Play a sound for every received message': 'Joue un son à chaque message reçu', 'Browser notifications': 'Notifications navigateur',
+    'Enabled — alerts even when tab is closed': 'Activées — alertes même onglet fermé', 'Blocked by browser': 'Bloquées par le navigateur',
+    'Not requested': 'Non demandées', 'Enabled': 'Activé', 'Blocked': 'Bloqué', 'Allow': 'Autoriser', 'AI bot': 'Bot IA', 'Account details': 'Compte',
+    'Language': 'Langue', 'Choose the platform language': 'Choisissez la langue de la plateforme', 'French': 'Français', 'English': 'English',
+    'Language updated': 'Langue mise à jour', 'Delete account': 'Supprimer le compte', 'Sign out': 'Se déconnecter',
+    'Delete your account?': 'Supprimer le compte ?', 'This action is irreversible.': 'Cette action est irréversible.',
+    'Confirm with your password': 'Confirmez avec votre mot de passe', 'Your current password': 'Votre mot de passe actuel', 'Cancel': 'Annuler',
+    'Delete permanently': 'Supprimer définitivement', 'Deleting...': 'Suppression...', 'Unknown contact': 'Contact inconnu',
+    'Today': "Aujourd'hui", 'Yesterday': 'Hier', 'Photo': 'Photo', 'Video': 'Vidéo', 'Voice message': 'Message vocal', 'Audio': 'Audio', 'Sticker': 'Sticker', 'Document': 'Document',
+    'No message': 'Aucun message', 'No messages in this conversation': 'Aucun message dans cette conversation', 'Select a conversation to view messages': 'Sélectionnez une discussion pour afficher les messages', 'Connect WhatsApp from the left panel to receive messages': 'Connectez votre WhatsApp depuis le panneau gauche pour recevoir des messages', 'Internal notes': 'Notes internes', 'never sent to the customer': 'jamais envoyées au client', 'Internal notes (never sent to the customer)': 'Notes internes (jamais envoyées au client)', 'Example: VIP, call back on June 15, difficult customer…': 'Ex : VIP, Rappeler le 15 juin, Cliente difficile…', 'Back': 'Retour', 'Close': 'Fermer', 'Actions': 'Actions', 'Emojis': 'Emojis', 'Attach a file': 'Joindre un fichier', 'Send (Enter)': 'Envoyer (Entrée)', 'Older conversations': 'Discussions plus anciennes', 'Search a conversation...': 'Rechercher une discussion...', 'Send': 'Envoyer', 'Type a message…': 'Écrire un message…', 'Download': 'Télécharger', 'Search…': 'Recherche…',
+    'Checking central server…': 'Vérification du serveur central…', 'Central API connected.': 'API centrale connectée.', 'The central server is unavailable. Please try again later.': 'Le serveur central est indisponible. Réessayez plus tard.', 'Main navigation': 'Navigation principale',
+    'SMART PLATFORM': 'PLATEFORME INTELLIGENTE', 'The intelligence behind your WhatsApp conversations': 'L’intelligence de vos conversations WhatsApp', 'Welcome back': 'Ravi de vous revoir', 'Access your workspace.': 'Accédez à votre espace de travail.', 'Get started with Botora': 'Commencez avec Botora', 'Create your workspace in seconds.': 'Créez votre espace en quelques secondes.', 'Login': 'Connexion', 'Create an account': 'Créer un compte', 'Full name': 'Nom complet', 'Your name': 'Votre nom', 'Email address': 'Adresse email', 'Password': 'Mot de passe', 'Min. 8 characters': 'Min. 8 caractères', 'Loading...': 'Chargement...', 'Log in': 'Se connecter', 'Create my account': 'Créer mon compte', 'Your password must contain at least 8 characters.': 'Votre mot de passe doit contenir au moins 8 caractères.'
+  },
+  en: {
+    'Dashboard': 'Dashboard', 'Conversations': 'Discussions', 'Campaigns': 'Campaigns', 'Credits': 'Credits',
+    'Recharge credits': 'Recharge credits', 'Statistics': 'Statistics', 'Customer sentiment': 'Customer sentiment',
+    'Funnel': 'Funnel', 'Subscriptions': 'Subscriptions', 'Settings': 'Settings', 'Administration': 'Administration',
+    'Control center': 'Control center', 'Account': 'Account', 'Logout': 'Log out', 'Search': 'Search',
+    'Search a contact or message…': 'Search a contact or message…', 'No results': 'No results',
+    'Navigation': 'Navigation', 'Profile': 'Profile', 'WhatsApp connected': 'WhatsApp connected', 'WhatsApp disconnected': 'WhatsApp disconnected',
+    'Discussions': 'Discussions', 'All': 'All', 'Unread': 'Unread', 'Favorites': 'Favorites', 'Groups': 'Groups', 'Archived': 'Archived',
+    'No unread messages': 'No unread messages', 'No favorites — right-click a conversation to add one': 'No favorites — right-click a conversation to add one',
+    'No groups': 'No groups', 'No archived conversations': 'No archived conversations', 'No results found': 'No results found', 'No conversations': 'No conversations',
+    'Connect WhatsApp': 'Connect WhatsApp', 'WhatsApp not connected': 'WhatsApp not connected', 'Connect': 'Connect',
+    'Active AI': 'AI active', 'Human': 'Human', 'Notes': 'Notes', 'Archived conversation': 'Archived conversation',
+    'Settings bot': 'Bot settings', 'Quick replies': 'Quick replies', 'Alerts': 'Alerts', 'Data & storage': 'Data & storage',
+    'My account': 'My account', 'Appearance': 'Appearance', 'Theme': 'Theme', 'Light mode enabled': 'Light mode enabled', 'Dark mode enabled': 'Dark mode enabled',
+    'Light': 'Light', 'Dark': 'Dark', 'Notifications': 'Notifications', 'Notification sound': 'Notification sound',
+    'Play a sound for every received message': 'Play a sound for every received message', 'Browser notifications': 'Browser notifications',
+    'Enabled — alerts even when tab is closed': 'Enabled — alerts even when tab is closed', 'Blocked by browser': 'Blocked by browser',
+    'Not requested': 'Not requested', 'Enabled': 'Enabled', 'Blocked': 'Blocked', 'Allow': 'Allow', 'AI bot': 'AI bot', 'Account details': 'Account',
+    'Language': 'Language', 'Choose the platform language': 'Choose the platform language', 'French': 'Français', 'English': 'English',
+    'Language updated': 'Language updated', 'Delete account': 'Delete account', 'Sign out': 'Sign out',
+    'Delete your account?': 'Delete your account?', 'This action is irreversible.': 'This action is irreversible.',
+    'Confirm with your password': 'Confirm with your password', 'Your current password': 'Your current password', 'Cancel': 'Cancel',
+    'Delete permanently': 'Delete permanently', 'Deleting...': 'Deleting...', 'Unknown contact': 'Unknown contact',
+    'Today': 'Today', 'Yesterday': 'Yesterday', 'Photo': 'Photo', 'Video': 'Video', 'Voice message': 'Voice message', 'Audio': 'Audio', 'Sticker': 'Sticker', 'Document': 'Document',
+    'No message': 'No message', 'No messages in this conversation': 'No messages in this conversation', 'Select a conversation to view messages': 'Select a conversation to view messages', 'Connect WhatsApp from the left panel to receive messages': 'Connect WhatsApp from the left panel to receive messages', 'Internal notes': 'Internal notes', 'never sent to the customer': 'never sent to the customer', 'Internal notes (never sent to the customer)': 'Internal notes (never sent to the customer)', 'Example: VIP, call back on June 15, difficult customer…': 'Example: VIP, call back on June 15, difficult customer…', 'Back': 'Back', 'Close': 'Close', 'Actions': 'Actions', 'Emojis': 'Emojis', 'Attach a file': 'Attach a file', 'Send (Enter)': 'Send (Enter)', 'Older conversations': 'Older conversations', 'Search a conversation...': 'Search a conversation...', 'Send': 'Send', 'Type a message…': 'Type a message…', 'Download': 'Download', 'Search…': 'Search…',
+    'Checking central server…': 'Checking central server…', 'Central API connected.': 'Central API connected.', 'The central server is unavailable. Please try again later.': 'The central server is unavailable. Please try again later.', 'Main navigation': 'Main navigation',
+    'SMART PLATFORM': 'SMART PLATFORM', 'The intelligence behind your WhatsApp conversations': 'The intelligence behind your WhatsApp conversations', 'Welcome back': 'Welcome back', 'Access your workspace.': 'Access your workspace.', 'Get started with Botora': 'Get started with Botora', 'Create your workspace in seconds.': 'Create your workspace in seconds.', 'Login': 'Log in', 'Create an account': 'Create an account', 'Full name': 'Full name', 'Your name': 'Your name', 'Email address': 'Email address', 'Password': 'Password', 'Min. 8 characters': 'Min. 8 characters', 'Loading...': 'Loading...', 'Log in': 'Log in', 'Create my account': 'Create my account', 'Your password must contain at least 8 characters.': 'Your password must contain at least 8 characters.'
+  }
+};
+
+const LanguageContext = createContext({ language: 'fr', setLanguage: async () => {}, t: key => key });
+
+export function LanguageProvider({ children }) {
+  const { account, token, refreshAccount } = useAuth();
+  const [language, setLanguageState] = useState(() => {
+    const saved = localStorage.getItem(LANGUAGE_KEY);
+    return SUPPORTED_LANGUAGES.includes(saved) ? saved : 'fr';
+  });
+
+  useEffect(() => {
+    if (SUPPORTED_LANGUAGES.includes(account?.language)) setLanguageState(account.language);
+  }, [account?.language]);
+
+  useEffect(() => {
+    localStorage.setItem(LANGUAGE_KEY, language);
+    document.documentElement.lang = language;
+  }, [language]);
+
+  const setLanguage = useCallback(async (nextLanguage) => {
+    if (!SUPPORTED_LANGUAGES.includes(nextLanguage)) return;
+    const previous = language;
+    setLanguageState(nextLanguage);
+    localStorage.setItem(LANGUAGE_KEY, nextLanguage);
+    try {
+      if (token) {
+        await axios.post(`${API_URL}/auth/language`, { language: nextLanguage });
+        await refreshAccount();
+      }
+    } catch (error) {
+      setLanguageState(previous);
+      localStorage.setItem(LANGUAGE_KEY, previous);
+      throw error;
+    }
+  }, [language, token, refreshAccount]);
+
+  const value = useMemo(() => ({
+    language,
+    setLanguage,
+    t: (key) => translations[language]?.[key] || translations.fr[key] || key
+  }), [language, setLanguage]);
+
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+}
+
+export function useLanguage() {
+  return useContext(LanguageContext);
+}

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { fr, enUS } from 'date-fns/locale';
 import { getContactDisplayName, getContactInitial } from '../../utils/contactDisplay';
+import { useLanguage } from '../../context/LanguageContext';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function ConversationList({ contacts, selectedContact, onSelectContact, onContactsUpdate, waStatus, socket, onConnectWhatsApp }) {
+  const { language, t } = useLanguage();
   const [search, setSearch] = useState('');
   const [tags, setTags] = useState([]);
   const [activeTagId, setActiveTagId] = useState(null);
@@ -160,8 +162,8 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     const diff = now - date;
     const days = Math.floor(diff / 86400000);
     if (days === 0) return format(date, 'HH:mm');
-    if (days === 1) return 'Hier';
-    if (days < 7) return format(date, 'EEEE', { locale: fr });
+    if (days === 1) return t('Yesterday');
+    if (days < 7) return format(date, 'EEEE', { locale: language === 'en' ? enUS : fr });
     return format(date, 'dd/MM/yy');
   };
 
@@ -298,27 +300,27 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   };
 
   const TABS = [
-    { id: 'all', label: 'Toutes' },
-    { id: 'unread', label: 'Non lues', badge: unreadBadge },
-    { id: 'favorites', label: 'Favoris' },
-    { id: 'groups', label: 'Groupes' },
-    { id: 'archived', label: 'Archivées' },
+    { id: 'all', label: t('All') },
+    { id: 'unread', label: t('Unread'), badge: unreadBadge },
+    { id: 'favorites', label: t('Favorites') },
+    { id: 'groups', label: t('Groups') },
+    { id: 'archived', label: t('Archived') },
   ];
 
   const hasNoResults = filtered.length === 0;
 
-  const emptyLabel = activeTab === 'unread' ? 'Aucun message non lu'
-    : activeTab === 'favorites' ? 'Aucun favori — clic droit sur une discussion pour en ajouter'
-    : activeTab === 'groups' ? 'Aucun groupe'
-    : activeTab === 'archived' ? 'Aucune discussion archivée'
-    : search || activeTagId ? 'Aucun résultat' : 'Aucune conversation';
+  const emptyLabel = activeTab === 'unread' ? t('No unread messages')
+    : activeTab === 'favorites' ? t('No favorites — right-click a conversation to add one')
+    : activeTab === 'groups' ? t('No groups')
+    : activeTab === 'archived' ? t('No archived conversations')
+    : search || activeTagId ? t('No results found') : t('No conversations');
 
   return (
     <div className="conversation-list">
       {!waStatus.isConnected && (
         <div className="wa-connect-banner">
-          <span>WhatsApp non connecté</span>
-          <button onClick={onConnectWhatsApp}>Connecter</button>
+          <span>{t('WhatsApp not connected')}</span>
+          <button onClick={onConnectWhatsApp}>{t('Connect')}</button>
         </div>
       )}
 
@@ -329,7 +331,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
           </svg>
           <input
             type="text"
-            placeholder="Rechercher une discussion..."
+            placeholder={t('Search a conversation...')}
             value={search}
             onChange={e => { setSearch(e.target.value); setShowOlderConversations(true); }}
             className="search-input"
@@ -427,7 +429,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
               showOlderConversations ? (
                 <>
                   <div className="older-conversations-separator">
-                    <span>Discussions plus anciennes</span>
+                    <span>{t('Older conversations')}</span>
                   </div>
                   {olderFiltered.map(contact => renderContact(contact))}
                 </>

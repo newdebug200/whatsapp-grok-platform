@@ -18,6 +18,7 @@ model Account {
   reset_token_expiry DateTime?
   credit_balance     Float     @default(0)
   is_blocked         Boolean   @default(false)
+  language           String    @default("fr")
 
   whatsappProfiles    WhatsAppProfile[]
   creditTransactions  CreditTransaction[]

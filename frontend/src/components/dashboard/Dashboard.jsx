@@ -15,6 +15,7 @@ import FunnelPage from './FunnelPage';
 import SubscriptionPlans from './SubscriptionPlans';
 import RechargeCredits from './RechargeCredits';
 import Sentiments from './Sentiments';
+import { useLanguage } from '../../context/LanguageContext';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -43,6 +44,7 @@ function playNotifSound() {
 
 export default function Dashboard() {
   const { account, token, logout, profiles, activeProfile, selectProfile, loadProfiles, refreshAccount } = useAuth();
+  const { t } = useLanguage();
   const [socket, setSocket] = useState(null);
   const [waStatus, setWaStatus] = useState({ isConnected: false, qrCode: null, status: 'not_initialized' });
   const [selectedContact, setSelectedContact] = useState(null);
@@ -362,23 +364,23 @@ export default function Dashboard() {
 
   const navItems = [
     ...(discussionsEnabled ? [{
-      key: 'chat', label: 'Discussions',
+      key: 'chat', label: t('Conversations'),
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l-4 4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
     }] : []),
     ...(campaignsEnabled ? [{
-      key: 'broadcast', label: 'Campagnes',
+      key: 'broadcast', label: t('Campaigns'),
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.39.4.53.8 1.07 1.2 1.61.96-.72 2.21-1.66 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z"/></svg>
     }] : []),
     ...(creditsEnabled ? [{
-      key: 'credits', label: 'Recharger les crédits',
+      key: 'credits', label: t('Recharge credits'),
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.75A2.75 2.75 0 0 1 5.75 4h12.5A2.75 2.75 0 0 1 21 6.75v10.5A2.75 2.75 0 0 1 18.25 20H5.75A2.75 2.75 0 0 1 3 17.25V6.75zm3.5 1.5h10.5v1.75H6.5V8.25zm0 4.5h6.25v1.75H6.5v-1.75z"/></svg>
     }] : []),
     ...(statsEnabled ? [{
-      key: 'stats', label: 'Statistiques',
+      key: 'stats', label: t('Statistics'),
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>
     }] : []),
     ...(sentimentsEnabled ? [{
-      key: 'sentiments', label: 'Sentiments clients',
+      key: 'sentiments', label: t('Customer sentiment'),
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-4 9a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 8 11zm4 7a6 6 0 0 1-5.19-3h2.3a3.75 3.75 0 0 0 5.78 0h2.3A6 6 0 0 1 12 18zm4-7a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 16 11z"/></svg>
     }] : []),
   ];
@@ -443,13 +445,13 @@ export default function Dashboard() {
 
   const appNavItems = [
     ...navItems,
-    ...(funnelEnabled ? [{ key: 'funnel', label: 'Entonnoir', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }] : []),
-    { key: 'subscriptions', label: 'Abonnements', icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> }
+    ...(funnelEnabled ? [{ key: 'funnel', label: t('Funnel'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }] : []),
+    { key: 'subscriptions', label: t('Subscriptions'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> }
   ];
   return (
     <div className="dashboard">
       {(
-        <aside className={`app-navigation ${appNavCollapsed ? 'app-navigation-collapsed' : ''}`} aria-label="Navigation principale">
+        <aside className={`app-navigation ${appNavCollapsed ? 'app-navigation-collapsed' : ''}`} aria-label={t('Main navigation')}>
           <button className="app-navigation-brand" onClick={goHome} title="Retour au tableau de bord">
             <img src="/icons/icon-192.png" alt="Botora" />
             <span>Botora</span>
@@ -484,15 +486,15 @@ export default function Dashboard() {
             ))}
           </div>
           <div className="app-navigation-group">
-            <div className="app-navigation-heading">Paramètres</div>
+            <div className="app-navigation-heading">{t('Settings')}</div>
             {[
-              ['config', 'Réglages du bot', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65-2-3.46-2.49 1a7.3 7.3 0 0 0-1.69-.98L15 3h-4l-.36 2.93c-.6.25-1.17.58-1.69.98l-2.49-1-2 3.46 2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65 2 3.46 2.49-1c.52.4 1.09.73 1.69.98L11 21h4l.36-2.93a7.3 7.3 0 0 0 1.69-.98l2.49 1 2-3.46-2.11-1.65zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z"/></svg>],
+              ['config', t('Settings bot'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65-2-3.46-2.49 1a7.3 7.3 0 0 0-1.69-.98L15 3h-4l-.36 2.93c-.6.25-1.17.58-1.69.98l-2.49-1-2 3.46 2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65 2 3.46 2.49-1c.52.4 1.09.73 1.69.98L11 21h4l.36-2.93a7.3 7.3 0 0 0 1.69-.98l2.49 1 2-3.46-2.11-1.65zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z"/></svg>],
               ['faq', 'FAQ', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-2h2zm2.07-6.25-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41a2 2 0 1 0-4 0H8a4 4 0 1 1 8 0c0 .88-.36 1.68-.93 2.25z"/></svg>],
-              ['templates', 'Réponses rapides', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 12H7v-2h10zm0-4H7V8h10zm0-4H7V4h10z"/></svg>],
+              ['templates', t('Quick replies'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 12H7v-2h10zm0-4H7V8h10zm0-4H7V4h10z"/></svg>],
               ['tags', 'Tags', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.78-.78.78-2.04 0-2.83zM5.5 7A1.5 1.5 0 1 1 5.5 4a1.5 1.5 0 0 1 0 3z"/></svg>],
-              ['journal', 'Alertes', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.93 6 11v5l-2 2v1h16v-1z"/></svg>],
-              ['storage', 'Données & stockage', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>],
-              ['account', 'Mon compte', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4z"/></svg>]
+              ['journal', t('Alerts'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.93 6 11v5l-2 2v1h16v-1z"/></svg>],
+              ['storage', t('Data & storage'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>],
+              ['account', t('My account'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.31 0-6 1.79-6 4v2h12v-2c0-2.21-2.69-4-6-4z"/></svg>]
             ].map(([tab, label, icon]) => (
               <button key={tab} className={`app-navigation-sub-link ${activePanel === 'settings' && settingsInitialTab === tab ? 'active' : ''}`} onClick={() => goToSettings(tab)} title={label}>
                 <span className="app-navigation-sub-icon">{icon}</span><span>{label}</span>
@@ -501,21 +503,21 @@ export default function Dashboard() {
           </div>
           {isAdmin && (
             <div className="app-navigation-group app-navigation-admin-group">
-              <div className="app-navigation-heading">Administration</div>
-              <button className={`app-navigation-sub-link ${activePanel === 'admin' ? 'active' : ''}`} onClick={() => handleNavClick('admin')} title="Centre d’administration">
-                <span className="app-navigation-sub-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg></span><span>Centre de contrôle</span>
+              <div className="app-navigation-heading">{t('Administration')}</div>
+              <button className={`app-navigation-sub-link ${activePanel === 'admin' ? 'active' : ''}`} onClick={() => handleNavClick('admin')} title={t('Control center')}>
+                <span className="app-navigation-sub-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg></span><span>{t('Control center')}</span>
               </button>
             </div>
           )}
           <div className="app-navigation-footer">
-            <button onClick={goHome}>← Tableau de bord</button>
-            <button className="app-navigation-logout" onClick={logout} title="Déconnexion" aria-label="Déconnexion">
+            <button onClick={goHome}>← {t('Dashboard')}</button>
+            <button className="app-navigation-logout" onClick={logout} title={t('Logout')} aria-label={t('Logout')}>
               <svg className="app-navigation-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M10 17l5-5-5-5" />
                 <path d="M15 12H3" />
                 <path d="M21 19V5a2 2 0 0 0-2-2h-4" />
               </svg>
-              <span>Déconnexion</span>
+              <span>{t('Logout')}</span>
             </button>
           </div>
         </aside>
@@ -554,7 +556,7 @@ export default function Dashboard() {
                         type="text"
                         autoFocus
                         className="search-input"
-                        placeholder="Rechercher un contact, un message…"
+                        placeholder={t('Search a contact or message…')}
                         value={globalQuery}
                         onChange={(e) => setGlobalQuery(e.target.value)}
                       />
@@ -604,7 +606,7 @@ export default function Dashboard() {
                       <div className="dropdown-flag-warn">⚠️ Solde de crédits épuisé</div>
                     )}
                     <div className="dropdown-divider" />
-                    <div className="dropdown-section-label">Navigation</div>
+                    <div className="dropdown-section-label">{t('Navigation')}</div>
                     <button className="dropdown-item" onClick={() => { setShowMenu(false); goHome(); }}>Tableau de bord</button>
                     {navItems.map(item => (
                       <button
@@ -617,10 +619,10 @@ export default function Dashboard() {
                     ))}
                     <button className="dropdown-item" onClick={() => { setShowMenu(false); setActivePanel('funnel'); }}>Entonnoir</button>
                     <div className="dropdown-divider" />
-                    <div className="dropdown-section-label">Compte</div>
+                    <div className="dropdown-section-label">{t('Account')}</div>
                     <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
                     <div className="dropdown-divider" />
-                    <button className="dropdown-item danger" onClick={logout}>Déconnexion</button>
+                    <button className="dropdown-item danger" onClick={logout}>{t('Logout')}</button>
                   </div>
                 )}
               </div>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { fr, enUS } from 'date-fns/locale';
 import { getContactDisplayName, getContactInitial } from '../../utils/contactDisplay';
+import { useLanguage } from '../../context/LanguageContext';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const EMOJI_CATEGORIES = {
@@ -17,6 +18,7 @@ const EMOJI_CATEGORIES = {
 const CATEGORY_LABELS = { '😀': 'Smileys', '👍': 'Gestes', '❤️': 'Cœurs', '🎉': 'Fête', '🍕': 'Nourriture', '🌸': 'Nature' };
 
 export default function ChatWindow({ contact, socket, waStatus, onBack }) {
+  const { language, t } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -391,9 +393,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     const date = new Date(ts);
     const now = new Date();
     const diff = Math.floor((now - date) / 86400000);
-    if (diff === 0) return "Aujourd'hui";
-    if (diff === 1) return 'Hier';
-    return format(date, 'd MMMM yyyy', { locale: fr });
+    if (diff === 0) return t('Today');
+    if (diff === 1) return t('Yesterday');
+    return format(date, 'd MMMM yyyy', { locale: language === 'en' ? enUS : fr });
   };
   const isSameDay = (a, b) =>
     format(new Date(a), 'yyyy-MM-dd') === format(new Date(b), 'yyyy-MM-dd');
@@ -558,9 +560,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
             <img src="/icons/icon-192.png" alt="Logo Botora" />
           </div>
           <h3>Botora</h3>
-          <p>Sélectionnez une discussion pour afficher les messages</p>
+          <p>{t('Select a conversation to view messages')}</p>
           {!waStatus.isConnected && (
-            <p className="wa-hint">Connectez votre WhatsApp depuis le panneau gauche pour recevoir des messages</p>
+            <p className="wa-hint">{t('Connect WhatsApp from the left panel to receive messages')}</p>
           )}
         </div>
       </div>
@@ -589,7 +591,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
               cursor: 'pointer', color: '#fff', fontSize: '1.2rem',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}
-            title="Fermer"
+            title={t('Close')}
           >✕</button>
           {mediaModal.type === 'video' ? (
             <video
@@ -639,7 +641,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       )}
 
       <div className="chat-header">
-        <button className="back-btn" onClick={onBack} title="Retour">
+        <button className="back-btn" onClick={onBack} title={t('Back')}>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
         <div className="chat-header-avatar" style={{ background: getColor(contact.id) }}>
@@ -657,16 +659,16 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
           title={iaPaused ? "Mode Humain — cliquer pour réactiver l'IA" : "Mode IA actif — cliquer pour prendre la main"}
         >
           {iaPaused ? (
-            <><span className="ia-mode-icon">👤</span><span className="ia-mode-label">Humain</span></>
+            <><span className="ia-mode-icon">👤</span><span className="ia-mode-label">{t('Human')}</span></>
           ) : (
-            <><span className="ia-mode-icon">🤖</span><span className="ia-mode-label">IA active</span></>
+            <><span className="ia-mode-icon">🤖</span><span className="ia-mode-label">{t('Active AI')}</span></>
           )}
         </button>
 
         <button
           className={`ia-mode-btn ${showNotes ? 'human' : ''}`}
           onClick={() => setShowNotes(v => !v)}
-          title="Notes internes (jamais envoyées au client)"
+          title={t('Internal notes (never sent to the customer)')}
           style={{ fontSize: '0.8rem', gap: 4 }}
         >
           <span style={{ fontSize: '1rem' }}>📝</span>
@@ -688,12 +690,12 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
           padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8
         }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#f6c90e', display: 'flex', alignItems: 'center', gap: 6 }}>
-            📝 Notes internes — <span style={{ fontWeight: 400, color: '#8e9baa' }}>jamais envoyées au client</span>
+            📝 {t('Internal notes')} — <span style={{ fontWeight: 400, color: '#8e9baa' }}>{t('never sent to the customer')}</span>
           </div>
           <textarea
             value={notesDraft}
             onChange={e => setNotesDraft(e.target.value)}
-            placeholder="Ex : VIP, Rappeler le 15 juin, Cliente difficile…"
+            placeholder={t('Example: VIP, call back on June 15, difficult customer…')}
             rows={3}
             style={{
               width: '100%', background: '#111b21', border: '1px solid #2d4a35',
@@ -720,9 +722,9 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
       <div className="chat-messages" ref={containerRef} onScroll={handleScroll}>
         {loading ? (
-          <div className="chat-loading">Chargement...</div>
+          <div className="chat-loading">{t('Loading...')}</div>
         ) : messages.length === 0 ? (
-          <div className="chat-no-messages">Aucun message dans cette conversation</div>
+          <div className="chat-no-messages">{t('No messages in this conversation')}</div>
         ) : (
           messages.map((msg, i) => {
             const showDate = i === 0 || !isSameDay(msg.created_at, messages[i - 1].created_at);
@@ -751,7 +753,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
                       <button
                         className="msg-menu-btn"
                         onClick={() => setOpenMenu(menuOpen ? null : msg.id)}
-                        title="Actions"
+                        title={t('Actions')}
                       >
                         <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
                           <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
@@ -814,7 +816,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
                       <button
                         className="msg-menu-btn"
                         onClick={() => setOpenMenu(menuOpen ? null : msg.id)}
-                        title="Actions"
+                        title={t('Actions')}
                       >
                         <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
                           <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
@@ -921,7 +923,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         <button
           className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
           onClick={handleToggleTemplates}
-          title="Réponses rapides"
+          title={t('Quick replies')}
           type="button"
           style={{ fontSize: '1rem', fontWeight: 700 }}
         >
@@ -930,7 +932,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         <button
           className={`emoji-toggle-btn ${showEmoji ? 'active' : ''}`}
           onClick={() => { setShowEmoji(v => !v); setShowTemplates(false); }}
-          title="Emojis"
+          title={t('Emojis')}
           type="button"
         >
           <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
@@ -940,7 +942,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
         <button
           className="emoji-toggle-btn"
           onClick={() => fileInputRef.current?.click()}
-          title="Joindre un fichier"
+          title={t('Attach a file')}
           type="button"
           disabled={sendingMedia || !waStatus.isConnected}
           style={{ opacity: sendingMedia ? 0.5 : 1 }}
@@ -1053,7 +1055,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
               className="send-btn"
               onClick={handleSend}
               disabled={!inputText.trim() || sending || !waStatus.isConnected}
-              title="Envoyer (Entrée)"
+              title={t('Send (Enter)')}
               type="button"
             >
               {sending ? (

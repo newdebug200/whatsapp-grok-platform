@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import axios from 'axios';
 import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/dashboard/Dashboard';
@@ -15,16 +16,17 @@ export function useTheme() {
 
 function AppContent() {
   const { account, loading } = useAuth();
+  const { t } = useLanguage();
   const [theme, setTheme] = useState(() => localStorage.getItem('botora-theme') || 'light');
-  const [centralStatus, setCentralStatus] = useState({ state: 'checking', message: 'Vérification du serveur central…' });
+  const [centralStatus, setCentralStatus] = useState({ state: 'checking', message: t('Checking central server…') });
 
   useEffect(() => {
     let cancelled = false;
     axios.get(`${API_URL}/central-health`, { timeout: 10000 })
-      .then(response => { if (!cancelled && response.data?.ok) setCentralStatus({ state: 'online', message: 'API centrale connectée.' }); else if (!cancelled) setCentralStatus({ state: 'offline', message: 'Le serveur central est indisponible. Réessayez plus tard.' }); })
-      .catch(error => { if (!cancelled) setCentralStatus({ state: 'offline', message: error.response?.data?.error || 'Le serveur central est indisponible. Réessayez plus tard.' }); });
+      .then(response => { if (!cancelled && response.data?.ok) setCentralStatus({ state: 'online', message: t('Central API connected.') }); else if (!cancelled) setCentralStatus({ state: 'offline', message: t('The central server is unavailable. Please try again later.') }); })
+      .catch(error => { if (!cancelled) setCentralStatus({ state: 'offline', message: error.response?.data?.error || t('The central server is unavailable. Please try again later.') }); });
     return () => { cancelled = true; };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -52,7 +54,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <LanguageProvider>
+        <AppContent />
+      </LanguageProvider>
     </AuthProvider>
   );
 }
