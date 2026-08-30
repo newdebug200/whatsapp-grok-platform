@@ -61,7 +61,7 @@ export default function RechargeCredits({ creditBalance, onBack, onBalanceRefres
     setPaying(true); setMessage(null);
     try {
       const r = await axios.post(`${API_URL}/payments/checkout`, { credits: qty });
-      if (!r.data?.paymentUrl || !/^https:\/\/(checkout\.)?fedapay\.com\//i.test(r.data.paymentUrl)) throw new Error('L’API n’a pas retourné une URL FedaPay valide.');
+      if (!r.data?.paymentUrl || !/^https:\/\/.+fedapay\.com\//i.test(r.data.paymentUrl)) throw new Error('L’API n’a pas retourné une URL FedaPay valide.');
       const paymentWindow = window.open(r.data.paymentUrl, '_blank', 'noopener,noreferrer');
       if (!paymentWindow) window.location.assign(r.data.paymentUrl);
       setMessage({ text: 'Paiement ouvert dans un nouvel onglet. Botora vérifie automatiquement son statut toutes les 5 secondes.' });
