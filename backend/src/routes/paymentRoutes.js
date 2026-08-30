@@ -29,6 +29,18 @@ function fedapayHeaders() {
 function unwrap(data) { return data?.v1 || data?.transaction || data; }
 function normalizeStatus(status) { return String(status || 'pending').toLowerCase(); }
 function extractId(data) { return String(unwrap(data)?.id || unwrap(data)?.transaction?.id || ''); }
+function adminResponsePayload(data) {
+  if (!data || typeof data !== 'object') return {};
+  return data.data && typeof data.data === 'object' ? data.data : data;
+}
+function adminResponseStatus(data) {
+  const payload = adminResponsePayload(data);
+  return payload?.status || payload?.state || payload?.result?.status || payload?.transaction?.status || null;
+}
+function adminResponseMessage(data) {
+  const payload = adminResponsePayload(data);
+  return payload?.message || payload?.error || payload?.details || payload?.result?.message || ''; 
+}
 function callbackUrl() {
   return process.env.FEDAPAY_CALLBACK_URL || `${process.env.APP_URL || 'http://localhost:5173'}/?payment=return`;
 }
@@ -138,12 +150,21 @@ router.post('/transactions/:id/verify', async (req, res) => {
   try {
     const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { email: true } });
     const adminResult = await botoraAdminRequest('/api/payment-verify.php', { email: account.email, transaction_id: payment.external_id });
-    const status = normalizeStatus(adminResult.status);
+    const statusValue = adminResponseStatus(adminResult);
+    const status = normalizeStatus(statusValue || 'pending');
+    const adminMessage = adminResponseMessage(adminResult) || (status === APPROVED ? 'Paiement approuvé : crédits ajoutés.' : `Paiement non approuvé (${status}).`);
+
+    if ((adminResult && adminResult.ok === false) || (adminResult && adminResult.success === false) || (!statusValue && (adminResult?.error || adminResult?.message))) {
+      return res.status(502).json({ error: adminMessage || 'La vérification FedaPay est temporairement indisponible.' });
+    }
+
     await creditApprovedPayment(payment, { status }, `manual:${payment.external_id}:${status}`, 'manual.verify', JSON.stringify(adminResult));
-    return res.json({ status, approved: status === APPROVED, credits: status === APPROVED ? payment.credits : 0, message: adminResult.message || (status === APPROVED ? 'Paiement approuvé : crédits ajoutés.' : `Paiement non approuvé (${status}).`) });
+    return res.json({ status, approved: status === APPROVED, credits: status === APPROVED ? payment.credits : 0, message: adminMessage });
   } catch (err) {
-    console.error('[FedaPay] Verification error:', err.response?.data || err.message);
-    return res.status(502).json({ error: 'La vérification FedaPay est temporairement indisponible.' });
+    const details = err.response?.data || err.message || {};
+    const detailMessage = typeof details === 'string' ? details : (details?.error || details?.message || 'La vérification FedaPay est temporairement indisponible.');
+    console.error('[FedaPay] Verification error:', details);
+    return res.status(502).json({ error: detailMessage });
   }
 });
 
