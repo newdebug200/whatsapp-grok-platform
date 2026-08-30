@@ -115,10 +115,6 @@ export default function DashboardHome({
         <>
           {/* KPI row */}
           <div className="dh-kpis">
-            <button className="dh-kpi" onClick={() => onGoTo('chat')}>
-              <div className="dh-kpi-value">{data.unreadConversations}</div>
-              <div className="dh-kpi-label">Conversations non lues</div>
-            </button>
             <div className="dh-kpi">
               <div className="dh-kpi-value">{data.totalContacts}</div>
               <div className="dh-kpi-label">Contacts au total</div>
