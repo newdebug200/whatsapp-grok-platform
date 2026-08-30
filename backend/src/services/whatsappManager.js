@@ -151,6 +151,35 @@ class WhatsAppManager {
 
   // ─── Import WhatsApp contacts from phone book ─────────────────────────────
 
+  _isUsableContactName(name, phoneNumber, waId) {
+    const value = String(name || '').trim();
+    if (!value) return false;
+    const normalized = value.replace(/[\s()+\-]/g, '');
+    const identifier = String(waId || '').split('@')[0].replace(/\D/g, '');
+    const phoneDigits = String(phoneNumber || '').replace(/\D/g, '');
+    return normalized !== identifier && normalized !== phoneDigits && value !== String(waId || '').trim();
+  }
+
+  async _resolvePrivateContactName(contact, phoneNumber, waId) {
+    const candidates = [contact?.name, contact?.pushname, contact?.shortName];
+    return candidates.find((name) => this._isUsableContactName(name, phoneNumber, waId)) || null;
+  }
+
+  async _resolveChatContactName(chat, phoneNumber, waId) {
+    if (chat?.isGroup) {
+      const groupName = chat.name || chat.formattedTitle;
+      return this._isUsableContactName(groupName, phoneNumber, waId)
+        ? groupName.trim()
+        : `Groupe ${String(waId || '').split('@')[0]}`;
+    }
+    try {
+      const contact = await chat.getContact();
+      return this._resolvePrivateContactName(contact, phoneNumber, waId);
+    } catch (_) {
+      return this._isUsableContactName(chat?.name, phoneNumber, waId) ? chat.name.trim() : null;
+    }
+  }
+
   async _importContacts(client, profileId) {
     if (!WWEB_AVAILABLE) return;
     try {
@@ -177,7 +206,7 @@ class WhatsAppManager {
 
           const phoneNumber = rawUser.startsWith('+') ? rawUser : '+' + rawUser;
           const waId = wContact.id._serialized || (digits + '@c.us');
-          const name = wContact.name || wContact.pushname || null;
+          const name = await this._resolvePrivateContactName(wContact, phoneNumber, waId);
           await this.prisma.contact.upsert({
             where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } },
             create: { profile_id: profileId, phone_number: phoneNumber, wa_id: waId, name },
@@ -211,13 +240,13 @@ class WhatsAppManager {
           let phoneNumber, contactName;
           if (isGroup) {
             phoneNumber = `group_${chat.id.user}`;
-            contactName = chat.name || `Groupe ${chat.id.user}`;
+            contactName = await this._resolveChatContactName(chat, phoneNumber, waId);
           } else {
             if (chat.id.server !== 'c.us') continue;
             const digits = chat.id.user.replace(/\D/g, '');
             if (digits.length < 7 || digits.length > 15) continue;
             phoneNumber = `+${chat.id.user}`;
-            contactName = chat.name || null;
+            contactName = await this._resolveChatContactName(chat, phoneNumber, waId);
           }
 
           const dbContact = await this.prisma.contact.upsert({
@@ -273,7 +302,7 @@ class WhatsAppManager {
                   direction,
                   type: msg.type || 'text',
                   created_at: msgDate,
-                  unread: !msg.fromMe,
+                  unread: false,
                   sentiment: null
                 }
               });
@@ -281,12 +310,31 @@ class WhatsAppManager {
             }
           }
 
-          const unreadCount = await this.prisma.message.count({
-            where: { contact_id: dbContact.id, unread: true }
+          // WhatsApp fournit le nombre réel de messages non lus dans ce chat.
+          // On réinitialise d’abord les indicateurs locaux afin d’éviter de
+          // transformer tout l’historique importé en messages non lus.
+          const waUnreadCount = Math.max(0, Number(chat.unreadCount) || 0);
+          await this.prisma.message.updateMany({
+            where: { contact_id: dbContact.id },
+            data: { unread: false }
           });
+          if (waUnreadCount > 0) {
+            const unreadMessages = await this.prisma.message.findMany({
+              where: { contact_id: dbContact.id, direction: 'received' },
+              orderBy: { created_at: 'desc' },
+              take: waUnreadCount,
+              select: { id: true }
+            });
+            if (unreadMessages.length > 0) {
+              await this.prisma.message.updateMany({
+                where: { id: { in: unreadMessages.map((message) => message.id) } },
+                data: { unread: true }
+              });
+            }
+          }
           await this.prisma.contact.update({
             where: { id: dbContact.id },
-            data: { unread_count: unreadCount }
+            data: { unread_count: waUnreadCount }
           });
         } catch (_) {}
       }

@@ -36,10 +36,13 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     try {
       const params = tab !== 'all' ? { filter: tab } : {};
       const res = await axios.get(`${API_URL}/messages/conversations`, { params });
-      const sorted = res.data.sort((a, b) => {
-        const da = a.messages[0]?.created_at || a.created_at;
-        const db = b.messages[0]?.created_at || b.created_at;
-        return new Date(db) - new Date(da);
+      const sorted = [...res.data].sort((a, b) => {
+        const getTimestamp = (contact) => {
+          const value = contact.last_message_at || contact.messages?.[0]?.created_at || contact.created_at;
+          const timestamp = new Date(value).getTime();
+          return Number.isFinite(timestamp) ? timestamp : 0;
+        };
+        return getTimestamp(b) - getTimestamp(a);
       });
       onContactsUpdate(sorted);
       if (tab === 'all') {
@@ -141,8 +144,9 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
       });
 
   const getLastMessageTime = (contact) => {
-    if (contact.messages[0]?.created_at) return new Date(contact.messages[0].created_at).getTime();
-    return new Date(contact.created_at).getTime();
+    const value = contact.last_message_at || contact.messages?.[0]?.created_at || contact.created_at;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
   };
 
   const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
@@ -161,8 +165,17 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     return format(date, 'dd/MM/yy');
   };
 
-  const getInitial = (contact) => (contact.name || contact.phone_number || '?').charAt(0).toUpperCase();
-  const getDisplayName = (contact) => contact.name || contact.phone_number;
+  const getInitial = (contact) => (getDisplayName(contact) || '?').charAt(0).toUpperCase();
+  const getDisplayName = (contact) => {
+    const name = String(contact.name || '').trim();
+    const phone = String(contact.phone_number || '').trim();
+    const waId = String(contact.wa_id || '').trim();
+    const nameLooksLikeIdentifier = !name
+      || name === waId
+      || name.replace(/[\s()+\-]/g, '') === phone.replace(/\D/g, '')
+      || name.replace(/[\s()+\-]/g, '') === waId.split('@')[0].replace(/\D/g, '');
+    return nameLooksLikeIdentifier ? (phone || waId || 'Contact inconnu') : name;
+  };
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[id % avatarColors.length];
 
@@ -195,7 +208,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                   <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
                 </svg>
               )}
-              {getDisplayName(contact)}
+              <span title={contact.phone_number || contact.wa_id || undefined}>{getDisplayName(contact)}</span>
             </span>
             <div className="contact-row-right">
               {isArchivedTab ? (

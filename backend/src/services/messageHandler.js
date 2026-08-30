@@ -175,7 +175,9 @@ class MessageHandler {
           content: messageContent,
           direction: 'received',
           type: message.type || 'text',
-          created_at: new Date(),
+          created_at: Number.isFinite(Number(message.timestamp))
+            ? new Date(Number(message.timestamp) * 1000)
+            : new Date(),
           unread: true,
           media_path: mediaPath
         }

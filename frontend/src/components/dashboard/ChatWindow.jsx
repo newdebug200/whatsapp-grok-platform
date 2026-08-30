@@ -383,7 +383,17 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     }
   };
 
-  const getInitial = (c) => (c.name || c.phone_number || '?').charAt(0).toUpperCase();
+  const getContactDisplayName = (c) => {
+    const name = String(c.name || '').trim();
+    const phone = String(c.phone_number || '').trim();
+    const waId = String(c.wa_id || '').trim();
+    const looksLikeIdentifier = !name
+      || name === waId
+      || name.replace(/[\s()+\-]/g, '') === phone.replace(/\D/g, '')
+      || name.replace(/[\s()+\-]/g, '') === waId.split('@')[0].replace(/\D/g, '');
+    return looksLikeIdentifier ? (phone || waId || 'Contact inconnu') : name;
+  };
+  const getInitial = (c) => getContactDisplayName(c).charAt(0).toUpperCase();
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[(id || 0) % avatarColors.length];
   const formatMsgTime = (ts) => format(new Date(ts), 'HH:mm');
@@ -646,8 +656,8 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
           {getInitial(contact)}
         </div>
         <div className="chat-header-info">
-          <div className="chat-header-name">{contact.name || contact.phone_number}</div>
-          <div className="chat-header-phone">{contact.name ? contact.phone_number : ''}</div>
+          <div className="chat-header-name">{getContactDisplayName(contact)}</div>
+          <div className="chat-header-phone">{contact.phone_number || contact.wa_id || ''}</div>
         </div>
 
         <button
