@@ -2,7 +2,7 @@ const axios = require('axios');
 const centralSync = require('./centralSync');
 const fs = require('fs');
 const path = require('path');
-
+const { resolveContactName } = require('../utils/contactDisplay');
 const PERSONALITY_PROMPTS = {
   professional: "Tu communiques de manière professionnelle, formelle et courtoise. Tu utilises un langage soutenu.",
   friendly: "Tu communiques de manière amicale, chaleureuse et décontractée. Tu tutois le client et utilises des emojis avec modération.",
@@ -122,7 +122,7 @@ class MessageHandler {
       } else {
         const contact = await message.getContact();
         phoneNumber = '+' + (contact.number || contact.id.user);
-        contactName = contact.name || contact.pushname || null;
+        contactName = resolveContactName(contact, phoneNumber, waId);
       }
 
       let dbContact = await prisma.contact.findUnique({

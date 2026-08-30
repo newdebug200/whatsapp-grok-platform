@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
+import { getContactDisplayName, getContactInitial } from '../../utils/contactDisplay';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function ConversationList({ contacts, selectedContact, onSelectContact, onContactsUpdate, waStatus, socket, onConnectWhatsApp }) {
@@ -165,17 +165,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     return format(date, 'dd/MM/yy');
   };
 
-  const getInitial = (contact) => (getDisplayName(contact) || '?').charAt(0).toUpperCase();
-  const getDisplayName = (contact) => {
-    const name = String(contact.name || '').trim();
-    const phone = String(contact.phone_number || '').trim();
-    const waId = String(contact.wa_id || '').trim();
-    const nameLooksLikeIdentifier = !name
-      || name === waId
-      || name.replace(/[\s()+\-]/g, '') === phone.replace(/\D/g, '')
-      || name.replace(/[\s()+\-]/g, '') === waId.split('@')[0].replace(/\D/g, '');
-    return nameLooksLikeIdentifier ? (phone || waId || 'Contact inconnu') : name;
-  };
+
   const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#f6c90e', '#fd79a8'];
   const getColor = (id) => avatarColors[id % avatarColors.length];
 
@@ -198,7 +188,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         style={{ position: 'relative' }}
       >
         <div className="contact-avatar" style={{ background: getColor(contact.id) }}>
-          {getInitial(contact)}
+          {getContactInitial(contact)}
         </div>
         <div className="contact-info">
           <div className="contact-row">
@@ -208,7 +198,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                   <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
                 </svg>
               )}
-              <span title={contact.phone_number || contact.wa_id || undefined}>{getDisplayName(contact)}</span>
+              <span title={contact.phone_number || contact.wa_id || undefined}>{getContactDisplayName(contact)}</span>
             </span>
             <div className="contact-row-right">
               {isArchivedTab ? (

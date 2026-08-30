@@ -161,7 +161,7 @@ class WhatsAppManager {
   }
 
   async _resolvePrivateContactName(contact, phoneNumber, waId) {
-    const candidates = [contact?.name, contact?.pushname, contact?.shortName];
+    const candidates = [contact?.name, contact?.pushname, contact?.shortName, contact?.verifiedName];
     return candidates.find((name) => this._isUsableContactName(name, phoneNumber, waId)) || null;
   }
 
@@ -231,6 +231,9 @@ class WhatsAppManager {
       const chats = await client.getChats();
       let syncedMessages = 0;
       let syncedChats = 0;
+      const syncEntry = this._getEntryByProfileId(profileId);
+      const readyAt = syncEntry?.entry?.readyAt || 0;
+      const ignoreIncomingUntil = syncEntry?.entry?.ignoreIncomingUntil || 0;
 
       for (const chat of chats) {
         try {
@@ -281,6 +284,11 @@ class WhatsAppManager {
 
             const direction = msg.fromMe ? 'sent' : 'received';
             const msgDate = new Date(msg.timestamp * 1000);
+            if (!msg.fromMe && readyAt && ignoreIncomingUntil
+              && msgDate.getTime() >= readyAt
+              && msgDate.getTime() < ignoreIncomingUntil) {
+              continue;
+            }
 
             const existing = await this.prisma.message.findFirst({
               where: {
@@ -438,7 +446,7 @@ class WhatsAppManager {
 
     this.clients.set(clientKey, {
       client, status: 'initializing', accountId,
-      profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null
+      profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null, ignoreIncomingUntil: null
     });
 
     // ── QR ──
@@ -510,9 +518,13 @@ class WhatsAppManager {
         profileId: profile.id, phoneNumber: profile.phone_number
       });
 
-      // Mark connection time — used to ignore queued messages replayed on reconnect
+      // Ignore every incoming message received during the first 10 seconds
+      // after connection. This protects the app from WhatsApp replay events.
       const readyEntry = this.clients.get(profile.id);
-      if (readyEntry) readyEntry.readyAt = Date.now();
+      if (readyEntry) {
+        readyEntry.readyAt = Date.now();
+        readyEntry.ignoreIncomingUntil = readyEntry.readyAt + 10 * 1000;
+      }
 
       // Import phone book contacts in background
       this._importContacts(client, profile.id).catch(() => {});
@@ -544,11 +556,14 @@ class WhatsAppManager {
           return;
         }
         const currentProfileId = entry.entry.profileId;
-        // Ignore uniquement les messages historiques antérieurs à ready.
-        // Les messages privés réels reçus pendant la reconnexion doivent être traités.
+        // Ignore les replays historiques et toute réception pendant la
+        // fenêtre de protection qui suit la connexion.
         const readyAt = entry.entry.readyAt || 0;
-        if (readyAt && Number(message.timestamp) * 1000 < readyAt) {
-          console.log(`[WA] Message entrant ignoré: replay historique timestamp=${message.timestamp} readyAt=${readyAt}`);
+        const ignoreIncomingUntil = entry.entry.ignoreIncomingUntil || 0;
+        const messageTime = Number(message.timestamp) * 1000;
+        if ((readyAt && messageTime < readyAt)
+          || (ignoreIncomingUntil && Date.now() < ignoreIncomingUntil)) {
+          console.log(`[WA] Message entrant ignoré pendant la reconnexion (timestamp=${message.timestamp}, protection jusqu'à ${ignoreIncomingUntil || readyAt})`);
           return;
         }
 
