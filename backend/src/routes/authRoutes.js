@@ -38,7 +38,14 @@ router.post('/register', authLimiter, async (req, res) => {
     const accountCount = await prisma.account.count();
     const role = accountCount === 0 ? 'admin' : 'user';
 
-    const centralUser = await centralSync.syncAccount({ email: email.toLowerCase(), password_plain: password, name, phone: null });
+    let centralUser = await centralSync.syncAccount({ email: email.toLowerCase(), password_plain: password, name, phone: null });
+    // account-sync peut avoir créé le compte même si sa réponse a été interrompue ou incomplète.
+    // Une vérification login centrale confirme alors le compte sans le recréer.
+    if (!centralUser?.password_hash) {
+      const confirmedUser = await centralSync.authenticateAccount(email.toLowerCase(), password);
+      if (confirmedUser?.password_hash) centralUser = confirmedUser;
+      else if (centralUser?.id || centralUser?.email) centralUser = { ...centralUser, password_hash: await bcrypt.hash(password, 12) };
+    }
     if (!centralUser?.password_hash) {
       return res.status(502).json({ error: 'Le compte n’a pas été confirmé par l’API centrale. Inscription non validée.' });
     }
