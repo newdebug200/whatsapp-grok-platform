@@ -59,7 +59,7 @@ model BotConfig {
   bot_name               String  @default("Botora")
   bot_info               String  @default("")
   bot_behavior           String  @default("")
-  ia_enabled             Boolean @default(true)
+  ia_enabled             Boolean @default(false)
   response_delay_seconds Int     @default(5)
 
   business_hours_enabled Boolean @default(false)
@@ -72,8 +72,8 @@ model BotConfig {
 
   personality            String  @default("professional")
   system_prompt_override String?
-  sentiment_alert        Boolean @default(true)
-  media_auto_reply       Boolean @default(true)
+  sentiment_alert        Boolean @default(false)
+  media_auto_reply       Boolean @default(false)
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }

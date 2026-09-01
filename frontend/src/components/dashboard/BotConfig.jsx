@@ -48,7 +48,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     bot_name: 'Botora',
     bot_info: '',
     bot_behavior: '',
-    ia_enabled: true,
+    ia_enabled: false,
     response_delay_seconds: 5,
     business_hours_enabled: false,
     open_days: '1,2,3,4,5',
@@ -58,8 +58,8 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     away_message: '',
     away_once_per_session: true,
     personality: 'professional',
-    sentiment_alert: true,
-    media_auto_reply: true
+    sentiment_alert: false,
+    media_auto_reply: false
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

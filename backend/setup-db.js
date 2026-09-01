@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS "BotConfig" (
   "bot_name"               TEXT    NOT NULL DEFAULT 'Botora',
   "bot_info"               TEXT    NOT NULL DEFAULT '',
   "bot_behavior"           TEXT    NOT NULL DEFAULT '',
-  "ia_enabled"             INTEGER NOT NULL DEFAULT 1,
+  "ia_enabled"             INTEGER NOT NULL DEFAULT 0,
   "response_delay_seconds" INTEGER NOT NULL DEFAULT 5,
   "business_hours_enabled" INTEGER NOT NULL DEFAULT 0,
   "open_days"              TEXT    NOT NULL DEFAULT '1,2,3,4,5',
@@ -99,8 +99,8 @@ CREATE TABLE IF NOT EXISTS "BotConfig" (
   "away_once_per_session"  INTEGER NOT NULL DEFAULT 1,
   "personality"            TEXT    NOT NULL DEFAULT 'professional',
   "system_prompt_override" TEXT,
-  "sentiment_alert"        INTEGER NOT NULL DEFAULT 1,
-  "media_auto_reply"       INTEGER NOT NULL DEFAULT 1,
+  "sentiment_alert"        INTEGER NOT NULL DEFAULT 0,
+  "media_auto_reply"       INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY ("profile_id") REFERENCES "WhatsAppProfile"("id")
 );
 
@@ -294,8 +294,8 @@ const migrations = [
   'ALTER TABLE "BotConfig" ADD COLUMN "away_once_per_session"   INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE "BotConfig" ADD COLUMN "personality"             TEXT    NOT NULL DEFAULT \'professional\'',
   'ALTER TABLE "BotConfig" ADD COLUMN "system_prompt_override"  TEXT',
-  'ALTER TABLE "BotConfig" ADD COLUMN "sentiment_alert"         INTEGER NOT NULL DEFAULT 1',
-  'ALTER TABLE "BotConfig" ADD COLUMN "media_auto_reply"        INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE "BotConfig" ADD COLUMN "sentiment_alert"         INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "BotConfig" ADD COLUMN "media_auto_reply"        INTEGER NOT NULL DEFAULT 0',
   // Contact
   'ALTER TABLE "Contact" ADD COLUMN "ia_paused"         INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "Contact" ADD COLUMN "sensitive_flagged" INTEGER NOT NULL DEFAULT 0',

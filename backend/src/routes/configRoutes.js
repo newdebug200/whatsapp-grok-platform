@@ -21,7 +21,7 @@ router.get('/bot', async (req, res) => {
           bot_name: 'Botora',
           bot_info: '',
           bot_behavior: '',
-          ia_enabled: true,
+          ia_enabled: false,
           response_delay_seconds: 5,
           business_hours_enabled: false,
           open_days: '1,2,3,4,5',
@@ -32,7 +32,8 @@ router.get('/bot', async (req, res) => {
           away_once_per_session: true,
           personality: 'professional',
           system_prompt_override: null,
-          sentiment_alert: true
+          sentiment_alert: false,
+          media_auto_reply: false
         }
       });
     }
@@ -86,7 +87,7 @@ router.put('/bot', async (req, res) => {
           bot_name: bot_name || 'Botora',
           bot_info: bot_info || '',
           bot_behavior: bot_behavior || '',
-          ia_enabled: ia_enabled !== undefined ? ia_enabled : true,
+          ia_enabled: ia_enabled !== undefined ? ia_enabled : false,
           response_delay_seconds: delaySeconds ?? 5,
           business_hours_enabled: business_hours_enabled ?? false,
           open_days: open_days || '1,2,3,4,5',
@@ -97,8 +98,8 @@ router.put('/bot', async (req, res) => {
           away_once_per_session: away_once_per_session ?? true,
           personality: personality || 'professional',
           system_prompt_override: system_prompt_override || null,
-          sentiment_alert: sentiment_alert ?? true,
-          media_auto_reply: media_auto_reply ?? true
+          sentiment_alert: sentiment_alert ?? false,
+          media_auto_reply: media_auto_reply ?? false
         },
         update: data
       });
@@ -111,7 +112,7 @@ router.put('/bot', async (req, res) => {
         delete safeData.sentiment_alert;
         config = await prisma.botConfig.upsert({
           where: { profile_id: req.profileId },
-          create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: true, response_delay_seconds: 5 },
+          create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: false, response_delay_seconds: 5 },
           update: safeData
         });
       } else throw err;
