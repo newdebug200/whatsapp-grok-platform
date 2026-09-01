@@ -476,6 +476,19 @@ export default function Dashboard() {
     { key: 'subscriptions', label: t('Subscriptions'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> },
     { key: 'api', label: t('API access'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7a5 5 0 0 1 9.9-1H20v4h-3.1A5 5 0 0 1 7 7zm5-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM4 14h13v3H4v-3zm0 5h9v3H4v-3z"/></svg> }
   ];
+
+  const sidebarItemMap = new Map(appNavItems.map(item => [item.key, item]));
+  const sidebarGroups = [
+    { key: 'communication', label: t('Communication'), keys: ['chat', 'broadcast'] },
+    { key: 'insights', label: t('Analysis & monitoring'), keys: ['stats', 'sentiments'] },
+    { key: 'billing', label: t('Credits & subscriptions'), keys: ['credits', 'credit-usage', 'subscriptions'] },
+    { key: 'integrations', label: t('Integrations'), keys: ['api'] },
+  ].map(group => ({ ...group, items: group.keys.map(key => sidebarItemMap.get(key)).filter(Boolean) })).filter(group => group.items.length > 0);
+  const sidebarInfoItems = [
+    { key: 'about', label: 'À propos', icon: <span aria-hidden="true">✦</span> },
+    { key: 'how-it-works', label: 'Comment ça marche ?', icon: <span aria-hidden="true">?</span> },
+  ];
+
   return (
     <div className="dashboard">
       {(
@@ -505,12 +518,19 @@ export default function Dashboard() {
             <span className={`app-navigation-status ${waStatus.isConnected ? 'connected' : ''}`} />
             <span>{profileLabel}</span>
           </div>
-          <div className="app-navigation-links">
-            {appNavItems.map(item => (
-              <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => handleNavClick(item.key)}>
-                <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
-                {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
-              </button>
+          <div className="app-navigation-sections">
+            {sidebarGroups.map(group => (
+              <div className="app-navigation-group app-navigation-feature-group" key={group.key}>
+                <div className="app-navigation-heading">{group.label}</div>
+                <div className="app-navigation-links">
+                  {group.items.map(item => (
+                    <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => handleNavClick(item.key)}>
+                      <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
+                      {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
           <div className="app-navigation-group">
@@ -519,6 +539,7 @@ export default function Dashboard() {
               ['config', t('Settings bot'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65-2-3.46-2.49 1a7.3 7.3 0 0 0-1.69-.98L15 3h-4l-.36 2.93c-.6.25-1.17.58-1.69.98l-2.49-1-2 3.46 2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65 2 3.46 2.49-1c.52.4 1.09.73 1.69.98L11 21h4l.36-2.93a7.3 7.3 0 0 0 1.69-.98l2.49 1 2-3.46-2.11-1.65zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z"/></svg>],
               ['faq', 'FAQ', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-2h2zm2.07-6.25-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41a2 2 0 1 0-4 0H8a4 4 0 1 1 8 0c0 .88-.36 1.68-.93 2.25z"/></svg>],
               ['templates', t('Quick replies'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 12H7v-2h10zm0-4H7V8h10zm0-4H7V4h10z"/></svg>],
+              ['keywordReplies', 'Réponses automatiques', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 3H4a2 2 0 0 0-2 2v14l4-4h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-3 8H7V9h10v2zm-3 4H7v-2h7v2z"/></svg>],
               ['tags', 'Tags', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.78-.78.78-2.04 0-2.83zM5.5 7A1.5 1.5 0 1 1 5.5 4a1.5 1.5 0 0 1 0 3z"/></svg>],
               ['journal', t('Alerts'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.93 6 11v5l-2 2v1h16v-1z"/></svg>],
               ['storage', t('Data & storage'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>],
@@ -526,6 +547,14 @@ export default function Dashboard() {
             ].map(([tab, label, icon]) => (
               <button key={tab} className={`app-navigation-sub-link ${activePanel === 'settings' && settingsInitialTab === tab ? 'active' : ''}`} onClick={() => goToSettings(tab)} title={label}>
                 <span className="app-navigation-sub-icon">{icon}</span><span>{label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="app-navigation-group app-navigation-info-group">
+            <div className="app-navigation-heading">Aide et informations</div>
+            {sidebarInfoItems.map(item => (
+              <button key={item.key} className={`app-navigation-sub-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => handleNavClick(item.key)} title={item.label}>
+                <span className="app-navigation-sub-icon">{item.icon}</span><span>{item.label}</span>
               </button>
             ))}
           </div>
