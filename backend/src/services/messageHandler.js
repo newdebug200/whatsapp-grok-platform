@@ -24,8 +24,16 @@ class MessageHandler {
     if (message.hasMedia || !message.body) return false;
     const incoming = this._normalizeKeyword(message.body);
     if (!incoming) return false;
-    const rules = await prisma.keywordAutoReply.findMany({ where: { profile_id: profileId, is_active: true } });
+    let rules = await prisma.keywordAutoReply.findMany({ where: { profile_id: profileId, is_active: true } });
+    // Le profil peut recevoir un message avant la synchronisation déclenchée au
+    // moment de la reconnexion, ou après une création depuis une autre session.
+    // Dans ce cas, on rafraîchit une fois le cache avant d’abandonner la recherche.
+    if (rules.length === 0) {
+      await centralSync.getKeywordAutoReplies(profileId);
+      rules = await prisma.keywordAutoReply.findMany({ where: { profile_id: profileId, is_active: true } });
+    }
     const matched = rules.find(rule => this._normalizeKeyword(rule.keyword_normalized || rule.keyword) === incoming);
+    console.log(`[AutoReply] Vérification — profil=${profileId}, reçu=${JSON.stringify(incoming)}, règles_actives=${rules.length}, trouvé=${Boolean(matched)}`);
     if (!matched || !matched.response_text) return false;
     const sent = await client.sendMessage(waId, matched.response_text);
     waManager.trackBotSentId(sent?.id?._serialized);
