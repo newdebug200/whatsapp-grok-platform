@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import './KeywordAutoReplyManager.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 export default function KeywordAutoReplyManager({ activeProfile }) {
   const [rules, setRules] = useState([]);
   const [keyword, setKeyword] = useState('');
@@ -16,7 +18,7 @@ export default function KeywordAutoReplyManager({ activeProfile }) {
     if (!activeProfile) return;
     setLoading(true); setError('');
     try {
-      const { data } = await axios.get('/api/config/keyword-replies');
+      const { data } = await axios.get(`${API_URL}/config/keyword-replies`);
       setRules(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.response?.data?.error || 'Impossible de charger les réponses automatiques.');
@@ -32,8 +34,8 @@ export default function KeywordAutoReplyManager({ activeProfile }) {
     if (!keyword.trim() || !responseText.trim()) { setError('Renseignez un mot-clé et une réponse.'); return; }
     setSaving(true);
     try {
-      if (editingId) await axios.patch(`/api/config/keyword-replies/${editingId}`, { keyword, response_text: responseText });
-      else await axios.post('/api/config/keyword-replies', { keyword, response_text: responseText });
+      if (editingId) await axios.patch(`${API_URL}/config/keyword-replies/${editingId}`, { keyword, response_text: responseText });
+      else await axios.post(`${API_URL}/config/keyword-replies`, { keyword, response_text: responseText });
       reset(); await loadRules(); setNotice(editingId ? 'Réponse automatique mise à jour.' : 'Réponse automatique ajoutée.');
     } catch (err) { setError(err.response?.data?.error || 'La sauvegarde n’a pas pu être effectuée.'); }
     finally { setSaving(false); }
@@ -43,14 +45,14 @@ export default function KeywordAutoReplyManager({ activeProfile }) {
 
   const toggle = async (rule) => {
     setError('');
-    try { await axios.patch(`/api/config/keyword-replies/${rule.id}`, { is_active: !rule.is_active }); await loadRules(); }
+    try { await axios.patch(`${API_URL}/config/keyword-replies/${rule.id}`, { is_active: !rule.is_active }); await loadRules(); }
     catch (err) { setError(err.response?.data?.error || 'Impossible de modifier cette réponse.'); }
   };
 
   const remove = async (rule) => {
     if (!window.confirm(`Supprimer la réponse pour « ${rule.keyword} » ?`)) return;
     setError('');
-    try { await axios.delete(`/api/config/keyword-replies/${rule.id}`); await loadRules(); setNotice('Réponse automatique supprimée.'); }
+    try { await axios.delete(`${API_URL}/config/keyword-replies/${rule.id}`); await loadRules(); setNotice('Réponse automatique supprimée.'); }
     catch (err) { setError(err.response?.data?.error || 'Impossible de supprimer cette réponse.'); }
   };
 
