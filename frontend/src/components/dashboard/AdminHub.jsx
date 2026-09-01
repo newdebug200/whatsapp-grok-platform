@@ -9,8 +9,10 @@ const ADMIN_PAGES = [
 
 export default function AdminHub({ account, onBack }) {
   const [page, setPage] = useState('verification');
-  if (!['admin', 'superadmin'].includes(account?.role)) {
-    return <div className="admin-access-denied"><strong>Accès refusé</strong><span>Cette zone est réservée aux administrateurs.</span></div>;
+  const hasControlCenterAccess = account?.control_center_access === true
+    || (account?.control_center_access == null && ['admin', 'superadmin'].includes(account?.role));
+  if (!hasControlCenterAccess) {
+    return <div className="admin-access-denied"><strong>Accès refusé</strong><span>Cette zone est réservée aux comptes autorisés.</span></div>;
   }
   const current = ADMIN_PAGES.find(item => item.key === page) || ADMIN_PAGES[0];
   return (

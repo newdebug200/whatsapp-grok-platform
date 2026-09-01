@@ -294,7 +294,9 @@ export default function Dashboard() {
   const handleContactsUpdate = (updated) => setContacts(updated);
 
   const handleNavClick = (key) => {
-    if (key === 'admin' && !['admin', 'superadmin'].includes(account?.role)) return;
+    const canOpenControlCenter = account?.control_center_access === true
+      || (account?.control_center_access == null && ['admin', 'superadmin'].includes(account?.role));
+    if (key === 'admin' && !canOpenControlCenter) return;
     setActivePanel(key);
     if (key === 'chat') setUnreadCount(0);
     if (key === 'bot') setSettingsInitialTab('config');
