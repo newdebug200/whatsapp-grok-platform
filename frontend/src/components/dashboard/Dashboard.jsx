@@ -108,8 +108,13 @@ export default function Dashboard() {
   }, [account]);
 
   useEffect(() => {
+    if (account?.central_suspended) {
+      setBotError(account.central_status === 'banned' ? t('This license has been banned. Contact support.') : t('Your account is suspended. Contact support.'));
+      const timer = setTimeout(() => logout(), 2000);
+      return () => clearTimeout(timer);
+    }
     if (account?.central_access_allowed === false) setActivePanel('subscriptions');
-  }, [account?.central_access_allowed]);
+  }, [account?.central_access_allowed, account?.central_suspended, account?.central_status]);
 
   // Refresh credit balance periodically
   useEffect(() => {
@@ -178,11 +183,20 @@ export default function Dashboard() {
 
     s.on('connect_error', (err) => {
       console.error('Erreur socket:', err.message);
-      if (err.message === 'SUBSCRIPTION_REQUIRED' || err.data?.access_type === 'expired') setActivePanel('subscriptions');
+      if (err.data?.access_type === 'suspended' || err.data?.access_type === 'banned') {
+        setBotError(err.data.access_type === 'banned' ? t('This license has been banned. Contact support.') : t('Your account is suspended. Contact support.'));
+        s.disconnect();
+        setTimeout(() => logout(), 2000);
+      } else if (err.message === 'SUBSCRIPTION_REQUIRED' || err.data?.access_type === 'expired') setActivePanel('subscriptions');
     });
     s.on('subscription-required', () => {
       setActivePanel('subscriptions');
       s.disconnect();
+    });
+    s.on('account-suspended', (data) => {
+      setBotError(data?.access_type === 'banned' ? t('This license has been banned. Contact support.') : t('Your account is suspended. Contact support.'));
+      s.disconnect();
+      setTimeout(() => logout(), 2000);
     });
 
     s.on('status', (status) => setWaStatus(status));

@@ -72,6 +72,9 @@ router.post('/login', authLimiter, async (req, res) => {
       });
     }
     if (account.is_blocked) return res.status(403).json({ error: 'Compte bloqué.' });
+    const centralAccess = await centralSync.getAccount(normalizedEmail);
+    if (centralAccess?.access_type === 'suspended') return res.status(403).json({ error: 'Votre accès est suspendu. Contactez le support.' });
+    if (centralAccess?.access_type === 'banned') return res.status(403).json({ error: 'Cette licence a été bannie. Contactez le support.' });
     centralSync.syncAccount(account).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language) } });
@@ -95,7 +98,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         data: { name: central.name || account.name, credit_balance: Number(central.credits_balance || 0) },
         select: { id: true, email: true, name: true, role: true, language: true, created_at: true, credit_balance: true, is_blocked: true }
       });
-      return res.json({ ...updated, central_status: central.status, central_plan_id: central.plan_id, central_access_allowed: central.access_allowed === undefined ? true : Boolean(central.access_allowed), central_access_type: central.access_type || 'none', central_access_ends_at: central.access_ends_at || null, central_trial_ends_at: central.trial_ends_at, central_subscription_ends_at: central.subscription_ends_at || null, central_trial_days_left: central.trial_days_left ?? null, central_subscription_days_left: central.subscription_days_left ?? null, central_server_time: central.server_time || null, central_synced: true });
+      return res.json({ ...updated, central_status: central.status, central_plan_id: central.plan_id, central_access_allowed: central.access_allowed === undefined ? true : Boolean(central.access_allowed), central_suspended: ['suspended', 'banned'].includes(central.access_type), central_access_type: central.access_type || 'none', central_access_ends_at: central.access_ends_at || null, central_trial_ends_at: central.trial_ends_at, central_subscription_ends_at: central.subscription_ends_at || null, central_trial_days_left: central.trial_days_left ?? null, central_subscription_days_left: central.subscription_days_left ?? null, central_server_time: central.server_time || null, central_synced: true });
     }
     res.json({ ...account, central_synced: false, central_sync_error: 'Profil central indisponible' });
   } catch (error) {

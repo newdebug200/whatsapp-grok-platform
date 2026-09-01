@@ -72,11 +72,6 @@ async function consumeCredits(accountId, tokensUsed, eventType = 'ai.usage', pay
   } catch (error) { console.warn(`[CentralSync] Consommation centrale impossible: ${error.message}`); return null; }
 }
 
-async function getPlans() {
-  try { const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'plans' }, timeout: 8000 }); return response.data?.plans || []; }
-  catch (error) { console.warn(`[CentralSync] Abonnements centraux indisponibles: ${error.message}`); return []; }
-}
-
 async function getSubscriptionOffer() {
   try {
     const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'subscription' }, timeout: 8000 });
@@ -120,4 +115,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getPlans, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getFeature };

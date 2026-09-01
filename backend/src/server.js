@@ -123,7 +123,7 @@ io.on('connection', (socket) => {
     try {
       const access = await checkSocketAccess(accountId);
       if (!access.allowed) {
-        socket.emit('subscription-required', access);
+        socket.emit(access.access_type === 'suspended' || access.access_type === 'banned' ? 'account-suspended' : 'subscription-required', access);
         socket.disconnect(true);
       }
     } catch (_) {}
