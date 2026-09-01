@@ -24,7 +24,11 @@ async function authenticateAccount(email, password) {
     const user = body.user || body.account || (body.id || body.email ? body : null);
     const confirmed = body.ok === true || body.success === true || (response.status >= 200 && response.status < 300);
     return confirmed ? { ...(user || {}), _centralConfirmed: true, password_hash: user?.password_hash || user?.passwordHash || null } : null;
-  } catch (error) { console.warn(`[CentralSync] Authentification centrale impossible: ${error.message}`); return null; }
+  } catch (error) {
+    const status = Number(error.response?.status || 0);
+    console.warn(`[CentralSync] Authentification centrale impossible: ${error.message}`);
+    return status >= 500 || status === 0 ? { _centralUnavailable: true, _centralStatus: status } : null;
+  }
 }
 
 async function syncAccount(account) {
@@ -35,7 +39,11 @@ async function syncAccount(account) {
     const user = body.user || body.account || (body.id || body.email ? body : null);
     const confirmed = body.ok === true || body.success === true || (response.status >= 200 && response.status < 300);
     return confirmed ? { ...(user || {}), _centralConfirmed: true, password_hash: user?.password_hash || user?.passwordHash || null } : null;
-  } catch (error) { console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`); return null; }
+  } catch (error) {
+    const status = Number(error.response?.status || 0);
+    console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`);
+    return status >= 500 || status === 0 ? { _centralUnavailable: true, _centralStatus: status } : null;
+  }
 }
 
 async function getAccount(email) {

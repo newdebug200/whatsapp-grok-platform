@@ -45,6 +45,9 @@ router.post('/register', authLimiter, async (req, res) => {
       const confirmedUser = await centralSync.authenticateAccount(email.toLowerCase(), password);
       if (confirmedUser?._centralConfirmed) centralUser = confirmedUser;
     }
+    if (centralUser?._centralUnavailable) {
+      return res.status(502).json({ error: 'L’API centrale est momentanément indisponible. Réessayez plus tard.' });
+    }
     if (!centralUser?._centralConfirmed) {
       return res.status(502).json({ error: 'Le compte n’a pas été confirmé par l’API centrale. Inscription non validée.' });
     }
@@ -71,7 +74,8 @@ router.post('/login', authLimiter, async (req, res) => {
     let isValid = account ? await bcrypt.compare(password, account.password) : false;
     if (!isValid) {
       const centralUser = await centralSync.authenticateAccount(normalizedEmail, password);
-      if (!centralUser?.password_hash) return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      if (centralUser?._centralUnavailable) return res.status(502).json({ error: 'L’API centrale est momentanément indisponible. Réessayez plus tard.' });
+      if (!centralUser?._centralConfirmed || !centralUser?.password_hash) return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
       account = await prisma.account.upsert({
         where: { email: normalizedEmail },
         update: { name: centralUser.name, password: centralUser.password_hash, is_blocked: false },
