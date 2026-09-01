@@ -76,6 +76,7 @@ router.post('/login', authLimiter, async (req, res) => {
     if (centralAccess?.access_type === 'suspended') return res.status(403).json({ error: 'Votre accès est suspendu. Contactez le support.' });
     if (centralAccess?.access_type === 'banned') return res.status(403).json({ error: 'Cette licence a été bannie. Contactez le support.' });
     centralSync.syncAccount(account).catch(() => {});
+    centralSync.syncCreditUsage(account.id).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language) } });
   } catch (error) {
@@ -93,6 +94,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!account) return res.status(404).json({ error: 'Compte introuvable' });
     const central = await centralSync.getAccount(account.email);
     if (central) {
+      centralSync.syncCreditUsage(account.id).catch(() => {});
       const updated = await prisma.account.update({
         where: { id: account.id },
         data: { name: central.name || account.name, credit_balance: Number(central.credits_balance || 0) },

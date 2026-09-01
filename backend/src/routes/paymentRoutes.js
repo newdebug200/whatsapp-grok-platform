@@ -159,23 +159,29 @@ router.post('/subscription/:id/verify', async (req, res) => {
   }
 });
 
-router.get('/config', (_req, res) => res.json({ minCredits: MIN_CREDITS, xofPerCredit: XOF_PER_CREDIT, tokensPerCredit: TOKENS_PER_CREDIT, currency: 'XOF', feesNotice: 'Les frais FedaPay, estimés entre 1,5 % et 4 %, restent à la charge du client.' }));
+router.get('/config', async (_req, res) => {
+  const central = await centralSync.getCreditConfig();
+  const conversion = central || { tokens_per_unit: TOKENS_PER_CREDIT, credits_per_unit: 1, xof_per_unit: XOF_PER_CREDIT, xof_per_credit: XOF_PER_CREDIT };
+  res.json({ minCredits: MIN_CREDITS, xofPerCredit: Number(conversion.xof_per_credit || (conversion.xof_per_unit / conversion.credits_per_unit)), tokensPerCredit: Number(conversion.tokens_per_unit / conversion.credits_per_unit), tokensPerUnit: Number(conversion.tokens_per_unit), creditsPerTokenUnit: Number(conversion.credits_per_unit), xofPerTokenUnit: Number(conversion.xof_per_unit), currency: 'XOF', feesNotice: 'Les frais FedaPay, estimés entre 1,5 % et 4 %, restent à votre charge.' });
+});
 
 router.post('/checkout', async (req, res) => {
   try {
     const credits = Number(req.body?.credits);
     if (!Number.isFinite(credits) || credits < MIN_CREDITS) return res.status(400).json({ error: `Le minimum est de ${MIN_CREDITS} crédits.` });
     const normalizedCredits = Number(credits.toFixed(10));
-    const amount = Math.round(normalizedCredits * XOF_PER_CREDIT);
+    const centralConversion = await centralSync.getCreditConfig();
+    const conversion = centralConversion || { tokens_per_unit: TOKENS_PER_CREDIT, credits_per_unit: 1, xof_per_unit: XOF_PER_CREDIT, xof_per_credit: XOF_PER_CREDIT };
+    const amount = Math.round(normalizedCredits * Number(conversion.xof_per_credit || (conversion.xof_per_unit / conversion.credits_per_unit)));
     const account = await prisma.account.findUnique({ where: { id: req.accountId }, select: { id: true, name: true, email: true } });
     if (!account) return res.status(404).json({ error: 'Compte introuvable.' });
     const merchantReference = `BOTORA-${account.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const payment = await prisma.paymentTransaction.create({ data: { account_id: account.id, external_id: merchantReference, amount_xof: amount, credits: normalizedCredits, status: 'pending', description: `Recharge de ${normalizedCredits} crédit(s)` } });
+    const payment = await prisma.paymentTransaction.create({ data: { account_id: account.id, external_id: merchantReference, amount_xof: amount, credits: normalizedCredits, status: 'pending', description: `Recharge de ${normalizedCredits} crédit(s)`, metadata: JSON.stringify({ conversion }) } });
     try {
       const created = await botoraAdminRequest('/api/payment-create.php', { email: account.email, credits: normalizedCredits, callback_url: callbackUrl(), platform_payment_id: String(payment.id) });
       const providerId = String(created.transactionId || '');
       if (!created.ok || !providerId || !created.paymentUrl) throw new Error(created.error || 'Réponse de paiement admin invalide');
-      await prisma.paymentTransaction.update({ where: { id: payment.id }, data: { external_id: providerId, metadata: JSON.stringify({ merchant_reference: merchantReference, admin_payment_id: created.paymentId }) } });
+      await prisma.paymentTransaction.update({ where: { id: payment.id }, data: { external_id: providerId, metadata: JSON.stringify({ conversion, merchant_reference: merchantReference, admin_payment_id: created.paymentId }) } });
       return res.json({ paymentId: payment.id, transactionId: providerId, paymentUrl: created.paymentUrl, amount: created.amount || amount, credits: normalizedCredits });
     } catch (err) {
       await prisma.paymentTransaction.update({ where: { id: payment.id }, data: { status: 'creation_failed', metadata: JSON.stringify({ error: err.response?.data || err.message }) } });
@@ -190,6 +196,21 @@ router.post('/checkout', async (req, res) => {
 router.get('/transactions', async (req, res) => {
   const rows = await prisma.paymentTransaction.findMany({ where: { account_id: req.accountId }, orderBy: { created_at: 'desc' }, take: 100 });
   res.json(rows);
+});
+
+router.get('/usage', async (req, res) => {
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const allowed = [50, 100, 500, 1000];
+  const requested = Number.parseInt(req.query.per_page, 10) || 50;
+  const perPage = allowed.includes(requested) ? requested : 50;
+  const where = { account_id: req.accountId };
+  if (page > 1) await centralSync.syncCreditUsage(req.accountId, page, perPage);
+  const [total, usage, aggregate] = await Promise.all([
+    prisma.creditUsage.count({ where }),
+    prisma.creditUsage.findMany({ where, orderBy: [{ created_at: 'desc' }, { id: 'desc' }], skip: (page - 1) * perPage, take: perPage }),
+    prisma.creditUsage.aggregate({ where, _sum: { tokens_used: true, credits_used: true } })
+  ]);
+  res.json({ usage, summary: { occurrences: total, tokens_used: Number(aggregate._sum.tokens_used || 0), credits_used: Number(aggregate._sum.credits_used || 0) }, pagination: { page, per_page: perPage, total, pages: Math.max(1, Math.ceil(total / perPage)) } });
 });
 
 router.post('/transactions/:id/verify', async (req, res) => {

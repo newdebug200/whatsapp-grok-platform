@@ -19,6 +19,14 @@ router.get('/', authMiddleware, async (req, res) => {
     const featureKeys = ['whatsapp_discussions_enabled','ia_enabled_global','auto_replies_enabled','faq_enabled','quick_replies_enabled','funnel_enabled','sentiments_enabled','sensitive_keywords_enabled','campaigns_enabled','stats_enabled','maintenance_enabled','verification_triggers_enabled','credits_enabled'];
     const centralValues = await Promise.all(featureKeys.map(async key => [key, await centralSync.getFeature(key, config[key] !== 'false')]));
     for (const [key, enabled] of centralValues) config[key] = enabled ? 'true' : 'false';
+    const centralCreditConfig = await centralSync.getCreditConfig();
+    if (centralCreditConfig) {
+      config.tokens_per_credit = String(centralCreditConfig.tokens_per_unit / centralCreditConfig.credits_per_unit);
+      config.credits_per_100k_tokens = String(centralCreditConfig.credits_per_unit);
+      config.credit_value_xof = String(centralCreditConfig.xof_per_unit);
+      config.credit_cost_xof = String(centralCreditConfig.xof_per_credit);
+      config.credit_config_updated_at = centralCreditConfig.updated_at || '';
+    }
     res.json(config);
   } catch (error) {
     console.error('Erreur GET platform-config:', error);

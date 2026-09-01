@@ -22,6 +22,7 @@ model Account {
 
   whatsappProfiles    WhatsAppProfile[]
   creditTransactions  CreditTransaction[]
+  creditUsages        CreditUsage[]
   paymentTransactions  PaymentTransaction[]
   subscriptionPayments SubscriptionPayment[]
   apiKeys              ApiKey[]
@@ -364,6 +365,25 @@ model CreditTransaction {
   created_at  DateTime @default(now())
 
   account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+}
+
+model CreditUsage {
+  id                       Int      @id @default(autoincrement())
+  central_id               Int?     @unique
+  account_id               Int
+  event_type               String
+  tokens_used              Int
+  credits_used             Float
+  tokens_per_unit          Int      @default(100000)
+  credits_per_unit         Float    @default(1)
+  xof_per_unit             Float    @default(120)
+  metadata                 String?
+  created_at               DateTime @default(now())
+
+  account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@index([account_id, created_at])
+  @@index([created_at])
 }
 
 model SubscriptionPlan {

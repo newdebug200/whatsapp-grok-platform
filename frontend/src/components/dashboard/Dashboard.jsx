@@ -14,6 +14,7 @@ import DashboardHome from './DashboardHome';
 import FunnelPage from './FunnelPage';
 import SubscriptionPlans from './SubscriptionPlans';
 import RechargeCredits from './RechargeCredits';
+import CreditUsage from './CreditUsage';
 import Sentiments from './Sentiments';
 import ApiAccess from './ApiAccess';
 import { useLanguage } from '../../context/LanguageContext';
@@ -398,6 +399,9 @@ export default function Dashboard() {
     ...(creditsEnabled ? [{
       key: 'credits', label: t('Recharge credits'),
       icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.75A2.75 2.75 0 0 1 5.75 4h12.5A2.75 2.75 0 0 1 21 6.75v10.5A2.75 2.75 0 0 1 18.25 20H5.75A2.75 2.75 0 0 1 3 17.25V6.75zm3.5 1.5h10.5v1.75H6.5V8.25zm0 4.5h6.25v1.75H6.5v-1.75z"/></svg>
+    }, {
+      key: 'credit-usage', label: t('Credit usage'),
+      icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 4v2h10V7H7zm0 4v2h7v-2H7zm0 4v2h10v-2H7z"/></svg>
     }] : []),
     ...(statsEnabled ? [{
       key: 'stats', label: t('Statistics'),
@@ -815,6 +819,7 @@ export default function Dashboard() {
             {activePanel === 'subscriptions' && <SubscriptionPlans onBack={goHome} />}
             {activePanel === 'api' && <ApiAccess onBack={goHome} />}
             {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBalanceRefresh={refreshAccount} onBack={goHome} />}
+            {activePanel === 'credit-usage' && creditsEnabled && <CreditUsage onBack={goHome} />}
             {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
             {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}

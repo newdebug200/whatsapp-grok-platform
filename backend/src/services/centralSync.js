@@ -62,13 +62,57 @@ async function getCredits(accountId) {
   } catch (error) { console.warn(`[CentralSync] Solde central indisponible: ${error.message}`); return null; }
 }
 
+async function syncCreditUsage(accountId, page = 1, perPage = 1000) {
+  if (!accountId) return false;
+  try {
+    const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
+    if (!account?.email) return false;
+    const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'credit-usage', email: account.email, page, per_page: perPage }, timeout: 15000 });
+    const rows = response.data?.usage || [];
+    for (const row of rows) {
+      let meta = {};
+      try { meta = JSON.parse(row.meta || '{}'); } catch (_) {}
+      const conversion = meta.conversion || {};
+      await prisma.creditUsage.upsert({
+        where: { central_id: Number(row.id) },
+        update: { account_id: Number(accountId), event_type: String(row.event_type || 'ai.usage'), tokens_used: Number(meta.tokens_used || 0), credits_used: Number(row.credits_used || 0), tokens_per_unit: Number(conversion.tokens_per_unit || 100000), credits_per_unit: Number(conversion.credits_per_unit || 1), xof_per_unit: Number(conversion.xof_per_unit ?? 120), metadata: JSON.stringify(meta.payload || {}) },
+        create: { central_id: Number(row.id), account_id: Number(accountId), event_type: String(row.event_type || 'ai.usage'), tokens_used: Number(meta.tokens_used || 0), credits_used: Number(row.credits_used || 0), tokens_per_unit: Number(conversion.tokens_per_unit || 100000), credits_per_unit: Number(conversion.credits_per_unit || 1), xof_per_unit: Number(conversion.xof_per_unit ?? 120), metadata: JSON.stringify(meta.payload || {}) }
+      });
+    }
+    return true;
+  } catch (error) { console.warn(`[CentralSync] Usages non synchronisés: ${error.message}`); return false; }
+}
+
+async function getCreditConfig() {
+  try {
+    const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'credit-config' }, timeout: 8000 });
+    return response.data?.credit_config || null;
+  } catch (error) {
+    console.warn(`[CentralSync] Configuration crédits indisponible: ${error.message}`);
+    return null;
+  }
+}
+
 async function consumeCredits(accountId, tokensUsed, eventType = 'ai.usage', payload = {}) {
   if (!accountId || !tokensUsed) return null;
   try {
     const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
     if (!account?.email) return null;
     const response = await axios.post(`${ADMIN_API}/api/consume-central.php`, { email: account.email, tokens_used: tokensUsed, event_type: eventType, payload }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
-    return response.data;
+    const data = response.data || {};
+    if (data.ok && Number(data.consumed) > 0) {
+      const conversion = data.conversion || { tokens_per_unit: 100000, credits_per_unit: Number(data.consumed) / (Number(tokensUsed) / 100000), xof_per_unit: 120 };
+      const usageData = {
+        account_id: Number(accountId), event_type: String(eventType || 'ai.usage'), tokens_used: Number(tokensUsed), credits_used: Number(data.consumed),
+        tokens_per_unit: Number(conversion.tokens_per_unit || 100000), credits_per_unit: Number(conversion.credits_per_unit || 1), xof_per_unit: Number(conversion.xof_per_unit ?? 120), metadata: JSON.stringify(payload || {})
+      };
+      const centralId = Number(data.usage_id || 0);
+      const save = centralId > 0
+        ? prisma.creditUsage.upsert({ where: { central_id: centralId }, update: usageData, create: { central_id: centralId, ...usageData } })
+        : prisma.creditUsage.create({ data: usageData });
+      save.catch(error => console.warn(`[CentralSync] Usage local non enregistrée: ${error.message}`));
+    }
+    return data;
   } catch (error) { console.warn(`[CentralSync] Consommation centrale impossible: ${error.message}`); return null; }
 }
 
@@ -115,4 +159,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getFeature };
