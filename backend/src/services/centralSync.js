@@ -160,6 +160,49 @@ async function syncApiKeyEvent(accountId, key, event) {
   }
 }
 
+async function getKeywordAutoReplies(profileId) {
+  if (!profileId) return null;
+  try {
+    const context = await prisma.whatsAppProfile.findUnique({ where: { id: Number(profileId) }, select: { account_id: true } });
+    if (!context?.account_id) return null;
+    const account = await prisma.account.findUnique({ where: { id: Number(context.account_id) }, select: { email: true } });
+    if (!account?.email) return null;
+    const response = await axios.get(`${ADMIN_API}/api/keyword-replies.php`, { params: { email: account.email, profile_key: String(profileId) }, timeout: 10000 });
+    const rules = Array.isArray(response.data?.rules) ? response.data.rules : [];
+    for (const rule of rules) {
+      const centralId = Number(rule.id);
+      if (!centralId) continue;
+      const keyword = String(rule.keyword || '').trim();
+      const normalized = String(keyword).normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+      await prisma.keywordAutoReply.upsert({
+        where: { central_id: centralId },
+        update: { profile_id: Number(profileId), keyword, keyword_normalized: normalized, response_text: String(rule.response_text || ''), is_active: Boolean(rule.is_active), central_updated_at: rule.updated_at ? new Date(rule.updated_at) : null },
+        create: { central_id: centralId, profile_id: Number(profileId), keyword, keyword_normalized: normalized, response_text: String(rule.response_text || ''), is_active: Boolean(rule.is_active), central_updated_at: rule.updated_at ? new Date(rule.updated_at) : null }
+      });
+    }
+    const ids = rules.map(rule => Number(rule.id)).filter(Boolean);
+    if (ids.length) await prisma.keywordAutoReply.deleteMany({ where: { profile_id: Number(profileId), central_id: { notIn: ids } } });
+    else await prisma.keywordAutoReply.deleteMany({ where: { profile_id: Number(profileId) } });
+    return rules;
+  } catch (error) {
+    console.warn(`[CentralSync] Réponses automatiques non synchronisées: ${error.message}`);
+    return null;
+  }
+}
+
+async function keywordReplyRequest(profileId, method, payload = {}) {
+  const context = await prisma.whatsAppProfile.findUnique({ where: { id: Number(profileId) }, select: { account_id: true } });
+  const account = context?.account_id ? await prisma.account.findUnique({ where: { id: Number(context.account_id) }, select: { email: true } }) : null;
+  if (!account?.email) throw new Error('Compte utilisateur introuvable.');
+  const body = { ...payload, email: account.email, profile_key: String(profileId) };
+  const response = await axios({ method, url: `${ADMIN_API}/api/keyword-replies.php`, params: method === 'GET' ? body : undefined, data: method === 'GET' ? undefined : body, headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
+  return response.data || {};
+}
+
+async function createKeywordAutoReply(profileId, payload) { return keywordReplyRequest(profileId, 'POST', payload); }
+async function updateKeywordAutoReply(profileId, payload) { return keywordReplyRequest(profileId, 'PATCH', payload); }
+async function deleteKeywordAutoReply(profileId, id) { return keywordReplyRequest(profileId, 'DELETE', { id }); }
+
 async function getFeature(key, fallback = true) {
   try {
     if (Date.now() - featureCache.at > 60000) {
@@ -173,4 +216,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getFeature };
+module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };

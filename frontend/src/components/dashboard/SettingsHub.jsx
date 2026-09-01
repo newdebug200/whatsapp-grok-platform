@@ -5,6 +5,7 @@ import Settings from './Settings';
 import FlagJournal from './FlagJournal';
 import StorageManager from './StorageManager';
 import QuickReplyManager from './QuickReplyManager';
+import KeywordAutoReplyManager from './KeywordAutoReplyManager';
 import TagManager from './TagManager';
 import './SettingsHub.css';
 import { useLanguage } from '../../context/LanguageContext';
@@ -22,6 +23,10 @@ const BOT_TABS = [
   {
     key: 'templates', label: 'Quick replies',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+  },
+  {
+    key: 'keywordReplies', label: 'Automatic replies',
+    icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2zm3 5v2h10V9H7zm0 4v2h7v-2H7z"/></svg>
   },
   {
     key: 'tags', label: 'Tags',
@@ -57,7 +62,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhats
 
   const accountTabs = ACCOUNT_TABS;
   const featureEnabled = (key) => account?.role === 'admin' || platformConfig[key] !== 'false';
-  const visibleBotTabs = BOT_TABS.filter(tab => ({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key] ? featureEnabled(({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key])) : true));
+  const visibleBotTabs = BOT_TABS.filter(tab => ({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', keywordReplies: null, journal: 'sensitive_keywords_enabled' }[tab.key] ? featureEnabled(({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key])) : true));
   useEffect(() => {
     if (tab !== 'account' && !visibleBotTabs.some(item => item.key === tab)) setTab('account');
   }, [tab, visibleBotTabs]);
@@ -93,6 +98,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhats
         )}
         {tab === 'faq' && <FAQManager />}
         {tab === 'templates' && <QuickReplyManager />}
+        {tab === 'keywordReplies' && <KeywordAutoReplyManager activeProfile={activeProfile} />}
         {tab === 'tags' && <TagManager activeProfile={activeProfile} />}
         {tab === 'journal' && <FlagJournal noProfile={noProfile} onGoConfig={onGoConfig} />}
         {tab === 'storage' && <StorageManager isAdmin={account?.role === 'admin'} noProfile={noProfile} onGoConfig={onGoConfig} />}

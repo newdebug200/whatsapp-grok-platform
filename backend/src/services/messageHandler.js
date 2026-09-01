@@ -16,7 +16,26 @@ class MessageHandler {
     this.awaySentMap = new Map();
   }
 
-  _isWithinBusinessHours(botConfig) {
+  _normalizeKeyword(value) {
+    return String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  }
+
+  async _handleKeywordAutoReply(message, client, prisma, profileId, waId, dbContact, waManager) {
+    if (message.hasMedia || !message.body) return false;
+    const incoming = this._normalizeKeyword(message.body);
+    if (!incoming) return false;
+    const rules = await prisma.keywordAutoReply.findMany({ where: { profile_id: profileId, is_active: true } });
+    const matched = rules.find(rule => this._normalizeKeyword(rule.keyword_normalized || rule.keyword) === incoming);
+    if (!matched || !matched.response_text) return false;
+    const sent = await client.sendMessage(waId, matched.response_text);
+    waManager.trackBotSentId(sent?.id?._serialized);
+    waManager.addToCache(profileId, dbContact.id, 'sent', matched.response_text);
+    await prisma.message.create({ data: { contact_id: dbContact.id, content: matched.response_text, direction: 'sent', type: 'text', created_at: new Date(), unread: false } }).catch(() => {});
+    console.log(`[AutoReply] Réponse envoyée — profil=${profileId}, mot-clé=${JSON.stringify(matched.keyword)}`);
+    return true;
+  }
+
+  async _isWithinBusinessHours(botConfig) {
     if (!botConfig.business_hours_enabled) return true;
     const tz = botConfig.timezone || 'UTC';
     let tzDate;
@@ -224,11 +243,8 @@ class MessageHandler {
         }
       }
 
-      // Verification is an explicit service and must remain available even
+      // Verification and explicit automatic replies remain available even
       // when the general AI reply feature is disabled by the administrator.
-      if (!isAdminAccount) {
-        if (!await centralSync.getFeature('ia_enabled_global', true)) return;
-      }
       // ── Sensitive keyword detection ──
       if (await centralSync.getFeature('sensitive_keywords_enabled', true)) {
         if (!message.hasMedia && message.body) {
@@ -246,6 +262,10 @@ class MessageHandler {
         }
       }
 
+      // Les réponses automatiques configurées par l’utilisateur sont prioritaires sur l’IA.
+      if (await this._handleKeywordAutoReply(message, client, prisma, profileId, waId, dbContact, waManager)) return;
+
+      if (!isAdminAccount && !await centralSync.getFeature('ia_enabled_global', true)) return;
       if (skipAI) return;
       if (!isAdminAccount) {
         if (!await centralSync.getFeature('auto_replies_enabled', true)) return;

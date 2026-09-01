@@ -20,9 +20,9 @@ model Account {
   is_blocked         Boolean   @default(false)
   language           String    @default("fr")
 
-  whatsappProfiles    WhatsAppProfile[]
-  creditTransactions  CreditTransaction[]
-  creditUsages        CreditUsage[]
+  whatsappProfiles     WhatsAppProfile[]
+  creditTransactions   CreditTransaction[]
+  creditUsages         CreditUsage[]
   paymentTransactions  PaymentTransaction[]
   subscriptionPayments SubscriptionPayment[]
   apiKeys              ApiKey[]
@@ -47,6 +47,7 @@ model WhatsAppProfile {
   sensitiveFlags       SensitiveFlag[]
   tags                 Tag[]
   quickReplies         QuickReply[]
+  keywordAutoReplies   KeywordAutoReply[]
   statuses             Status[]
 
   @@unique([account_id, phone_number])
@@ -169,6 +170,24 @@ model QuickReply {
   updated_at DateTime @updatedAt
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+}
+
+model KeywordAutoReply {
+  id                 Int       @id @default(autoincrement())
+  central_id         Int?      @unique
+  profile_id         Int
+  keyword            String
+  keyword_normalized String
+  response_text      String
+  is_active          Boolean   @default(true)
+  central_updated_at DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  profile WhatsAppProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@unique([profile_id, keyword_normalized])
+  @@index([profile_id, is_active])
 }
 
 model Campaign {
@@ -318,19 +337,19 @@ model PaymentWebhookEvent {
 }
 
 model SubscriptionPayment {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   account_id      Int
-  provider        String   @default("fedapay")
-  external_id     String   @unique
+  provider        String    @default("fedapay")
+  external_id     String    @unique
   amount_xof      Int
-  duration_days   Int      @default(365)
-  status          String   @default("pending")
+  duration_days   Int       @default(365)
+  status          String    @default("pending")
   description     String?
   metadata        String?
   approved_at     DateTime?
   last_checked_at DateTime?
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
 
   account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
 
@@ -339,8 +358,8 @@ model SubscriptionPayment {
 }
 
 model ApiKey {
-    id           Int      @id @default(autoincrement())
-  key_uid      String   @unique @default(cuid())
+  id           Int       @id @default(autoincrement())
+  key_uid      String    @unique @default(cuid())
   account_id   Int
   name         String
   prefix       String
@@ -368,17 +387,17 @@ model CreditTransaction {
 }
 
 model CreditUsage {
-  id                       Int      @id @default(autoincrement())
-  central_id               Int?     @unique
-  account_id               Int
-  event_type               String
-  tokens_used              Int
-  credits_used             Float
-  tokens_per_unit          Int      @default(100000)
-  credits_per_unit         Float    @default(1)
-  xof_per_unit             Float    @default(120)
-  metadata                 String?
-  created_at               DateTime @default(now())
+  id               Int      @id @default(autoincrement())
+  central_id       Int?     @unique
+  account_id       Int
+  event_type       String
+  tokens_used      Int
+  credits_used     Float
+  tokens_per_unit  Int      @default(100000)
+  credits_per_unit Float    @default(1)
+  xof_per_unit     Float    @default(120)
+  metadata         String?
+  created_at       DateTime @default(now())
 
   account Account @relation(fields: [account_id], references: [id], onDelete: Cascade)
 

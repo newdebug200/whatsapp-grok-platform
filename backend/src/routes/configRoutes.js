@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
+const centralSync = require('../services/centralSync');
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
@@ -178,6 +179,81 @@ router.delete('/keywords/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la suppression' });
+  }
+});
+
+// ── Réponses automatiques par mot-clé ───────────────────────────────
+
+function normalizeKeyword(value) {
+  return String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+}
+
+router.get('/keyword-replies', async (req, res) => {
+  try {
+    await centralSync.getKeywordAutoReplies(req.profileId);
+    const rules = await prisma.keywordAutoReply.findMany({ where: { profile_id: req.profileId }, orderBy: [{ created_at: 'desc' }, { id: 'desc' }] });
+    res.json(rules);
+  } catch (error) {
+    console.error('Erreur GET keyword replies:', error);
+    res.status(500).json({ error: 'Impossible de charger les réponses automatiques.' });
+  }
+});
+
+router.post('/keyword-replies', async (req, res) => {
+  try {
+    const keyword = String(req.body?.keyword || '').trim();
+    const responseText = String(req.body?.response_text || '').trim();
+    const normalized = normalizeKeyword(keyword);
+    if (!normalized || keyword.length > 255) return res.status(400).json({ error: 'Le mot-clé est requis et ne peut pas dépasser 255 caractères.' });
+    if (!responseText || responseText.length > 4000) return res.status(400).json({ error: 'La réponse est requise et ne peut pas dépasser 4 000 caractères.' });
+    const duplicate = await prisma.keywordAutoReply.findFirst({ where: { profile_id: req.profileId, keyword_normalized: normalized } });
+    if (duplicate) return res.status(409).json({ error: 'Ce mot-clé existe déjà pour ce profil.' });
+    const result = await centralSync.createKeywordAutoReply(req.profileId, { keyword, response_text: responseText, is_active: req.body?.is_active !== false });
+    if (!result?.ok || !result.rule?.id) return res.status(502).json({ error: 'La réponse automatique n’a pas pu être enregistrée.' });
+    const rule = await prisma.keywordAutoReply.create({ data: { central_id: Number(result.rule.id), profile_id: req.profileId, keyword: result.rule.keyword || keyword, keyword_normalized: normalized, response_text: result.rule.response_text || responseText, is_active: result.rule.is_active !== false, central_updated_at: result.rule.updated_at ? new Date(result.rule.updated_at) : null } });
+    res.status(201).json(rule);
+  } catch (error) {
+    console.error('Erreur POST keyword replies:', error);
+    const status = error.response?.status === 409 ? 409 : 500;
+    res.status(status).json({ error: status === 409 ? 'Ce mot-clé existe déjà pour ce profil.' : 'Impossible d’enregistrer la réponse automatique.' });
+  }
+});
+
+router.patch('/keyword-replies/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await prisma.keywordAutoReply.findFirst({ where: { id, profile_id: req.profileId } });
+    if (!existing) return res.status(404).json({ error: 'Réponse automatique introuvable.' });
+    const keyword = req.body?.keyword !== undefined ? String(req.body.keyword).trim() : existing.keyword;
+    const responseText = req.body?.response_text !== undefined ? String(req.body.response_text).trim() : existing.response_text;
+    const normalized = normalizeKeyword(keyword);
+    if (!normalized || keyword.length > 255) return res.status(400).json({ error: 'Le mot-clé est requis et ne peut pas dépasser 255 caractères.' });
+    if (!responseText || responseText.length > 4000) return res.status(400).json({ error: 'La réponse est requise et ne peut pas dépasser 4 000 caractères.' });
+    const duplicate = await prisma.keywordAutoReply.findFirst({ where: { profile_id: req.profileId, keyword_normalized: normalized, NOT: { id } } });
+    if (duplicate) return res.status(409).json({ error: 'Ce mot-clé existe déjà pour ce profil.' });
+    const result = await centralSync.updateKeywordAutoReply(req.profileId, { id: existing.central_id, keyword, response_text: responseText, is_active: req.body?.is_active !== undefined ? Boolean(req.body.is_active) : existing.is_active });
+    if (!result?.ok) return res.status(502).json({ error: 'La réponse automatique n’a pas pu être mise à jour.' });
+    const rule = await prisma.keywordAutoReply.update({ where: { id }, data: { keyword, keyword_normalized: normalized, response_text: responseText, is_active: req.body?.is_active !== undefined ? Boolean(req.body.is_active) : existing.is_active, central_updated_at: new Date() } });
+    res.json(rule);
+  } catch (error) {
+    console.error('Erreur PATCH keyword replies:', error);
+    const status = error.response?.status === 409 ? 409 : 500;
+    res.status(status).json({ error: status === 409 ? 'Ce mot-clé existe déjà pour ce profil.' : 'Impossible de mettre à jour la réponse automatique.' });
+  }
+});
+
+router.delete('/keyword-replies/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await prisma.keywordAutoReply.findFirst({ where: { id, profile_id: req.profileId } });
+    if (!existing) return res.status(404).json({ error: 'Réponse automatique introuvable.' });
+    const result = await centralSync.deleteKeywordAutoReply(req.profileId, existing.central_id);
+    if (!result?.ok) return res.status(502).json({ error: 'La réponse automatique n’a pas pu être supprimée.' });
+    await prisma.keywordAutoReply.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erreur DELETE keyword replies:', error);
+    res.status(500).json({ error: 'Impossible de supprimer la réponse automatique.' });
   }
 });
 

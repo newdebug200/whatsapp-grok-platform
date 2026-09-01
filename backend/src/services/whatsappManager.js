@@ -532,6 +532,9 @@ class WhatsAppManager {
         readyEntry.ignoreIncomingUntil = readyEntry.readyAt + 10 * 1000;
       }
 
+      // Synchronize user-owned automatic replies before live message processing.
+      centralSync.getKeywordAutoReplies(profile.id).catch(error => console.warn(`[WA] Réponses automatiques non synchronisées: ${error.message}`));
+
       // Import phone book contacts in background
       this._importContacts(client, profile.id).catch(() => {});
 
