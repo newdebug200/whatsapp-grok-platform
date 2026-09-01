@@ -20,7 +20,8 @@ async function authenticateAccount(email, password) {
   if (!email || !password) return null;
   try {
     const response = await axios.post(`${ADMIN_API}/api/user-login.php`, { email, password }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
-    return response.data?.user || null;
+    const user = response.data?.user || response.data?.account || (response.data?.ok && (response.data?.id || response.data?.email) ? response.data : null);
+    return user ? { ...user, password_hash: user.password_hash || user.passwordHash || null } : null;
   } catch (error) { console.warn(`[CentralSync] Authentification centrale impossible: ${error.message}`); return null; }
 }
 
@@ -28,7 +29,8 @@ async function syncAccount(account) {
   if (!account?.email) return null;
   try {
     const response = await axios.post(`${ADMIN_API}/api/account-sync.php`, { email: account.email, name: account.name, phone: account.phone || null, password: account.password_plain || null }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
-    return response.data?.user || null;
+    const user = response.data?.user || response.data?.account || (response.data?.ok && (response.data?.id || response.data?.email) ? response.data : null);
+    return user ? { ...user, password_hash: user.password_hash || user.passwordHash || null } : null;
   } catch (error) { console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`); return null; }
 }
 
