@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import './KeywordAutoReplyManager.css';
 
 export default function KeywordAutoReplyManager({ activeProfile }) {
   const [rules, setRules] = useState([]);
@@ -53,24 +54,28 @@ export default function KeywordAutoReplyManager({ activeProfile }) {
     catch (err) { setError(err.response?.data?.error || 'Impossible de supprimer cette réponse.'); }
   };
 
-  if (!activeProfile) return <div className="settings-empty">Connectez d’abord un compte WhatsApp pour configurer les réponses automatiques.</div>;
+  if (!activeProfile) return <div className="keyword-replies-empty"><span className="keyword-replies-empty-icon">↪</span><strong>Connectez un compte WhatsApp</strong><p>Associez d’abord un profil WhatsApp pour configurer vos réponses automatiques.</p></div>;
 
-  return <section className="settings-panel">
-    <div className="settings-panel-header">
+  return <section className="keyword-replies-panel">
+    <div className="keyword-replies-header">
       <div><h2>Réponses automatiques</h2><p>Répondez automatiquement à un message exact. La casse est ignorée : « Bonjour », « bonjour » et « BONJOUR » correspondent au même mot-clé.</p></div>
     </div>
-    {error && <div className="settings-alert error">{error}</div>}
-    {notice && <div className="settings-alert success">{notice}</div>}
-    <form onSubmit={submit} className="settings-form-grid">
-      <label>Mot-clé<input value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={255} placeholder="Bonjour" /></label>
-      <label>Réponse à envoyer<textarea value={responseText} onChange={e => setResponseText(e.target.value)} maxLength={4000} rows={3} placeholder="Bonjour, comment pouvons-nous vous aider ?" /></label>
-      <div className="settings-form-actions"><button type="submit" disabled={saving}>{saving ? 'Enregistrement…' : editingId ? 'Mettre à jour' : 'Ajouter'}</button>{editingId && <button type="button" className="secondary" onClick={reset}>Annuler</button>}</div>
+    {error && <div className="keyword-replies-alert keyword-replies-alert-error" role="alert"><strong>Un problème est survenu</strong><span>{error}</span></div>}
+    {notice && <div className="keyword-replies-alert keyword-replies-alert-success" role="status"><strong>Modification enregistrée</strong><span>{notice}</span></div>}
+    <form onSubmit={submit} className="keyword-replies-form">
+      <div className="keyword-replies-form-heading"><div><span className="keyword-replies-section-label">Nouvelle règle</span><h3>{editingId ? 'Modifier la réponse' : 'Créer une réponse automatique'}</h3><p>La règle s’applique lorsque le message reçu correspond au mot-clé, sans tenir compte des majuscules et minuscules.</p></div><span className="keyword-replies-form-badge">{editingId ? 'Modification' : 'Disponible'}</span></div>
+      <div className="keyword-replies-fields"><label><span>Mot-clé</span><small>Le texte à reconnaître</small><input value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={255} placeholder="Bonjour" /></label>
+      <label><span>Réponse à envoyer</span><small>Le message envoyé automatiquement</small><textarea value={responseText} onChange={e => setResponseText(e.target.value)} maxLength={4000} rows={4} placeholder="Bonjour, comment pouvons-nous vous aider ?" /></label></div>
+      <div className="keyword-replies-form-actions"><button type="submit" className="keyword-replies-primary-action" disabled={saving}>{saving ? 'Enregistrement…' : editingId ? 'Mettre à jour' : 'Ajouter la réponse'}</button>{editingId && <button type="button" className="keyword-replies-secondary-action" onClick={reset}>Annuler</button>}</div>
     </form>
-    <div className="settings-list">
-      {loading ? <p>Chargement…</p> : rules.length === 0 ? <p className="muted">Aucune réponse automatique configurée.</p> : rules.map(rule => <article className={`settings-list-item ${rule.is_active ? '' : 'is-disabled'}`} key={rule.id}>
-        <div><strong>{rule.keyword}</strong><p>{rule.response_text}</p></div>
-        <div className="settings-item-actions"><button type="button" onClick={() => toggle(rule)}>{rule.is_active ? 'Désactiver' : 'Activer'}</button><button type="button" onClick={() => edit(rule)}>Modifier</button><button type="button" className="danger" onClick={() => remove(rule)}>Supprimer</button></div>
+    <div className="keyword-replies-list-section">
+      <div className="keyword-replies-list-heading"><div><span className="keyword-replies-section-label">Règles enregistrées</span><h3>Vos réponses automatiques</h3></div><span className="keyword-replies-count">{rules.length} {rules.length === 1 ? 'règle' : 'règles'}</span></div>
+      <div className="keyword-replies-list">
+      {loading ? <div className="keyword-replies-state"><span className="keyword-replies-spinner" />Chargement des règles…</div> : rules.length === 0 ? <div className="keyword-replies-state keyword-replies-state-empty"><span className="keyword-replies-state-icon">＋</span><strong>Aucune réponse automatique</strong><p>Créez votre première règle ci-dessus pour répondre automatiquement à un mot-clé.</p></div> : rules.map(rule => <article className={`keyword-replies-item ${rule.is_active ? '' : 'is-disabled'}`} key={rule.id}>
+        <div className="keyword-replies-item-content"><div className="keyword-replies-item-keyword"><span className="keyword-replies-keyword-dot" />{rule.keyword}<span className={`keyword-replies-status ${rule.is_active ? 'active' : 'inactive'}`}>{rule.is_active ? 'Active' : 'Inactive'}</span></div><p>{rule.response_text}</p></div>
+        <div className="keyword-replies-item-actions"><button type="button" className="keyword-replies-action" onClick={() => toggle(rule)}>{rule.is_active ? 'Désactiver' : 'Activer'}</button><button type="button" className="keyword-replies-action" onClick={() => edit(rule)}>Modifier</button><button type="button" className="keyword-replies-action keyword-replies-danger" onClick={() => remove(rule)}>Supprimer</button></div>
       </article>)}
+      </div>
     </div>
   </section>;
 }
