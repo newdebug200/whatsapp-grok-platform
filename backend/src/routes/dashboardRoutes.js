@@ -8,13 +8,6 @@ const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 router.use(authMiddleware);
 router.use(profileMiddleware);
 
-const FUNNEL_STAGES = ['prospect', 'interesse', 'client', 'fidele'];
-const STAGE_LABELS = {
-  prospect: 'Prospect',
-  interesse: 'Intéressé',
-  client: 'Client',
-  fidele: 'Fidèle'
-};
 const NEGATIVE_SENTIMENTS = ['colere', 'negatif', 'frustre', 'inquiet', 'confus', 'urgent'];
 const SENTIMENT_CATEGORIES = ['positif', 'neutre', 'negatif', 'colere', 'satisfait', 'frustre', 'inquiet', 'confus', 'reconnaissant', 'urgent'];
 
@@ -36,7 +29,6 @@ router.get('/overview', async (req, res) => {
       pausedContactsList,
       sentimentAlerts,
       sentimentAlertsList,
-      funnelCounts,
       messagesReceivedToday,
       messagesSentToday,
       totalContacts,
@@ -74,12 +66,6 @@ router.get('/overview', async (req, res) => {
         orderBy: { created_at: 'desc' },
         take: 5,
       }),
-      Promise.all(
-        FUNNEL_STAGES.map(stage =>
-          prisma.contact.count({ where: { profile_id: profileId, funnel_stage: stage, archived: false } })
-            .then(count => ({ stage, label: STAGE_LABELS[stage], count }))
-        )
-      ),
       prisma.message.count({
         where: { direction: 'received', created_at: { gte: startOfToday }, contact: { profile_id: profileId } },
       }),
@@ -135,7 +121,6 @@ router.get('/overview', async (req, res) => {
       pausedContactsList,
       sentimentAlerts,
       sentimentAlertsList,
-      funnelCounts,
       today: { received: messagesReceivedToday, sent: messagesSentToday },
       totalContacts,
       dailyMessages,

@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../prisma');
-const { authMiddleware, profileMiddleware } = require('../middleware/auth');
+const { authMiddleware, profileMiddleware, adminMiddleware } = require('../middleware/auth');
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
+router.use(adminMiddleware);
 
 const FUNNEL_STAGES = ['prospect', 'interesse', 'client', 'fidele'];
 const STAGE_LABELS = {

@@ -4,7 +4,6 @@ import './DashboardHome.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-const FUNNEL_COLORS = { prospect: '#8e9baa', interesse: '#e0ab00', client: '#25d366', fidele: '#9b59b6' };
 const avatarColors = ['#25d366', '#128c7e', '#075e54', '#34b7f1', '#667eea', '#e0ab00', '#fd79a8'];
 const getColor = (id) => avatarColors[(id || 0) % avatarColors.length];
 
@@ -37,14 +36,12 @@ export default function DashboardHome({
   }, [load]);
 
   const needsAttention = data && (data.pausedContacts > 0 || data.sentimentAlerts > 0);
-  const totalFunnel = data ? (data.funnelCounts.reduce((s, c) => s + c.count, 0) || 1) : 1;
   const maxDaily = data ? Math.max(1, ...data.dailyMessages.map(d => d.sent + d.received)) : 1;
   const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
   const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
 
   const sections = [
     ...(featureEnabled('whatsapp_discussions_enabled') ? [{ key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null }] : []),
-    ...(featureEnabled('funnel_enabled') ? [{ key: 'funnel', label: 'Entonnoir', desc: 'Suivi des prospects par étape', emoji: '📊', color: '#667eea' }] : []),
     { key: 'subscriptions', label: 'Abonnements', desc: 'Voir les offres Botora', emoji: '◈', color: '#0aa37f' },
     { key: 'credits', label: 'Recharger les crédits', desc: 'Payer avec FedaPay', emoji: '₣', color: '#0aa37f' },
     ...(featureEnabled('stats_enabled') ? [{ key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈', color: '#34b7f1' }] : []),
@@ -170,33 +167,6 @@ export default function DashboardHome({
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* Entonnoir résumé */}
-            <div className="dh-card">
-              <div className="dh-card-title">
-                Entonnoir de contacts
-                <button className="dh-link" onClick={() => onGoTo('funnel')}>Voir tout →</button>
-              </div>
-              <div className="dh-funnel-bar">
-                {data.funnelCounts.map(c => (
-                  <div
-                    key={c.stage}
-                    className="dh-funnel-seg"
-                    style={{ width: `${(c.count / totalFunnel) * 100}%`, background: FUNNEL_COLORS[c.stage] }}
-                    title={`${c.label}: ${c.count}`}
-                  />
-                ))}
-              </div>
-              <div className="dh-funnel-legend">
-                {data.funnelCounts.map(c => (
-                  <div key={c.stage} className="dh-funnel-legend-item">
-                    <span className="dh-funnel-dot" style={{ background: FUNNEL_COLORS[c.stage] }} />
-                    <span className="dh-funnel-legend-label">{c.label}</span>
-                    <span className="dh-funnel-legend-count">{c.count}</span>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* Activité de la semaine */}

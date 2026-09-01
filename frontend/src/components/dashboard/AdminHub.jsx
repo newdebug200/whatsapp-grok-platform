@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import AdminPanel from './AdminPanel';
+import Funnel from './Funnel';
 import './AdminHub.css';
 
 const ADMIN_PAGES = [
   { key: 'verification', label: 'Vérification', description: 'Configurez les déclencheurs de vérification WhatsApp.', icon: '✓' },
   { key: 'dressur', label: 'File WhatsApp', description: 'Supervisez les envois et leur progression.', icon: '↗' },
+  { key: 'funnel', label: 'Entonnoir de contacts', description: 'Suivez les contacts par étape commerciale.', icon: '◈' },
 ];
 
 export default function AdminHub({ account, onBack }) {
@@ -33,7 +35,8 @@ export default function AdminHub({ account, onBack }) {
         ))}
       </nav>
       <div className="admin-page-heading"><div><span className="admin-workspace-kicker">Administration / {current.label}</span><h2>{current.label}</h2><p>{current.description}</p></div></div>
-      {['verification', 'dressur'].includes(page) ? <AdminPanel section={page} /> : null}
+      {['verification', 'dressur'].includes(page) && <AdminPanel section={page} />}
+      {page === 'funnel' && <Funnel />}
     </section>
   );
 }

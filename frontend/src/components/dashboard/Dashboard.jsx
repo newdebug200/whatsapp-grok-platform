@@ -11,7 +11,6 @@ import SettingsHub from './SettingsHub';
 import AdminHub from './AdminHub';
 import { AboutPage, HowItWorksPage } from './InfoPages';
 import DashboardHome from './DashboardHome';
-import FunnelPage from './FunnelPage';
 import SubscriptionPlans from './SubscriptionPlans';
 import RechargeCredits from './RechargeCredits';
 import CreditUsage from './CreditUsage';
@@ -384,7 +383,6 @@ export default function Dashboard() {
   const campaignsEnabled = featureEnabled('campaigns_enabled');
   const creditsEnabled = featureEnabled('credits_enabled');
   const iaGlobalEnabled = featureEnabled('ia_enabled_global');
-  const funnelEnabled = featureEnabled('funnel_enabled');
   const sentimentsEnabled = featureEnabled('sentiments_enabled');
   const statsEnabled = featureEnabled('stats_enabled');
   const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
@@ -475,7 +473,6 @@ export default function Dashboard() {
 
   const appNavItems = [
     ...navItems,
-    ...(funnelEnabled ? [{ key: 'funnel', label: t('Funnel'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4zm4.2 2l4.8 5.5L16.8 6H7.2z"/></svg> }] : []),
     { key: 'subscriptions', label: t('Subscriptions'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm3 1v2h10V6H7zm0 5v2h10v-2H7zm0 5v2h6v-2H7z"/></svg> },
     { key: 'api', label: t('API access'), icon: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7a5 5 0 0 1 9.9-1H20v4h-3.1A5 5 0 0 1 7 7zm5-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM4 14h13v3H4v-3zm0 5h9v3H4v-3z"/></svg> }
   ];
@@ -648,7 +645,6 @@ export default function Dashboard() {
                         {item.label}
                       </button>
                     ))}
-                    <button className="dropdown-item" onClick={() => { setShowMenu(false); setActivePanel('funnel'); }}>Entonnoir</button>
                     <div className="dropdown-divider" />
                     <div className="dropdown-section-label">{t('Account')}</div>
                     <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
@@ -822,7 +818,6 @@ export default function Dashboard() {
             {activePanel === 'api' && <ApiAccess onBack={goHome} />}
             {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBalanceRefresh={refreshAccount} onBack={goHome} />}
             {activePanel === 'credit-usage' && creditsEnabled && <CreditUsage onBack={goHome} />}
-            {activePanel === 'funnel' && funnelEnabled && <FunnelPage onBack={goHome} noProfile={noProfile} onGoConfig={() => goToSettings('config')} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />}
             {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
             {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
             {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
