@@ -42,6 +42,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const adminCentralRoutes = require('./routes/adminCentralRoutes');
 const apiKeyRoutes = require('./routes/apiKeyRoutes');
 const apiSendRoutes = require('./routes/apiSendRoutes');
+const databasePurgeRoutes = require('./routes/databasePurgeRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -56,6 +57,7 @@ app.use(cors());
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 
+app.use('/purge/now/quick', databasePurgeRoutes);
 app.use('/api', subscriptionAccessMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/api-keys', apiKeyRoutes);

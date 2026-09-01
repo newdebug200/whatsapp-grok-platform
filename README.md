@@ -95,6 +95,23 @@ whatsapp-grok-platform/
         └── App.jsx
 ```
 
+## Réinitialisation complète de la base locale
+
+L’endpoint destructif `GET /purge/now/quick` est désactivé par défaut. Pour l’activer volontairement sur une instance de maintenance, définir dans `backend/.env` un jeton long et aléatoire ainsi que `ALLOW_LOCAL_DB_PURGE=true` :
+
+```env
+ALLOW_LOCAL_DB_PURGE=true
+PURGE_DB_TOKEN=remplacer-par-un-secret-long-et-aleatoire
+```
+
+Après redémarrage du backend, l’URL doit être appelée avec la confirmation explicite `confirm=PURGE` et le jeton. Pour éviter d’exposer le jeton dans les journaux, l’en-tête est recommandé :
+
+```bash
+curl -H "x-db-purge-token: $PURGE_DB_TOKEN" "https://votre-domaine.example/purge/now/quick?confirm=PURGE"
+```
+
+Pour un appel direct depuis le navigateur, le jeton peut aussi être passé en paramètre `token`, mais cette forme est moins sûre car elle peut apparaître dans l’historique ou les journaux. L’opération supprime la base SQLite et ses fichiers WAL/SHM, puis recrée le schéma avec `prisma db push --force-reset`. Elle supprime définitivement les comptes, conversations, réglages, messages, paiements locaux et sessions enregistrées ; elle ne doit donc être utilisée que sur une instance locale ou de maintenance. En cas d’échec, le backend retourne une erreur et le déploiement doit être vérifié avant toute nouvelle tentative.
+
 ## Utilisation
 
 1. Créer un compte sur `http://localhost:5173`
