@@ -40,17 +40,17 @@ router.post('/register', authLimiter, async (req, res) => {
 
     let centralUser = await centralSync.syncAccount({ email: email.toLowerCase(), password_plain: password, name, phone: null });
     // account-sync peut avoir créé le compte même si sa réponse a été interrompue ou incomplète.
-    // Une vérification login centrale confirme alors le compte sans le recréer.
-    if (!centralUser?.password_hash) {
+    // On confirme d’abord le succès central, puis on conserve le mot de passe uniquement sous forme de hash local.
+    if (!centralUser?._centralConfirmed) {
       const confirmedUser = await centralSync.authenticateAccount(email.toLowerCase(), password);
-      if (confirmedUser?.password_hash) centralUser = confirmedUser;
-      else if (centralUser?.id || centralUser?.email) centralUser = { ...centralUser, password_hash: await bcrypt.hash(password, 12) };
+      if (confirmedUser?._centralConfirmed) centralUser = confirmedUser;
     }
-    if (!centralUser?.password_hash) {
+    if (!centralUser?._centralConfirmed) {
       return res.status(502).json({ error: 'Le compte n’a pas été confirmé par l’API centrale. Inscription non validée.' });
     }
+    const localPasswordHash = await bcrypt.hash(password, 12);
     const account = await prisma.account.create({
-      data: { email: email.toLowerCase(), password: centralUser.password_hash, name, role }
+      data: { email: email.toLowerCase(), password: localPasswordHash, name, role }
     });
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language), control_center_access: centralUser?.control_center_access ?? null } });
