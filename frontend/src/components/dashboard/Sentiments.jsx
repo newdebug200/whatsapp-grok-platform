@@ -10,7 +10,7 @@ const SENTIMENT_LABELS = {
   reconnaissant: 'Reconnaissant', urgent: 'Urgent'
 };
 
-export default function Sentiments({ onSelectContact }) {
+export default function Sentiments({ onSelectContact, onBack }) {
   const [filter, setFilter] = useState('negative');
   const [messages, setMessages] = useState([]);
   const [counts, setCounts] = useState({ all: 0, angry: 0, negative: 0 });
@@ -41,7 +41,10 @@ export default function Sentiments({ onSelectContact }) {
           <h1>Traitement des sentiments</h1>
           <p>Identifiez rapidement les clients qui nécessitent une réponse ou une intervention.</p>
         </div>
-        <button className="sentiments-refresh" onClick={load} disabled={loading} aria-label="Actualiser">↻ Actualiser</button>
+        <div className="sentiments-header-actions">
+          {onBack && <button className="sentiments-back" onClick={onBack}>← Retour</button>}
+          <button className="sentiments-refresh" onClick={load} disabled={loading} aria-label="Actualiser">↻ Actualiser</button>
+        </div>
       </header>
 
       <div className="sentiments-stats">

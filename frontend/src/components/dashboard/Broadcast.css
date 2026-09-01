@@ -850,3 +850,15 @@
   .bc-card { padding: 16px; }
   .bc-card-actions > button { flex: 1 1 auto; justify-content: center; }
 }
+
+/* Header et largeur communs du workspace Botora. */
+.bc-panel { width: 100%; max-width: none; margin: 0; }
+.bc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.bc-toolbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.bc-toolbar-actions .bc-back { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 9px 13px; border: 1px solid var(--border, #dce5e8); border-radius: 10px; background: var(--bg-primary, #fff); color: var(--text-primary, #30434c); font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; }
+.bc-toolbar-actions .bc-back:hover { border-color: var(--accent, #0aa37f); color: var(--accent-dark, #08745f); }
+@media (max-width: 720px) {
+  .bc-toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .bc-toolbar-actions { width: 100%; justify-content: flex-start; }
+  .bc-toolbar-actions > button { flex: 1 1 auto; }
+}

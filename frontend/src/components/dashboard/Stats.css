@@ -463,3 +463,15 @@
 [data-theme="dark"] .top-contact-rank { color: var(--text-muted); }
 [data-theme="dark"] .chart-col.today .chart-label { color: var(--accent); }
 [data-theme="dark"] .top-contact-count { background: rgba(37,211,102,.14); color: #6ee7a0; }
+
+/* Workspace pleine largeur et actions de header uniformes. */
+.stats-panel { width: 100%; max-width: none; margin: 0; }
+.stats-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.stats-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.stats-back { min-height: 40px; padding: 9px 13px; border: 1px solid var(--border, #dce5e8); border-radius: 10px; background: var(--bg-primary, #fff); color: var(--text-primary, #30434c); font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; }
+.stats-back:hover { border-color: var(--accent, #0aa37f); color: var(--accent-dark, #08745f); }
+@media (max-width: 620px) {
+  .stats-header { align-items: flex-start; flex-wrap: wrap; }
+  .stats-header-actions { width: 100%; justify-content: flex-start; }
+  .stats-header-actions > button { flex: 1 1 auto; }
+}

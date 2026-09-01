@@ -507,7 +507,7 @@ export default function Dashboard() {
           </div>
           <div className="app-navigation-links">
             {appNavItems.map(item => (
-              <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => item.key === 'funnel' ? setActivePanel('funnel') : handleNavClick(item.key)}>
+              <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => handleNavClick(item.key)}>
                 <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
                 {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
               </button>
@@ -777,12 +777,12 @@ export default function Dashboard() {
             )
           )}
           {activePanel === 'stats' && (
-            noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />
+            noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} onBack={goHome} />
           )}
           {activePanel === 'broadcast' && campaignsEnabled && (
             noProfile
               ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} />
-              : <Broadcast socket={socket} activeProfile={activeProfile} />
+              : <Broadcast socket={socket} activeProfile={activeProfile} onBack={goHome} />
           )}
           {(activePanel === 'bot' || activePanel === 'settings') && (
             <SettingsHub
@@ -796,6 +796,7 @@ export default function Dashboard() {
               noProfile={noProfile}
               onGoConfig={() => goToSettings('config')}
               platformConfig={platformConfig}
+              onBack={goHome}
             />
           )}
         </div>
@@ -818,10 +819,10 @@ export default function Dashboard() {
             {activePanel === 'api' && <ApiAccess onBack={goHome} />}
             {activePanel === 'credits' && <RechargeCredits creditBalance={creditBalance} onBalanceRefresh={refreshAccount} onBack={goHome} />}
             {activePanel === 'credit-usage' && creditsEnabled && <CreditUsage onBack={goHome} />}
-            {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} />)}
-            {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
-            {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} />)}
-            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onResyncWhatsApp={handleResyncWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} noProfile={noProfile} onGoConfig={() => goToSettings('config')} platformConfig={platformConfig} />}
+            {activePanel === 'stats' && statsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Stats socket={socket} onBack={goHome} />)}
+            {activePanel === 'sentiments' && sentimentsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Sentiments onBack={goHome} onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }} />)}
+            {activePanel === 'broadcast' && campaignsEnabled && (noProfile ? <NoProfilePlaceholder onGoConfig={() => goToSettings('config')} /> : <Broadcast socket={socket} activeProfile={activeProfile} onBack={goHome} />)}
+            {(activePanel === 'bot' || activePanel === 'settings') && <SettingsHub waStatus={waStatus} onConnectWhatsApp={handleConnectWhatsApp} onResyncWhatsApp={handleResyncWhatsApp} onLogoutWhatsApp={handleLogoutWhatsApp} activeProfile={activeProfile} account={account} initialTab={settingsInitialTab} noProfile={noProfile} onGoConfig={() => goToSettings('config')} platformConfig={platformConfig} onBack={goHome} />}
           </div>
         )}
       </main>

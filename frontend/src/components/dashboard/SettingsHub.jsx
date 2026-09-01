@@ -41,9 +41,7 @@ const BOT_TABS = [
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M4 4h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2V6a2 2 0 0 1 2-2zm0 8h16a2 2 0 0 1 2 2v2c0 1.1-1.8 2-4 2H6c-2.2 0-4-.9-4-2v-2a2 2 0 0 1 2-2zm2-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 8a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
   },
 ];
-// Note: "Prospects" (the funnel/entonnoir) used to live here as a sub-tab under
-// Bot & WhatsApp. It's now a top-level sidebar item (see Dashboard.jsx) for
-// better visibility, since it's a sales/follow-up tool, not a bot config screen.
+// L’Entonnoir de contacts est réservé au Centre de contrôle administrateur.
 
 const ACCOUNT_TABS = [
   {
@@ -52,7 +50,7 @@ const ACCOUNT_TABS = [
   },
 ];
 
-export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, noProfile, onGoConfig, platformConfig = {} }) {
+export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhatsApp, onLogoutWhatsApp, activeProfile, account, initialTab, noProfile, onGoConfig, onBack, platformConfig = {} }) {
   const { t } = useLanguage();
   const [tab, setTab] = useState(initialTab || 'config');
 
@@ -66,6 +64,24 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhats
   useEffect(() => {
     if (tab !== 'account' && !visibleBotTabs.some(item => item.key === tab)) setTab('account');
   }, [tab, visibleBotTabs]);
+
+  const currentTab = [...visibleBotTabs, ...accountTabs].find(item => item.key === tab) || visibleBotTabs[0] || accountTabs[0];
+  const getTabLabel = (item) => {
+    if (!item) return 'Réglages';
+    if (item.key === 'config') return 'Réglages Bot';
+    if (item.key === 'keywordReplies') return 'Réponses automatiques';
+    return item.label === 'FAQ' || item.label === 'Tags' ? item.label : t(item.label);
+  };
+  const pageDescriptions = {
+    config: 'Configurez le bot, les options IA et la connexion WhatsApp.',
+    faq: 'Gérez les questions et réponses utilisées par votre bot.',
+    templates: 'Préparez des messages réutilisables pour vos conversations.',
+    keywordReplies: 'Déclenchez des réponses automatiques selon les mots-clés reçus.',
+    tags: 'Organisez vos contacts avec des étiquettes personnalisées.',
+    journal: 'Consultez les alertes et les sujets sensibles détectés.',
+    storage: 'Gérez les données locales et l’espace utilisé par votre profil.',
+    account: 'Gérez votre profil, votre langue et vos préférences.'
+  };
 
   const renderTab = (tabItem) => (
     <button
@@ -81,6 +97,14 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhats
 
   return (
     <div className="sh-wrapper">
+      <header className="sh-page-header">
+        <div>
+          <span className="sh-page-eyebrow">Botora / Réglages</span>
+          <h1>{getTabLabel(currentTab)}</h1>
+          <p>{pageDescriptions[tab]}</p>
+        </div>
+        {onBack && <button type="button" className="sh-page-back" onClick={onBack}>← Tableau de bord</button>}
+      </header>
       <div className="sh-tabs">
         {visibleBotTabs.map(renderTab)}
         <div className="sh-tab-separator" />

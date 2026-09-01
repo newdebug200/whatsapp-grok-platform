@@ -42,7 +42,7 @@ function getMinDatetimeLocal() {
   return now.toISOString().slice(0, 16);
 }
 
-export default function Broadcast({ socket, activeProfile }) {
+export default function Broadcast({ socket, activeProfile, onBack }) {
   const [view, setView] = useState('list');
   const [campaigns, setCampaigns] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -847,10 +847,13 @@ export default function Broadcast({ socket, activeProfile }) {
     <div className="bc-panel">
       <div className="bc-toolbar">
         <h2 className="bc-title">Campagnes</h2>
-        <button className="bc-btn-primary bc-btn-sm" onClick={() => { setView('create'); setError(''); }}>
+        <div className="bc-toolbar-actions">
+          {onBack && <button className="bc-back" onClick={onBack}>← Retour</button>}
+          <button className="bc-btn-primary bc-btn-sm" onClick={() => { setView('create'); setError(''); }}>
           <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           Nouvelle campagne
-        </button>
+          </button>
+        </div>
       </div>
 
       {error && <div className="bc-error">{error}</div>}

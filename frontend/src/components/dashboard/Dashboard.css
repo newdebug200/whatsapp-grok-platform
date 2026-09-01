@@ -2435,3 +2435,59 @@
 [data-theme="dark"] .chat-sidebar .profile-selector-wrapper { background: var(--sidebar-bg); }
 [data-theme="dark"] .chat-sidebar .profile-selector-btn { border-color: rgba(56,214,171,.3); box-shadow: 0 5px 16px rgba(0,0,0,.25); }
 [data-theme="dark"] .chat-sidebar .profile-dropdown-add { color: var(--brand-mint); }
+
+/* Uniformisation des pages feature : aucun container centré hors Discussions. */
+.feature-page-shell > * {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+.feature-page-shell > .bc-panel,
+.feature-page-shell > .recharge-page,
+.feature-page-shell > .credit-usage-page,
+.feature-page-shell > .stats-panel,
+.feature-page-shell > .sentiments-page,
+.feature-page-shell > .fp-page,
+.feature-page-shell > .subscription-public,
+.feature-page-shell > .api-access-page,
+.feature-page-shell > .admin-workspace {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+}
+.feature-page-shell .recharge-header,
+.feature-page-shell .recharge-section-title,
+.feature-page-shell .recharge-grid,
+.feature-page-shell .recharge-history,
+.feature-page-shell .sentiments-hero,
+.feature-page-shell .sentiments-stats,
+.feature-page-shell .sentiments-toolbar,
+.feature-page-shell .sentiments-list,
+.feature-page-shell .sentiments-error,
+.feature-page-shell .sentiments-empty,
+.feature-page-shell .subscription-public-hero,
+.feature-page-shell .subscription-public-grid,
+.feature-page-shell .subscription-public-state,
+.feature-page-shell .api-access-header,
+.feature-page-shell .api-access-grid,
+.feature-page-shell .api-access-card,
+.feature-page-shell .storage-manager-hero,
+.feature-page-shell .storage-safety,
+.feature-page-shell .storage-grid,
+.feature-page-shell .storage-notice,
+.feature-page-shell .storage-error,
+.feature-page-shell .storage-loading,
+.feature-page-shell .storage-footnote,
+.feature-page-shell .admin-workspace-header,
+.feature-page-shell .admin-page-nav,
+.feature-page-shell .admin-page-heading,
+.feature-page-shell .admin-workspace > .admin-panel {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+.feature-page-shell .stats-panel { width: 100%; max-width: none; margin: 0; }
+.feature-page-shell .stats-header { width: 100%; }

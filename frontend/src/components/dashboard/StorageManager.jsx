@@ -54,7 +54,7 @@ export default function StorageManager({ isAdmin = false, noProfile = false, onG
 
   return (
     <section className="storage-manager">
-      <header className="storage-manager-hero"><div><span className="storage-eyebrow">Maintenance</span><h1>Données et stockage</h1><p>Libérez de l’espace local sans supprimer vos réglages ni votre compte.</p></div><button className="storage-refresh" onClick={load} disabled={loading}>↻ Actualiser</button></header>
+      <header className="storage-manager-hero"><button className="storage-refresh" onClick={load} disabled={loading}>↻ Actualiser</button></header>
       <div className="storage-safety"><span>✓</span><div><strong>Nettoyage sécurisé par profil</strong><p>Chaque action est limitée au profil WhatsApp actif. Les suppressions sont définitives et nécessitent une confirmation.</p></div></div>
       {notice && <div className="storage-notice">{notice}</div>}
       {error && <div className="storage-error">{error}</div>}

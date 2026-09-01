@@ -5,3 +5,8 @@
 .subscription-access-banner span{opacity:.8}.subscription-access-banner.active{border-color:rgba(37,211,102,.45)}.subscription-access-banner.expired{border-color:rgba(192,57,43,.4);background:rgba(192,57,43,.06)}
 .subscription-pending-payment{background:rgba(246,201,14,.12);border-color:rgba(246,201,14,.5)}.subscription-pending-payment button{border:0;border-radius:8px;padding:9px 14px;background:#25d366;color:#073b21;font-weight:700;cursor:pointer}.subscription-pending-payment button:disabled{opacity:.6;cursor:wait}
 .subscription-public-state.success{border-color:rgba(37,211,102,.5);color:#087f3e}.subscription-public-cta:disabled{opacity:.65;cursor:wait}
+
+/* Largeur pleine du workspace feature. */
+.subscription-public-hero,
+.subscription-public-grid,
+.subscription-public-state { width: 100%; max-width: none; margin-left: 0; margin-right: 0; }

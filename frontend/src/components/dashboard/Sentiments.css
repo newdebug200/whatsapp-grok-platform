@@ -35,3 +35,19 @@
 .sentiments-error { max-width:1180px; margin:0 auto; padding:14px; border-radius:10px; background:#fdecea; color:#c0392b; font-size:13px; } .sentiments-error button { margin-left:10px; border:0; background:transparent; color:inherit; font-weight:800; cursor:pointer; }
 @media (max-width:700px) { .sentiments-page { padding:22px 16px 40px; } .sentiments-hero,.sentiments-toolbar { flex-direction:column; align-items:stretch; } .sentiments-refresh { align-self:flex-start; } .sentiments-stats { grid-template-columns:1fr; gap:10px; } .sentiment-row { align-items:flex-start; flex-wrap:wrap; } .sentiment-open { margin-left:56px; } .sentiments-filters { overflow-x:auto; } }
 [data-theme="dark"] .sentiments-page { color:#f1f5f6; } [data-theme="dark"] .sentiment-stat,[data-theme="dark"] .sentiment-row,[data-theme="dark"] .sentiments-filters,[data-theme="dark"] .sentiments-refresh { background:#233138; border-color:#2a3942; } [data-theme="dark"] .sentiment-stat strong,[data-theme="dark"] .sentiment-row-head strong { color:#f1f5f6; } [data-theme="dark"] .sentiment-message p { color:#aebac1; }
+
+/* Header uniforme et largeur pleine du workspace. */
+.sentiments-hero,
+.sentiments-stats,
+.sentiments-toolbar,
+.sentiments-list,
+.sentiments-empty,
+.sentiments-error { max-width: none; margin-left: 0; margin-right: 0; }
+.sentiments-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.sentiments-back { min-height: 40px; padding: 9px 13px; border: 1px solid #d9e3eb; border-radius: 10px; background: #fff; color: #536273; font: inherit; font-weight: 700; cursor: pointer; }
+.sentiments-back:hover { border-color: #25d366; color: #128c7e; }
+@media (max-width: 700px) {
+  .sentiments-header-actions { width: 100%; justify-content: flex-start; }
+  .sentiments-header-actions > button { flex: 1 1 auto; }
+}
+[data-theme="dark"] .sentiments-back { background: #233138; border-color: #2a3942; color: #f1f5f6; }
