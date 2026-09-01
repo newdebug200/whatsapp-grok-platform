@@ -43,10 +43,16 @@ export default function AuthPage() {
         await register(form.email, form.password, form.name);
       }
     } catch (err) {
+      const status = err.response?.status;
+      const serverError = String(err.response?.data?.error || '').toLowerCase();
       if (!err.response) {
-        setError('Impossible de contacter le serveur. Vérifiez que le backend est lancé sur le port 3001.');
+        setError(t('The service is temporarily unavailable. Check your connection and try again.'));
+      } else if (status === 401) {
+        setError(t('The email or password is incorrect.'));
+      } else if (status === 502 || serverError.includes('api centrale') || serverError.includes('central api')) {
+        setError(t('We could not complete the request right now. Please try again shortly.'));
       } else {
-        setError(err.response?.data?.error || 'Une erreur serveur est survenue. Réessayez.');
+        setError(t('Something went wrong. Please try again.'));
       }
     } finally {
       setLoading(false);
