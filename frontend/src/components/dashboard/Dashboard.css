@@ -2491,3 +2491,16 @@
 }
 .feature-page-shell .stats-panel { width: 100%; max-width: none; margin: 0; }
 .feature-page-shell .stats-header { width: 100%; }
+
+/* Groupes fonctionnels de la sidebar. */
+.app-navigation-sections { display: flex; flex-direction: column; gap: 0; }
+.app-navigation-sections > .app-navigation-feature-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.app-navigation-feature-group .app-navigation-heading { color: #607284; }
+.app-navigation-info-group { margin-top: 22px; }
+.app-navigation-info-group .app-navigation-sub-link.active { color: #e47738; background: #fff; box-shadow: 0 3px 10px rgba(63,81,99,.08); }
+.app-navigation-admin-group { margin-top: auto; }
+@media (max-width: 560px) {
+  .app-navigation-sections { width: 100%; }
+}
+[data-theme="dark"] .app-navigation-feature-group .app-navigation-heading { color: #aebac1; }
+[data-theme="dark"] .app-navigation-info-group .app-navigation-sub-link.active { background: #233138; }
