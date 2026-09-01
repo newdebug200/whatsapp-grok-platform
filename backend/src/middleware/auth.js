@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const JWT_SECRET = process.env.JWT_SECRET || 'botora-secret-key-change-in-prod';
 const prisma = new PrismaClient();
 const { normalizeLanguage, translate } = require('../utils/i18n');
+const centralSync = require('../services/centralSync');
 
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -61,12 +62,16 @@ async function adminMiddleware(req, res, next) {
   try {
     const account = await prisma.account.findUnique({
       where: { id: req.accountId },
-      select: { role: true }
+      select: { role: true, email: true }
     });
-    if (!account || account.role !== 'admin') {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
-    }
+    if (!account) return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+    const central = await centralSync.getAccount(account.email);
+    if (!central) return res.status(503).json({ error: 'Vérification des droits administrateur indisponible' });
+    const legacyAccess = central.control_center_access === null || central.control_center_access === undefined;
+    const allowed = legacyAccess ? account.role === 'admin' : Boolean(central.control_center_access);
+    if (!allowed) return res.status(403).json({ error: 'Accès au Centre de contrôle refusé' });
     req.isAdmin = true;
+    req.controlCenterAccess = true;
     next();
   } catch (err) {
     return res.status(500).json({ error: 'Erreur vérification rôle admin' });

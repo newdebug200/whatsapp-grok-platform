@@ -46,7 +46,7 @@ router.post('/register', authLimiter, async (req, res) => {
       data: { email: email.toLowerCase(), password: centralUser.password_hash, name, role }
     });
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language) } });
+    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language), control_center_access: centralUser?.control_center_access ?? null } });
   } catch (error) {
     console.error('Erreur register:', error);
     res.status(500).json({ error: "Erreur lors de l'inscription" });
@@ -78,7 +78,7 @@ router.post('/login', authLimiter, async (req, res) => {
     centralSync.syncAccount(account).catch(() => {});
     centralSync.syncCreditUsage(account.id).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language) } });
+    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language), control_center_access: centralAccess?.control_center_access ?? null } });
   } catch (error) {
     console.error('Erreur login:', error);
     res.status(500).json({ error: 'Erreur lors de la connexion' });
@@ -100,9 +100,9 @@ router.get('/me', authMiddleware, async (req, res) => {
         data: { name: central.name || account.name, credit_balance: Number(central.credits_balance || 0) },
         select: { id: true, email: true, name: true, role: true, language: true, created_at: true, credit_balance: true, is_blocked: true }
       });
-      return res.json({ ...updated, central_status: central.status, central_plan_id: central.plan_id, central_access_allowed: central.access_allowed === undefined ? true : Boolean(central.access_allowed), central_suspended: ['suspended', 'banned'].includes(central.access_type), central_access_type: central.access_type || 'none', central_access_ends_at: central.access_ends_at || null, central_trial_ends_at: central.trial_ends_at, central_subscription_ends_at: central.subscription_ends_at || null, central_trial_days_left: central.trial_days_left ?? null, central_subscription_days_left: central.subscription_days_left ?? null, central_server_time: central.server_time || null, central_synced: true });
+      return res.json({ ...updated, control_center_access: central.control_center_access ?? null, central_status: central.status, central_plan_id: central.plan_id, central_access_allowed: central.access_allowed === undefined ? true : Boolean(central.access_allowed), central_suspended: ['suspended', 'banned'].includes(central.access_type), central_access_type: central.access_type || 'none', central_access_ends_at: central.access_ends_at || null, central_trial_ends_at: central.trial_ends_at, central_subscription_ends_at: central.subscription_ends_at || null, central_trial_days_left: central.trial_days_left ?? null, central_subscription_days_left: central.subscription_days_left ?? null, central_server_time: central.server_time || null, central_synced: true });
     }
-    res.json({ ...account, central_synced: false, central_sync_error: 'Profil central indisponible' });
+    res.json({ ...account, control_center_access: null, central_synced: false, central_sync_error: 'Profil central indisponible' });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la récupération du compte' });
   }
