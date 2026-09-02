@@ -11,8 +11,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  max-width: 1180px;
-  margin: 0 auto 28px;
+  max-width: none;
+  margin: 0 0 28px;
 }
 
 .keyword-replies-header h2 {
@@ -36,9 +36,9 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  max-width: 1180px;
+  max-width: none;
   box-sizing: border-box;
-  margin: 0 auto 16px;
+  margin: 0 0 16px;
   padding: 13px 16px;
   border: 1px solid;
   border-radius: 12px;
@@ -52,9 +52,9 @@
 
 .keyword-replies-form,
 .keyword-replies-list-section {
-  max-width: 1180px;
+  max-width: none;
   box-sizing: border-box;
-  margin: 0 auto 22px;
+  margin: 0 0 22px;
   padding: clamp(20px, 2.5vw, 30px);
   border: 1px solid var(--border, #dfe7e8);
   border-radius: 18px;
