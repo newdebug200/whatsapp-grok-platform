@@ -2504,3 +2504,10 @@
 }
 [data-theme="dark"] .app-navigation-feature-group .app-navigation-heading { color: #aebac1; }
 [data-theme="dark"] .app-navigation-info-group .app-navigation-sub-link.active { background: #233138; }
+
+/* Réglages Bot : le wrapper ne doit pas rester limité par l’ancienne règle à 1440px. */
+.feature-page-shell > .sh-wrapper {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
