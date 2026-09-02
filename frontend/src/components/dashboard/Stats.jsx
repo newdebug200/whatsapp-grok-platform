@@ -58,10 +58,8 @@ export default function Stats({ socket, onBack }) {
         <div className="stats-title">Statistiques</div>
         <div className="stats-header-actions">
           {onBack && <button className="stats-back" onClick={onBack}>← Retour</button>}
-          <button className="stats-refresh" onClick={load} title="Actualiser">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-            <path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-1.76-4.24l-2.24 2.24H22V4l-4.35 4.35z"/>
-          </svg>
+          <button className="stats-refresh" onClick={load} title="Actualiser" aria-label="Actualiser">
+            <span aria-hidden="true">↻</span> Actualiser
           </button>
         </div>
       </div>

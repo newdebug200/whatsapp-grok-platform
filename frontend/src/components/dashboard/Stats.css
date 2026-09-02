@@ -386,10 +386,18 @@
 }
 
 .stats-refresh {
-  border: 1px solid var(--border, #dce5e8);
-  background: var(--bg-primary, #fff);
-  color: var(--text-secondary, #667781);
+  border: 1px solid #d9e3eb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 15px;
+  color: #536273;
+  cursor: pointer;
+  font-weight: 700;
 }
+
+.stats-refresh:hover { border-color: #25d366; color: #128c7e; }
+.stats-refresh:disabled { opacity: .6; cursor: wait; }
+.stats-refresh span { display: inline-block; margin-right: 3px; font-size: 1.05em; line-height: 1; }
 
 .stats-cards {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -445,6 +453,8 @@
 [data-theme="dark"] .stats-spinner { border-color: var(--border); border-top-color: var(--accent); }
 [data-theme="dark"] .stats-refresh { background: var(--bg-card); color: var(--text-secondary); border-color: var(--border); }
 [data-theme="dark"] .stats-refresh:hover { background: var(--bg-hover); color: var(--accent); }
+[data-theme="dark"] .stats-refresh { border-color: var(--border); }
+[data-theme="dark"] .stats-refresh:hover { border-color: var(--accent); color: var(--accent); }
 [data-theme="dark"] .stat-card,
 [data-theme="dark"] .stats-section { background: var(--bg-card); border-color: var(--border); box-shadow: 0 10px 26px rgba(0,0,0,.2); }
 [data-theme="dark"] .stat-card-value,
