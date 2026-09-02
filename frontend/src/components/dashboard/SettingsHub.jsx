@@ -105,11 +105,6 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhats
         </div>
         {onBack && <button type="button" className="sh-page-back" onClick={onBack}>← Tableau de bord</button>}
       </header>
-      <div className="sh-tabs">
-        {visibleBotTabs.map(renderTab)}
-        <div className="sh-tab-separator" />
-        {accountTabs.map(renderTab)}
-      </div>
       <div className="sh-content">
         {tab === 'config' && (
           <BotConfig
