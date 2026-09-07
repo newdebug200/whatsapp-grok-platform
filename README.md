@@ -108,6 +108,27 @@ La seconde confirmation utilise un nonce temporaire de cinq minutes, à usage un
 3. Renseigner les informations du bot (domaine, comportement, FAQ)
 4. Envoyer un message WhatsApp au numéro connecté → le bot répond
 
+## Vérification des numéros WhatsApp par API
+
+Les endpoints publics utilisent une clé API dans `X-API-Key` ou `Authorization: Bearer btr_...` et nécessitent un profil WhatsApp connecté. Un profil précis peut être sélectionné avec `profile_id`; sinon le premier profil connecté est utilisé.
+
+Pour vérifier un numéro :
+
+```bash
+curl -X POST https://votre-domaine/api/v1/whatsapp/check-number \\
+  -H 'Content-Type: application/json' \\
+  -H 'X-API-Key: btr_live_...' \\
+  -d '{"phone_number":"229XXXXXXXX","profile_id":1}'
+```
+
+La réponse contient le numéro normalisé et le booléen `is_whatsapp` :
+
+```json
+{"ok":true,"phone_number":"+229XXXXXXXX","is_whatsapp":true,"profile_id":1,"whatsapp_id":"229XXXXXXXX@c.us"}
+```
+
+Pour vérifier plusieurs numéros, utiliser `POST /api/v1/whatsapp/check-numbers` avec `{"numbers":["229XXXXXXXX","229YYYYYYYY"]}`. La limite est de 100 numéros par requête. Les résultats individuels indiquent `checked`, `invalid` ou `error`.
+
 ## Numérotation
 
 Les numéros de téléphone sont affichés au format international : `+22915758565`

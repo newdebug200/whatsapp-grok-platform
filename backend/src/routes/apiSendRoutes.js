@@ -18,6 +18,13 @@ function normalizeRecipient(value) {
   return `${digits}@c.us`;
 }
 
+function normalizePhoneNumber(value) {
+  const raw = String(value || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 6 || digits.length > 15) return null;
+  return { digits, phoneNumber: `+${digits}` };
+}
+
 function mediaData(payload) {
   const media = payload?.media && typeof payload.media === 'object' ? payload.media : payload || {};
   const data = media.data || media.base64 || media.content;
@@ -100,6 +107,45 @@ router.post('/messages/send-batch', async (req, res) => {
   const failed = results.length - sent;
   const status = failed === 0 ? 'completed' : sent === 0 ? 'failed' : 'partial';
   res.status(failed && sent ? 207 : failed ? 400 : 200).json({ ok: failed === 0, status, total: results.length, sent, failed, results });
+});
+
+router.post('/whatsapp/check-number', async (req, res) => {
+  const normalized = normalizePhoneNumber(req.body?.phone_number || req.body?.phone || req.body?.number);
+  if (!normalized) return res.status(400).json({ ok: false, error: 'Numéro invalide. Utilisez un numéro international, par exemple 229XXXXXXXX.' });
+  try {
+    const profile = await resolveProfile(req.accountId, req.body?.profile_id || req.body?.profileId);
+    if (!profile) return res.status(503).json({ ok: false, code: 'WHATSAPP_PROFILE_REQUIRED', error: 'Aucun profil WhatsApp connecté.' });
+    const client = whatsappManager.getClient(profile.id);
+    if (!client) return res.status(503).json({ ok: false, code: 'WHATSAPP_NOT_CONNECTED', error: 'Le profil WhatsApp n’est pas connecté.' });
+    const numberId = await client.getNumberId(normalized.digits);
+    res.json({ ok: true, phone_number: normalized.phoneNumber, is_whatsapp: Boolean(numberId), profile_id: profile.id, whatsapp_id: numberId?._serialized || null });
+  } catch (error) {
+    console.error('[API] Vérification numéro WhatsApp:', error.message);
+    res.status(502).json({ ok: false, code: 'WHATSAPP_CHECK_FAILED', error: 'Vérification WhatsApp momentanément indisponible.' });
+  }
+});
+
+router.post('/whatsapp/check-numbers', async (req, res) => {
+  const numbers = Array.isArray(req.body?.numbers) ? req.body.numbers : [];
+  if (!numbers.length) return res.status(400).json({ ok: false, error: 'Le tableau numbers est requis et ne peut pas être vide.' });
+  if (numbers.length > MAX_BATCH) return res.status(400).json({ ok: false, error: `La vérification ne peut pas contenir plus de ${MAX_BATCH} numéros.` });
+  const profile = await resolveProfile(req.accountId, req.body?.profile_id || req.body?.profileId);
+  if (!profile) return res.status(503).json({ ok: false, code: 'WHATSAPP_PROFILE_REQUIRED', error: 'Aucun profil WhatsApp connecté.' });
+  const client = whatsappManager.getClient(profile.id);
+  if (!client) return res.status(503).json({ ok: false, code: 'WHATSAPP_NOT_CONNECTED', error: 'Le profil WhatsApp n’est pas connecté.' });
+  const results = [];
+  for (let index = 0; index < numbers.length; index += 1) {
+    const normalized = normalizePhoneNumber(numbers[index]);
+    if (!normalized) { results.push({ index, phone_number: String(numbers[index] || ''), is_whatsapp: false, status: 'invalid' }); continue; }
+    try {
+      const numberId = await client.getNumberId(normalized.digits);
+      results.push({ index, phone_number: normalized.phoneNumber, is_whatsapp: Boolean(numberId), whatsapp_id: numberId?._serialized || null, status: 'checked' });
+    } catch (error) {
+      results.push({ index, phone_number: normalized.phoneNumber, is_whatsapp: false, status: 'error', error: 'Vérification indisponible pour ce numéro.' });
+    }
+  }
+  const valid = results.filter(item => item.status === 'checked');
+  res.json({ ok: true, profile_id: profile.id, total: results.length, whatsapp: valid.filter(item => item.is_whatsapp).length, not_whatsapp: valid.filter(item => !item.is_whatsapp).length, results });
 });
 
 router.get('/messages/health', (_req, res) => res.json({ ok: true, status: 'ready' }));
