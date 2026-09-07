@@ -663,9 +663,14 @@ class WhatsAppManager {
     // ── Disconnected ──
     client.on('disconnected', async (reason) => {
       console.log(`[WA] Déconnecté — ${reason}`);
-      centralSync.reportActivity(accountId, 'whatsapp.profile_disconnected', { profile_id: profileId, reason: String(reason || 'unknown') }).catch(() => {});
       const found = this._findEntryByClient(client);
       const resolvedProfileId = found?.entry?.profileId;
+      const resolvedPhoneNumber = found?.entry?.phoneNumber || null;
+      centralSync.reportActivity(accountId, 'whatsapp.profile_disconnected', {
+        profile_id: resolvedProfileId || profileId,
+        phone_number: resolvedPhoneNumber,
+        reason: String(reason || 'unknown')
+      }).catch(() => {});
       if (resolvedProfileId) {
         try {
           await this.prisma.whatsAppProfile.update({
