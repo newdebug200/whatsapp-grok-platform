@@ -67,6 +67,27 @@ async function syncAccount(account) {
   }
 }
 
+async function requestPasswordReset(email) {
+  if (!email) return null;
+  try {
+    const response = await axios.post(`${ADMIN_API}/api/password-reset-request.php`, { email: String(email).toLowerCase().trim() }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
+    return response.data || null;
+  } catch (error) {
+    console.warn(`[CentralSync] Demande de récupération impossible: ${error.message}`);
+    return null;
+  }
+}
+
+async function confirmPasswordReset(email, code, newPassword) {
+  if (!email || !code || !newPassword) return null;
+  try {
+    const response = await axios.post(`${ADMIN_API}/api/password-reset-confirm.php`, { email: String(email).toLowerCase().trim(), code, new_password: newPassword }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
+    return response.data || null;
+  } catch (error) {
+    return error.response?.data || null;
+  }
+}
+
 async function getAccount(email) {
   if (!email) return null;
   try {
@@ -237,4 +258,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, authorizeWhatsAppNumber, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };
+module.exports = { reportActivity, authorizeWhatsAppNumber, syncAccount, requestPasswordReset, confirmPasswordReset, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };

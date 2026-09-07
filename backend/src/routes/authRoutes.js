@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const prisma = require('../prisma');
 const { authMiddleware, JWT_SECRET } = require('../middleware/auth');
@@ -140,24 +139,11 @@ router.post('/language', authMiddleware, async (req, res) => {
 
 router.post('/reset-request', authLimiter, async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = String(req.body?.email || '').toLowerCase().trim();
     if (!email) return res.status(400).json({ error: 'Email requis' });
-    const account = await prisma.account.findUnique({ where: { email: email.toLowerCase() } });
-    if (!account) {
-      return res.json({ message: 'Si cet email existe, un token de réinitialisation a été généré.' });
-    }
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + 60 * 60 * 1000);
-    await prisma.account.update({
-      where: { id: account.id },
-      data: { reset_token: token, reset_token_expiry: expiry }
-    });
-    console.log(`[Reset] Token pour ${email}: ${token} (expire dans 1h)`);
-    res.json({
-      message: 'Token de réinitialisation généré.',
-      reset_token: token,
-      note: 'En production, ce token serait envoyé par email.'
-    });
+    const result = await centralSync.requestPasswordReset(email);
+    if (!result) return res.status(502).json({ error: 'Le service d’e-mail est momentanément indisponible. Réessayez plus tard.' });
+    res.json({ message: result.message || 'Si cet email existe, un code de récupération a été envoyé.' });
   } catch (error) {
     console.error('Erreur reset-request:', error);
     res.status(500).json({ error: 'Erreur lors de la demande de réinitialisation' });
@@ -166,25 +152,23 @@ router.post('/reset-request', authLimiter, async (req, res) => {
 
 router.post('/reset-confirm', authLimiter, async (req, res) => {
   try {
-    const { token, new_password } = req.body;
-    if (!token || !new_password) {
-      return res.status(400).json({ error: 'Token et nouveau mot de passe requis' });
+    const email = String(req.body?.email || '').toLowerCase().trim();
+    const code = String(req.body?.code || '').trim();
+    const newPassword = String(req.body?.new_password || '');
+    if (!email || !/^\d{6}$/.test(code) || !newPassword) {
+      return res.status(400).json({ error: 'Email, code à 6 chiffres et nouveau mot de passe requis' });
     }
-    if (new_password.length < 8) {
+    if (newPassword.length < 8) {
       return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
     }
-    const account = await prisma.account.findFirst({
-      where: { reset_token: token, reset_token_expiry: { gt: new Date() } }
-    });
-    if (!account) {
-      return res.status(400).json({ error: 'Token invalide ou expiré' });
+    const result = await centralSync.confirmPasswordReset(email, code, newPassword);
+    if (!result) return res.status(502).json({ error: 'Le service de récupération est momentanément indisponible.' });
+    if (!result.ok) return res.status(400).json({ error: result.error || 'Code invalide ou expiré' });
+    const account = await prisma.account.findUnique({ where: { email } });
+    if (account) {
+      await prisma.account.update({ where: { id: account.id }, data: { password: await bcrypt.hash(newPassword, 12), reset_token: null, reset_token_expiry: null } });
     }
-    const hashed = await bcrypt.hash(new_password, 12);
-    await prisma.account.update({
-      where: { id: account.id },
-      data: { password: hashed, reset_token: null, reset_token_expiry: null }
-    });
-    res.json({ success: true, message: 'Mot de passe réinitialisé avec succès' });
+    res.json({ success: true, message: result.message || 'Mot de passe réinitialisé avec succès' });
   } catch (error) {
     console.error('Erreur reset-confirm:', error);
     res.status(500).json({ error: 'Erreur lors de la réinitialisation' });

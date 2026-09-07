@@ -108,6 +108,12 @@ La seconde confirmation utilise un nonce temporaire de cinq minutes, à usage un
 3. Renseigner les informations du bot (domaine, comportement, FAQ)
 4. Envoyer un message WhatsApp au numéro connecté → le bot répond
 
+### Mot de passe oublié
+
+Depuis l’écran de connexion, l’utilisateur peut sélectionner **Mot de passe oublié ?**. Il saisit son adresse e-mail, reçoit un code à 6 chiffres, puis renseigne ce code ainsi qu’un nouveau mot de passe. Le code est valable 15 minutes, limité à 5 tentatives et utilisable une seule fois. Aucun lien de récupération n’est envoyé.
+
+Les routes locales correspondantes sont `POST /api/auth/reset-request` et `POST /api/auth/reset-confirm`; elles transmettent la demande à l’API centrale Botora Admin.
+
 ## API publique
 
 La base des endpoints publics est `/api/v1`. Toutes les routes publiques nécessitent une clé API active dans l’un des en-têtes suivants :
