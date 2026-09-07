@@ -470,6 +470,21 @@ class WhatsAppManager {
       const phoneNumber = '+' + client.info.wid.user;
       console.log(`[WA] Connecté — ${phoneNumber}`);
 
+      const authorization = await centralSync.authorizeWhatsAppNumber(accountId, phoneNumber, profileId);
+      if (!authorization.allowed) {
+        const message = authorization.message || 'Ce numéro WhatsApp ne peut pas être connecté à ce compte en période d’essai. Un abonnement annuel actif est requis.';
+        console.warn(`[WA] Connexion refusée pour ${phoneNumber}: ${authorization.reason || 'not_allowed'}`);
+        try { await client.destroy(); } catch (_) {}
+        this._cleanChromeLocks(clientKey);
+        const rejected = this._findEntryByClient(client);
+        if (rejected) this.clients.delete(rejected.key);
+        this.io?.to(`account_${accountId}`).emit('status', {
+          isConnected: false, qrCode: null, status: 'connection_blocked', profileId,
+          phoneNumber, message
+        });
+        return;
+      }
+
       let profile;
       try {
         profile = await this.prisma.whatsAppProfile.upsert({

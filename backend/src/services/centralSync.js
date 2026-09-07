@@ -16,6 +16,27 @@ async function reportActivity(accountId, eventType, payload = {}, tokensUsed = n
   }
 }
 
+async function authorizeWhatsAppNumber(accountId, phoneNumber, profileId = null) {
+  if (!accountId || !phoneNumber) return { allowed: false, unavailable: true, reason: 'invalid_request' };
+  try {
+    const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
+    if (!account?.email) return { allowed: false, unavailable: true, reason: 'account_not_found' };
+    const response = await axios.post(`${ADMIN_API}/api/whatsapp-authorize.php`, {
+      email: account.email, phone_number: phoneNumber, profile_id: profileId
+    }, { headers: { 'Content-Type': 'application/json' }, timeout: 8000, validateStatus: status => status >= 200 && status < 500 });
+    const data = response.data || {};
+    return {
+      allowed: data.allowed === true,
+      unavailable: response.status >= 500 || response.status === 0,
+      reason: data.reason || (data.allowed === false ? 'not_allowed' : null),
+      message: data.error || null
+    };
+  } catch (error) {
+    console.warn(`[CentralSync] Autorisation WhatsApp impossible: ${error.message}`);
+    return { allowed: false, unavailable: true, reason: 'central_unavailable', message: 'Le contrôle central est momentanément indisponible.' };
+  }
+}
+
 async function authenticateAccount(email, password) {
   if (!email || !password) return null;
   try {
@@ -216,4 +237,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };
+module.exports = { reportActivity, authorizeWhatsAppNumber, syncAccount, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };
