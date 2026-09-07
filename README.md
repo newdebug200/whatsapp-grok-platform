@@ -1,6 +1,6 @@
 # SanRobot — Plateforme WhatsApp IA multi-utilisateurs
 
-SanRobot est une plateforme web qui permet à chaque utilisateur de connecter son propre numéro WhatsApp et de configurer un bot IA qui répond automatiquement aux messages entrants, grâce à l'API Groq (LLaMA 3.3 70B).
+SanRobot est une plateforme web qui permet à chaque utilisateur de connecter son propre numéro WhatsApp et de configurer un bot IA qui répond automatiquement aux messages entrants, grâce à l'API Groq (`openai/gpt-oss-20b`).
 
 ## Fonctionnalités
 
@@ -19,7 +19,7 @@ SanRobot est une plateforme web qui permet à chaque utilisateur de connecter so
 | Frontend | React 18, Vite, Axios, Socket.io-client, date-fns |
 | Backend | Express 4, Socket.io, JWT, bcryptjs |
 | Base de données | SQLite via Prisma ORM |
-| IA | Groq API (llama-3.3-70b-versatile) |
+| IA | Groq API (`openai/gpt-oss-20b`) |
 | WhatsApp | whatsapp-web.js + Puppeteer |
 | PWA | manifest.json, Service Worker manuel |
 
@@ -27,7 +27,7 @@ SanRobot est une plateforme web qui permet à chaque utilisateur de connecter so
 
 ```bash
 # 1. Cloner et aller sur la branche work
-git clone https://github.com/debugStaut200/whatsapp-grok-platform.git
+git clone https://github.com/newdebug200/whatsapp-grok-platform.git
 cd whatsapp-grok-platform
 git checkout work
 
@@ -108,26 +108,144 @@ La seconde confirmation utilise un nonce temporaire de cinq minutes, à usage un
 3. Renseigner les informations du bot (domaine, comportement, FAQ)
 4. Envoyer un message WhatsApp au numéro connecté → le bot répond
 
-## Vérification des numéros WhatsApp par API
+## API publique
 
-Les endpoints publics utilisent une clé API dans `X-API-Key` ou `Authorization: Bearer btr_...` et nécessitent un profil WhatsApp connecté. Un profil précis peut être sélectionné avec `profile_id`; sinon le premier profil connecté est utilisé.
+La base des endpoints publics est `/api/v1`. Toutes les routes publiques nécessitent une clé API active dans l’un des en-têtes suivants :
 
-Pour vérifier un numéro :
-
-```bash
-curl -X POST https://votre-domaine/api/v1/whatsapp/check-number \\
-  -H 'Content-Type: application/json' \\
-  -H 'X-API-Key: btr_live_...' \\
-  -d '{"phone_number":"229XXXXXXXX","profile_id":1}'
+```http
+X-API-Key: btr_live_...
 ```
 
-La réponse contient le numéro normalisé et le booléen `is_whatsapp` :
+ou :
+
+```http
+Authorization: Bearer btr_live_...
+```
+
+Les clés API sont créées depuis l’espace utilisateur. Elles sont propres au compte Botora, peuvent être révoquées individuellement et ne doivent jamais être exposées dans du code frontend ou un dépôt public. Les routes utilisent le premier profil WhatsApp connecté du compte, sauf si `profile_id` est fourni.
+
+### Envoyer un message
+
+```http
+POST /api/v1/messages/send
+Content-Type: application/json
+```
+
+Corps minimal :
 
 ```json
-{"ok":true,"phone_number":"+229XXXXXXXX","is_whatsapp":true,"profile_id":1,"whatsapp_id":"229XXXXXXXX@c.us"}
+{
+  "to": "229XXXXXXXX",
+  "message": "Bonjour !"
+}
 ```
 
-Pour vérifier plusieurs numéros, utiliser `POST /api/v1/whatsapp/check-numbers` avec `{"numbers":["229XXXXXXXX","229YYYYYYYY"]}`. La limite est de 100 numéros par requête. Les résultats individuels indiquent `checked`, `invalid` ou `error`.
+`to` accepte également les alias `recipient`, `phone` et `number`. Le numéro doit être fourni au format international, avec ou sans signe `+`. Pour choisir un compte WhatsApp précis, ajouter `profile_id`.
+
+Réponse réussie :
+
+```json
+{
+  "ok": true,
+  "status": "sent",
+  "message_id": "true_229XXXXXXXX@c.us_...",
+  "recipient": "229XXXXXXXX@c.us",
+  "profile_id": 1,
+  "type": "text"
+}
+```
+
+### Vérifier un numéro WhatsApp
+
+Cet endpoint interroge WhatsApp à partir d’une session déjà connectée. Il ne se contente pas de valider la structure du numéro : `is_whatsapp` indique si WhatsApp renvoie un identifiant pour ce numéro.
+
+```http
+POST /api/v1/whatsapp/check-number
+Content-Type: application/json
+```
+
+Requête :
+
+```json
+{
+  "phone_number": "229XXXXXXXX",
+  "profile_id": 1
+}
+```
+
+Le champ `phone_number` accepte aussi les alias `phone` et `number`. Le champ `profile_id` est facultatif. Le numéro est normalisé en format international avec `+` dans la réponse.
+
+Réponse si le numéro est enregistré sur WhatsApp :
+
+```json
+{
+  "ok": true,
+  "phone_number": "+229XXXXXXXX",
+  "is_whatsapp": true,
+  "profile_id": 1,
+  "whatsapp_id": "229XXXXXXXX@c.us"
+}
+```
+
+Réponse si le numéro n’est pas enregistré sur WhatsApp :
+
+```json
+{
+  "ok": true,
+  "phone_number": "+229XXXXXXXX",
+  "is_whatsapp": false,
+  "profile_id": 1,
+  "whatsapp_id": null
+}
+```
+
+### Vérifier plusieurs numéros
+
+```http
+POST /api/v1/whatsapp/check-numbers
+Content-Type: application/json
+```
+
+Requête :
+
+```json
+{
+  "profile_id": 1,
+  "numbers": ["229XXXXXXXX", "+229YYYYYYYY", "229ZZZZZZZZ"]
+}
+```
+
+La limite est de 100 numéros par requête. Chaque élément retourne son index d’origine, le numéro normalisé et un statut : `checked`, `invalid` ou `error`.
+
+Réponse :
+
+```json
+{
+  "ok": true,
+  "profile_id": 1,
+  "total": 3,
+  "whatsapp": 2,
+  "not_whatsapp": 1,
+  "results": [
+    {"index": 0, "phone_number": "+229XXXXXXXX", "is_whatsapp": true, "status": "checked"},
+    {"index": 1, "phone_number": "+229YYYYYYYY", "is_whatsapp": false, "status": "checked"},
+    {"index": 2, "phone_number": "+229ZZZZZZZZ", "is_whatsapp": true, "status": "checked"}
+  ]
+}
+```
+
+### Erreurs communes
+
+| Code HTTP | Code API | Signification |
+|---:|---|---|
+| 400 | — | Numéro invalide, corps absent ou lot vide/trop grand |
+| 401 | `API_KEY_REQUIRED` / `API_KEY_INVALID` | Clé absente, invalide ou révoquée |
+| 403 | `SUBSCRIPTION_REQUIRED` | L’accès API du compte n’est pas autorisé |
+| 502 | `WHATSAPP_CHECK_FAILED` | Vérification WhatsApp temporairement indisponible |
+| 503 | `WHATSAPP_PROFILE_REQUIRED` | Aucun profil WhatsApp connecté |
+| 503 | `WHATSAPP_NOT_CONNECTED` | Le profil demandé n’est pas actuellement connecté |
+
+Les endpoints de vérification ne peuvent fonctionner que lorsqu’au moins un profil WhatsApp est connecté et opérationnel.
 
 ## Numérotation
 
