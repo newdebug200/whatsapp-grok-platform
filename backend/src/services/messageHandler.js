@@ -67,7 +67,7 @@ class MessageHandler {
       const resp = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
           messages: [
             {
               role: 'system',
@@ -110,7 +110,7 @@ class MessageHandler {
       const resp = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
           messages: [
             { role: 'system', content: 'Tu es un assistant qui résume les interactions client de manière concise.' },
             { role: 'user', content: prompt }
@@ -567,7 +567,7 @@ class MessageHandler {
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
           messages: [{ role: 'system', content: systemPrompt }, ...historyMessages, { role: 'user', content: messageText }],
           temperature: 0.2,
           max_tokens: 400
@@ -579,7 +579,7 @@ class MessageHandler {
       const totalTokens = response.data.usage?.total_tokens || 0;
       let centralCreditResult = null;
       if (creditsEnabled && accountId && totalTokens > 0) {
-        centralCreditResult = await centralSync.consumeCredits(accountId, totalTokens, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant' });
+        centralCreditResult = await centralSync.consumeCredits(accountId, totalTokens, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b' });
         if (!centralCreditResult?.ok) {
           throw new Error(centralCreditResult?.error || 'API centrale des crédits indisponible');
         }
