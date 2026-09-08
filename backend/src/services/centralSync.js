@@ -1,7 +1,9 @@
 const axios = require('axios');
 const prisma = require('../prisma');
 const ADMIN_API = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
-const SERVICE_HEADERS = process.env.BOTORA_ADMIN_SERVICE_KEY ? { 'X-Botora-Service-Key': process.env.BOTORA_ADMIN_SERVICE_KEY } : {};
+// Valeur pratique pour le développement local ; remplacer en production.
+const SERVICE_KEY = process.env.BOTORA_ADMIN_SERVICE_KEY || 'abcd';
+const SERVICE_HEADERS = { 'X-Botora-Service-Key': SERVICE_KEY };
 let featureCache = { at: 0, values: {} };
 
 async function reportActivity(accountId, eventType, payload = {}, tokensUsed = null, creditsUsed = null) {
