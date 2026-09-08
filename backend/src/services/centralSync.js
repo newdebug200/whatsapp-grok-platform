@@ -1,6 +1,7 @@
 const axios = require('axios');
 const prisma = require('../prisma');
 const ADMIN_API = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
+const SERVICE_HEADERS = process.env.BOTORA_ADMIN_SERVICE_KEY ? { 'X-Botora-Service-Key': process.env.BOTORA_ADMIN_SERVICE_KEY } : {};
 let featureCache = { at: 0, values: {} };
 
 async function reportActivity(accountId, eventType, payload = {}, tokensUsed = null, creditsUsed = null) {
@@ -70,7 +71,7 @@ async function syncAccount(account) {
 async function requestPasswordReset(email) {
   if (!email) return null;
   try {
-    const response = await axios.post(`${ADMIN_API}/api/password-reset-request.php`, { email: String(email).toLowerCase().trim() }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
+    const response = await axios.post(`${ADMIN_API}/api/password-reset-request.php`, { email: String(email).toLowerCase().trim() }, { headers: { 'Content-Type': 'application/json', ...SERVICE_HEADERS }, timeout: 10000 });
     return response.data || null;
   } catch (error) {
     console.warn(`[CentralSync] Demande de récupération impossible: ${error.message}`);
@@ -81,7 +82,7 @@ async function requestPasswordReset(email) {
 async function confirmPasswordReset(email, code, newPassword) {
   if (!email || !code || !newPassword) return null;
   try {
-    const response = await axios.post(`${ADMIN_API}/api/password-reset-confirm.php`, { email: String(email).toLowerCase().trim(), code, new_password: newPassword }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
+    const response = await axios.post(`${ADMIN_API}/api/password-reset-confirm.php`, { email: String(email).toLowerCase().trim(), code, new_password: newPassword }, { headers: { 'Content-Type': 'application/json', ...SERVICE_HEADERS }, timeout: 10000 });
     return response.data || null;
   } catch (error) {
     return error.response?.data || null;
