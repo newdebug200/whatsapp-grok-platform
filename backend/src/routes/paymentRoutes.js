@@ -1,35 +1,18 @@
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
-let Webhook = null;
-try {
-  ({ Webhook } = require('fedapay'));
-} catch (_) {
-  console.warn('[FedaPay] SDK absent : les paiements resteront indisponibles jusqu’à npm install.');
-}
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware } = require('../middleware/auth');
 const centralSync = require('../services/centralSync');
 
-const FEDAPAY_API_URL = (process.env.FEDAPAY_API_URL || 'https://api.fedapay.com/v1').replace(/\/$/, '');
 const BOTORA_ADMIN_API_URL = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
-// Authentification interservices désactivée temporairement en développement.
 const MIN_CREDITS = 5;
 const XOF_PER_CREDIT = 120;
 const TOKENS_PER_CREDIT = 100000;
 const APPROVED = 'approved';
-const NON_FINAL_STATUSES = new Set(['pending', 'transferred', 'canceled', 'declined', 'deleted']);
 
-function fedapayHeaders() {
-  const key = process.env.FEDAPAY_SECRET_KEY;
-  if (!key) throw new Error('FEDAPAY_SECRET_KEY non configurée');
-  return { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
-}
-
-function unwrap(data) { return data?.v1 || data?.transaction || data; }
 function normalizeStatus(status) { return String(status || 'pending').toLowerCase(); }
-function extractId(data) { return String(unwrap(data)?.id || unwrap(data)?.transaction?.id || ''); }
 function adminResponsePayload(data) {
   if (!data || typeof data !== 'object') return {};
   return data.data && typeof data.data === 'object' ? data.data : data;
@@ -44,11 +27,6 @@ function adminResponseMessage(data) {
 }
 function callbackUrl() {
   return process.env.FEDAPAY_CALLBACK_URL || `${process.env.APP_URL || 'http://localhost:5173'}/?payment=return`;
-}
-
-async function retrieveTransaction(externalId) {
-  const response = await axios.get(`${FEDAPAY_API_URL}/transactions/${encodeURIComponent(externalId)}`, { headers: fedapayHeaders(), timeout: 20000 });
-  return unwrap(response.data);
 }
 
 async function botoraAdminRequest(path, body) {
@@ -80,33 +58,6 @@ async function creditApprovedPayment(payment, transaction, eventId, eventType, r
     }
   });
 }
-
-// Webhook is mounted before express.json in server.js, so req.body is a Buffer.
-router.post('/webhook', async (req, res) => {
-  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
-  const signature = req.headers['x-fedapay-signature'];
-  let event;
-  try {
-    if (!Webhook) throw new Error('SDK FedaPay absent. Exécutez npm install dans backend.');
-    if (!process.env.FEDAPAY_WEBHOOK_SECRET) throw new Error('FEDAPAY_WEBHOOK_SECRET non configurée');
-    event = Webhook.constructEvent(raw, signature, process.env.FEDAPAY_WEBHOOK_SECRET);
-  } catch (err) {
-    return res.status(400).json({ error: `Webhook invalide: ${err.message}` });
-  }
-  const eventType = String(event?.name || event?.type || '').toLowerCase();
-  const payload = event?.object || event?.data || event?.transaction || {};
-  const externalId = String(payload?.id || payload?.transaction?.id || '');
-  const eventId = String(event?.id || `${eventType}:${externalId}:${payload?.updated_at || payload?.status || Date.now()}`);
-  if (!externalId) return res.status(200).json({ received: true });
-  try {
-    const payment = await prisma.paymentTransaction.findUnique({ where: { external_id: externalId } });
-    if (payment) await creditApprovedPayment(payment, payload, eventId, eventType, raw.toString('utf8'));
-    return res.status(200).json({ received: true });
-  } catch (err) {
-    console.error('[FedaPay] Webhook processing error:', err.message);
-    return res.status(500).json({ error: 'Webhook temporairement indisponible' });
-  }
-});
 
 router.use(authMiddleware);
 
