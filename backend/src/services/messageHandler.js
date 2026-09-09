@@ -513,7 +513,9 @@ class MessageHandler {
 
       // ── From here on we're committed to generating and sending a reply,
       //    so sentiment analysis and memory update are now safe to run. ──
-      const sentimentResult = await this._analyzeSentiment(messageText, apiKey, consumeAIUsage).catch(() => null);
+      const sentimentResult = botConfig?.sentiment_enabled === true
+        ? await this._analyzeSentiment(messageText, apiKey, consumeAIUsage).catch(() => null)
+        : null;
       if (sentimentResult) {
         prisma.message.findFirst({
           where: { contact_id: freshContact.id, direction: 'received' },

@@ -72,6 +72,7 @@ model BotConfig {
 
   personality            String  @default("professional")
   system_prompt_override String?
+  sentiment_enabled      Boolean @default(false)
   sentiment_alert        Boolean @default(false)
   media_auto_reply       Boolean @default(false)
 

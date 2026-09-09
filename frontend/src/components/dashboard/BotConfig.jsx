@@ -58,6 +58,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     away_message: '',
     away_once_per_session: true,
     personality: 'professional',
+    sentiment_enabled: false,
     sentiment_alert: false,
     media_auto_reply: false
   });
@@ -361,6 +362,16 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             <div className="toggle-desc">Le bot répond automatiquement grâce à l'IA</div>
           </div>
           <button className={`toggle-btn ${config.ia_enabled ? 'on' : 'off'}`} onClick={() => setConfig({ ...config, ia_enabled: !config.ia_enabled })}>
+            <span className="toggle-knob" />
+          </button>
+        </div>
+
+        <div className="toggle-row" style={{ marginTop: 12 }}>
+          <div>
+            <div className="toggle-label">🧠 Émotions IA</div>
+            <div className="toggle-desc">Analyse les émotions des messages entrants et utilise des crédits IA</div>
+          </div>
+          <button className={`toggle-btn ${config.sentiment_enabled ? 'on' : 'off'}`} onClick={() => setConfig(c => ({ ...c, sentiment_enabled: !c.sentiment_enabled }))}>
             <span className="toggle-knob" />
           </button>
         </div>
