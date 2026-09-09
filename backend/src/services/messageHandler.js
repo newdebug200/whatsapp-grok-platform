@@ -61,7 +61,7 @@ class MessageHandler {
     return currentMinutes >= openH * 60 + openM && currentMinutes < closeH * 60 + closeM;
   }
 
-  async _analyzeSentiment(text, apiKey) {
+  async _analyzeSentiment(text, apiKey, onUsage = null) {
     if (!text || !apiKey) return null;
     try {
       const resp = await axios.post(
@@ -80,6 +80,8 @@ class MessageHandler {
         },
         { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 8000 }
       );
+      const totalTokens = Number(resp.data.usage?.total_tokens || 0);
+      if (onUsage && totalTokens > 0 && !(await onUsage(totalTokens, 'ai.sentiment'))) return null;
       const raw = resp.data.choices[0].message.content.trim().toLowerCase();
       const allowed = ['positif', 'neutre', 'negatif', 'colere', 'satisfait', 'frustre', 'inquiet', 'confus', 'reconnaissant', 'urgent'];
       if (allowed.includes(raw)) return raw;
@@ -98,7 +100,7 @@ class MessageHandler {
     }
   }
 
-  async _updateMemory(contact, prisma, apiKey, newMessageText) {
+  async _updateMemory(contact, prisma, apiKey, newMessageText, onUsage = null) {
     if (!apiKey) return;
     try {
       const existing = await prisma.contactMemory.findUnique({ where: { contact_id: contact.id } });
@@ -120,6 +122,8 @@ class MessageHandler {
         },
         { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 10000 }
       );
+      const totalTokens = Number(resp.data.usage?.total_tokens || 0);
+      if (onUsage && totalTokens > 0 && !(await onUsage(totalTokens, 'ai.memory'))) return;
       const summary = resp.data.choices[0].message.content.trim();
       await prisma.contactMemory.upsert({
         where: { contact_id: contact.id },
@@ -493,9 +497,23 @@ class MessageHandler {
         if (accountId && creditsEnabled && !isAdminAccount) return;
       }
 
+      // Chaque appel Groq est débité avec ses propres tokens. Les comptes admin
+      // restent exemptés, comme dans le contrôle de solde historique.
+      const consumeAIUsage = async (tokensUsed, eventType, payload = {}) => {
+        if (!creditsEnabled || !accountId || isAdminAccount) return true;
+        const result = await centralSync.consumeCredits(accountId, tokensUsed, eventType, { profile_id: profileId, model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b', ...payload });
+        if (!result?.ok) {
+          console.warn(`[Credits] Débit refusé pour ${eventType}: ${result?.error || 'réponse centrale invalide'}`);
+          return false;
+        }
+        const balance = Number(result.credits_balance);
+        if (Number.isFinite(balance)) await prisma.account.update({ where: { id: accountId }, data: { credit_balance: balance } }).catch(() => {});
+        return true;
+      };
+
       // ── From here on we're committed to generating and sending a reply,
       //    so sentiment analysis and memory update are now safe to run. ──
-      const sentimentResult = await this._analyzeSentiment(messageText, apiKey).catch(() => null);
+      const sentimentResult = await this._analyzeSentiment(messageText, apiKey, consumeAIUsage).catch(() => null);
       if (sentimentResult) {
         prisma.message.findFirst({
           where: { contact_id: freshContact.id, direction: 'received' },
@@ -519,7 +537,7 @@ class MessageHandler {
         }
       }
 
-      this._updateMemory(freshContact, prisma, apiKey, messageText).catch(() => {});
+      await this._updateMemory(freshContact, prisma, apiKey, messageText, consumeAIUsage).catch(() => {});
 
       const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
 
@@ -538,7 +556,7 @@ class MessageHandler {
         for (const m of recentMessages) waManager.addToCache(profileId, contact.id, m.direction, m.content);
       }
 
-      await this._callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memory?.summary || null, { accountId, creditsEnabled });
+      await this._callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memory?.summary || null, { accountId, creditsEnabled, isAdminAccount, consumeAIUsage });
     } catch (error) {
       console.error('Erreur processTextMessage:', error);
     }
@@ -554,7 +572,7 @@ class MessageHandler {
       return;
     }
 
-    const { accountId = null, creditsEnabled = false } = creditInfo;
+    const { accountId = null, creditsEnabled = false, isAdminAccount = false, consumeAIUsage = null } = creditInfo;
 
     try {
       const systemPrompt = this._buildSystemPrompt(botConfig, faqs, memorySummary);
@@ -578,10 +596,13 @@ class MessageHandler {
       const aiResponse = response.data.choices[0].message.content;
       const totalTokens = response.data.usage?.total_tokens || 0;
       let centralCreditResult = null;
-      if (creditsEnabled && accountId && totalTokens > 0) {
-        centralCreditResult = await centralSync.consumeCredits(accountId, totalTokens, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b' });
-        if (!centralCreditResult?.ok) {
-          throw new Error(centralCreditResult?.error || 'API centrale des crédits indisponible');
+      if (creditsEnabled && accountId && !isAdminAccount && totalTokens > 0) {
+        if (consumeAIUsage) {
+          const consumed = await consumeAIUsage(totalTokens, 'ai.usage');
+          if (!consumed) throw new Error('Crédits insuffisants ou API centrale indisponible');
+        } else {
+          centralCreditResult = await centralSync.consumeCredits(accountId, totalTokens, 'ai.usage', { profile_id: profileId, model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b' });
+          if (!centralCreditResult?.ok) throw new Error(centralCreditResult?.error || 'API centrale des crédits indisponible');
         }
       }
 

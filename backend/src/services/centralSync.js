@@ -157,7 +157,7 @@ async function consumeCredits(accountId, tokensUsed, eventType = 'ai.usage', pay
   try {
     const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
     if (!account?.email) return null;
-    const response = await axios.post(`${ADMIN_API}/api/consume-central.php`, { email: account.email, tokens_used: tokensUsed, event_type: eventType, payload }, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
+    const response = await axios.post(`${ADMIN_API}/api/consume-central.php`, { email: account.email, tokens_used: tokensUsed, event_type: eventType, payload }, { headers: { 'Content-Type': 'application/json', ...SERVICE_HEADERS }, timeout: 10000 });
     const data = response.data || {};
     if (data.ok && Number(data.consumed) > 0) {
       const conversion = data.conversion || { tokens_per_unit: 100000, credits_per_unit: Number(data.consumed) / (Number(tokensUsed) / 100000), xof_per_unit: 120 };
