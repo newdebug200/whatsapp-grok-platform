@@ -5,7 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import './Settings.css';
 
 export default function Settings() {
-  const { account, logout, deleteAccount } = useAuth();
+  const { account, logout, requestAccountDeletion } = useAuth();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const [languageError, setLanguageError] = useState('');
@@ -13,7 +13,8 @@ export default function Settings() {
   const [notifEnabled, setNotifEnabled] = useState(Notification.permission === 'granted');
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteReasonText, setDeleteReasonText] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
@@ -29,11 +30,15 @@ export default function Settings() {
   };
 
   const handleDeleteAccount = async () => {
-    if (!deletePassword) { setDeleteError('Mot de passe requis'); return; }
+    if (!deleteReason) { setDeleteError('Sélectionnez un motif'); return; }
+    if (deleteReason === 'other' && deleteReasonText.trim().length < 20) { setDeleteError('Le motif Autre doit contenir au moins 20 caractères'); return; }
     setDeleting(true);
     setDeleteError('');
     try {
-      await deleteAccount(deletePassword);
+      await requestAccountDeletion(deleteReason, deleteReasonText.trim());
+      setShowDeleteModal(false);
+      setDeleteError('');
+      window.alert('Votre demande de suppression a été enregistrée. Botora Admin va l’examiner avant toute suppression définitive.');
     } catch (err) {
       setDeleteError(err.response?.data?.error || 'Erreur lors de la suppression');
       setDeleting(false);
@@ -180,7 +185,7 @@ export default function Settings() {
         <button
           className="settings-logout-btn"
           style={{ marginTop: 8, background: 'rgba(192,57,43,0.08)', color: '#c0392b', borderColor: 'rgba(192,57,43,0.25)' }}
-          onClick={() => { setShowDeleteModal(true); setDeletePassword(''); setDeleteError(''); }}
+          onClick={() => { setShowDeleteModal(true); setDeleteReason(''); setDeleteReasonText(''); setDeleteError(''); }}
         >
           <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
           {t('Delete account')}
@@ -202,24 +207,32 @@ export default function Settings() {
               {t('Delete your account?')}
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #888)', marginBottom: 16, lineHeight: 1.5 }}>
-              {t('This action is irreversible.')} Tous vos profils WhatsApp, conversations, FAQs et configurations seront définitivement supprimés.
+              Votre demande sera examinée par Botora Admin. Le compte ne sera pas supprimé immédiatement.
             </div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 6 }}>
-              {t('Confirm with your password')}
-            </div>
-            <input
-              type="password"
-              value={deletePassword}
-              onChange={e => setDeletePassword(e.target.value)}
-              placeholder="Votre mot de passe actuel"
-              style={{
-                width: '100%', padding: '9px 12px', borderRadius: 8,
-                border: '1px solid var(--border, #333)', background: 'var(--bg, #111)',
-                color: 'var(--text, #fff)', fontSize: '0.9rem', boxSizing: 'border-box'
-              }}
-              onKeyDown={e => e.key === 'Enter' && handleDeleteAccount()}
-              autoFocus
-            />
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 8 }}>Pourquoi souhaitez-vous supprimer votre compte ?</div>
+            {[
+              ['no_longer_needed', 'Je n’en ai plus besoin'],
+              ['too_expensive', 'Le prix est trop élevé'],
+              ['difficult_to_use', 'Le service est difficile à utiliser'],
+              ['missing_features', 'Il manque des fonctionnalités'],
+              ['privacy_concern', 'Préoccupation liée à la confidentialité'],
+              ['other', 'Autre']
+            ].map(([value, label]) => (
+              <label key={value} style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0', fontSize: '0.85rem', cursor: 'pointer' }}>
+                <input type="radio" name="delete-reason" value={value} checked={deleteReason === value} onChange={e => setDeleteReason(e.target.value)} />
+                {label}
+              </label>
+            ))}
+            {deleteReason === 'other' && (
+              <textarea
+                value={deleteReasonText}
+                onChange={e => setDeleteReasonText(e.target.value)}
+                placeholder="Expliquez la raison (minimum 20 caractères)"
+                minLength={20}
+                rows={4}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border, #333)', background: 'var(--bg, #111)', color: 'var(--text, #fff)', fontSize: '0.9rem', boxSizing: 'border-box', marginTop: 6 }}
+              />
+            )}
             {deleteError && (
               <div style={{ color: '#c0392b', fontSize: '0.82rem', marginTop: 6 }}>{deleteError}</div>
             )}
@@ -239,7 +252,7 @@ export default function Settings() {
                   background: '#c0392b', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.88rem',
                   opacity: deleting ? 0.7 : 1
                 }}
-              >{deleting ? t('Deleting...') : t('Delete permanently')}</button>
+              >{deleting ? 'Envoi en cours…' : 'Envoyer la demande'}</button>
             </div>
           </div>
         </div>

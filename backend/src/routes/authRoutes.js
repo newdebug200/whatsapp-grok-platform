@@ -175,39 +175,22 @@ router.post('/reset-confirm', authLimiter, async (req, res) => {
   }
 });
 
-router.delete('/account', authMiddleware, async (req, res) => {
+router.post('/account/deletion-request', authMiddleware, async (req, res) => {
   try {
-    const { password } = req.body;
-    if (!password) return res.status(400).json({ error: 'Mot de passe requis pour confirmer la suppression' });
+    const reasonCode = String(req.body?.reason_code || '').trim();
+    const reasonText = String(req.body?.reason_text || '').trim();
+    const allowedReasons = ['no_longer_needed', 'too_expensive', 'difficult_to_use', 'missing_features', 'privacy_concern', 'other'];
+    if (!allowedReasons.includes(reasonCode)) return res.status(400).json({ error: 'Motif de suppression invalide' });
+    if (reasonCode === 'other' && reasonText.length < 20) return res.status(400).json({ error: 'Le motif Autre doit contenir au moins 20 caractères' });
     const account = await prisma.account.findUnique({ where: { id: req.accountId } });
     if (!account) return res.status(404).json({ error: 'Compte introuvable' });
-    const isValid = await bcrypt.compare(password, account.password);
-    if (!isValid) return res.status(401).json({ error: 'Mot de passe incorrect' });
-
-    const profiles = await prisma.whatsAppProfile.findMany({
-      where: { account_id: req.accountId },
-      select: { id: true }
-    });
-    const profileIds = profiles.map(p => p.id);
-    if (profileIds.length > 0) {
-      const contacts = await prisma.contact.findMany({
-        where: { profile_id: { in: profileIds } },
-        select: { id: true }
-      });
-      const contactIds = contacts.map(c => c.id);
-      if (contactIds.length > 0) {
-        await prisma.message.deleteMany({ where: { contact_id: { in: contactIds } } });
-      }
-      await prisma.contact.deleteMany({ where: { profile_id: { in: profileIds } } });
-      await prisma.fAQ.deleteMany({ where: { profile_id: { in: profileIds } } });
-      await prisma.botConfig.deleteMany({ where: { profile_id: { in: profileIds } } });
-      await prisma.whatsAppProfile.deleteMany({ where: { account_id: req.accountId } });
-    }
-    await prisma.account.delete({ where: { id: req.accountId } });
-    res.json({ success: true, message: 'Compte supprimé définitivement' });
+    const result = await centralSync.requestAccountDeletion(account.email, reasonCode, reasonText);
+    if (!result) return res.status(502).json({ error: 'Le service de suppression est momentanément indisponible.' });
+    if (!result.ok) return res.status(400).json({ error: result.error || 'La demande de suppression n’a pas pu être enregistrée.' });
+    res.json({ success: true, pending: true, message: result.message || 'Votre demande a été enregistrée et sera examinée par Botora Admin.' });
   } catch (error) {
-    console.error('Erreur suppression compte:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression du compte' });
+    console.error('Erreur demande suppression compte:', error);
+    res.status(500).json({ error: 'Erreur lors de la demande de suppression du compte' });
   }
 });
 

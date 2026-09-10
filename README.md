@@ -114,6 +114,10 @@ Depuis l’écran de connexion, l’utilisateur peut sélectionner **Mot de pass
 
 Les routes locales correspondantes sont `POST /api/auth/reset-request` et `POST /api/auth/reset-confirm`; elles transmettent la demande à l’API centrale Botora Admin.
 
+### Demande de suppression de compte
+
+Depuis **Réglages → Compte → Supprimer le compte**, l’utilisateur choisit un motif. Le motif **Autre** exige une précision d’au moins 20 caractères. La demande est envoyée à Botora Admin et le compte reste conservé jusqu’à la revue d’un administrateur. La suppression validée efface les données du compte, mais les numéros WhatsApp utilisés pendant un essai restent inscrits dans l’historique anti-abus central afin d’empêcher la réutilisation d’un autre compte d’essai.
+
 ## API publique
 
 La base des endpoints publics est `/api/v1`. Toutes les routes publiques nécessitent une clé API active dans l’un des en-têtes suivants :

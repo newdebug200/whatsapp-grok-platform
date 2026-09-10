@@ -91,6 +91,16 @@ async function confirmPasswordReset(email, code, newPassword) {
   }
 }
 
+async function requestAccountDeletion(email, reasonCode, reasonText = '') {
+  if (!email || !reasonCode) return null;
+  try {
+    const response = await axios.post(`${ADMIN_API}/api/account-deletion-request.php`, { email: String(email).toLowerCase().trim(), reason_code: reasonCode, reason_text: reasonText }, { headers: { 'Content-Type': 'application/json', ...SERVICE_HEADERS }, timeout: 10000 });
+    return response.data || null;
+  } catch (error) {
+    return error.response?.data || null;
+  }
+}
+
 async function getAccount(email) {
   if (!email) return null;
   try {
@@ -261,4 +271,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, authorizeWhatsAppNumber, syncAccount, requestPasswordReset, confirmPasswordReset, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };
+module.exports = { reportActivity, authorizeWhatsAppNumber, syncAccount, requestPasswordReset, confirmPasswordReset, requestAccountDeletion, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };

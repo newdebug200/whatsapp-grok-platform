@@ -130,9 +130,8 @@ export function AuthProvider({ children }) {
     setActiveProfileState(null);
   };
 
-  const deleteAccount = async (password) => {
-    const res = await axios.delete(`${API_URL}/auth/account`, { data: { password } });
-    if (res.data.success) logout();
+  const requestAccountDeletion = async (reasonCode, reasonText = '') => {
+    const res = await axios.post(`${API_URL}/auth/account/deletion-request`, { reason_code: reasonCode, reason_text: reasonText });
     return res.data;
   };
 
@@ -140,7 +139,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       account, token, loading,
       profiles, activeProfile,
-      login, register, logout, deleteAccount,
+      login, register, logout, requestAccountDeletion,
       selectProfile, loadProfiles, refreshAccount
     }}>
       {children}
