@@ -646,3 +646,11 @@ button.dh-kpi:hover { box-shadow: 0 2px 8px var(--shadow, rgba(0,0,0,0.14)); }
 }
 [data-theme="dark"] .dh-status-eyebrow { color: #83e3a8; }
 [data-theme="dark"] .dh-status-action { color: #082d22; }
+
+
+/* Présentation compacte des accès essentiels */
+.dh-sections-grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.dh-section-card { min-height: 112px; padding: 14px 15px; gap: 5px; box-shadow: 0 1px 5px var(--shadow, rgba(0,0,0,.06)); }
+.dh-section-icon-wrap { width: 36px; height: 36px; border-radius: 10px; }
+.dh-section-emoji { font-size: 18px; }
+@media (max-width: 600px) { .dh-section-card { min-height: 108px; padding: 13px 12px; } }
