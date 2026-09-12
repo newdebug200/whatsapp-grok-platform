@@ -41,6 +41,12 @@
 .api-inline-code { display: block; margin: 7px 0; padding: 8px 10px; border-radius: 8px; background: rgba(18, 140, 126, .08); color: #087f72; font-size: .78rem; overflow-wrap: anywhere; }
 .api-example-block { margin-top: 16px; }
 .api-example-block pre { margin-top: 0; }
+.api-example-secondary { margin-top: 18px; }
+.api-example-secondary h3 { margin-bottom: 10px; }
+.api-reference-grid { margin-top: 0; }
+.api-reference-list { margin: 10px 0 0; padding-left: 20px; color: var(--text-secondary, #667781); line-height: 1.65; font-size: .88rem; }
+.api-reference-list li + li { margin-top: 5px; }
+.api-reference-list code { color: #087f72; }
 .api-keys-card { margin-bottom: 18px; }
 @media (max-width: 720px) {
   .api-documentation { padding: 18px 16px; }

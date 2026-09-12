@@ -22,6 +22,9 @@ function ApiDocumentation({ t, bottom = false }) {
           <h3>{t('Available endpoints')}</h3>
           <div className="api-endpoint"><code>POST /api/v1/messages/send</code><span>Un message</span></div>
           <div className="api-endpoint"><code>POST /api/v1/messages/send-batch</code><span>Jusqu’à 100 messages</span></div>
+          <div className="api-endpoint"><code>POST /api/v1/whatsapp/check-number</code><span>Vérifier un numéro</span></div>
+          <div className="api-endpoint"><code>POST /api/v1/whatsapp/check-numbers</code><span>Jusqu’à 100 numéros</span></div>
+          <div className="api-endpoint"><code>GET /api/v1/messages/health</code><span>État du service</span></div>
           <p className="api-muted">Les requêtes doivent utiliser <code>Content-Type: application/json</code>.</p>
         </article>
         <article className="api-doc-block">
@@ -37,6 +40,8 @@ function ApiDocumentation({ t, bottom = false }) {
             <p><code>to</code> : numéro du destinataire au format international.</p>
             <p><code>message</code> : texte du message, facultatif si un média est envoyé.</p>
             <p><code>media</code> : objet optionnel avec <code>data</code> en base64, <code>mimeType</code> et <code>filename</code>.</p>
+            <p><code>profile_id</code> : identifiant du profil WhatsApp à utiliser. Facultatif si un seul profil est connecté.</p>
+            <p><code>numbers</code> : tableau de numéros pour la vérification groupée, limité à 100 éléments.</p>
           </article>
         )}
       </div>
@@ -48,6 +53,21 @@ function ApiDocumentation({ t, bottom = false }) {
   -H "Content-Type: application/json" \\
   -d '{"to":"229XXXXXXXX","message":"Bonjour depuis mon application"}'`}</code></pre>
           <p className="api-muted">Pour un fichier, ajoutez par exemple <code>media: &#123; data: "...", mimeType: "image/png", filename: "photo.png" &#125;</code>. La légende est facultative.</p>
+          <div className="api-example-secondary">
+            <h3>Vérifier un numéro WhatsApp</h3>
+            <pre><code>{`curl -X POST "${API_URL}/v1/whatsapp/check-number" \\
+  -H "X-API-Key: btr_live_votre_cle" \\
+  -H "Content-Type: application/json" \\
+  -d '{"phone_number":"229XXXXXXXX","profile_id":1}'`}</code></pre>
+            <p className="api-muted">La réponse contient <code>is_whatsapp: true</code> ou <code>false</code>.</p>
+          </div>
+          <div className="api-example-secondary">
+            <h3>Vérifier plusieurs numéros</h3>
+            <pre><code>{`curl -X POST "${API_URL}/v1/whatsapp/check-numbers" \\
+  -H "X-API-Key: btr_live_votre_cle" \\
+  -H "Content-Type: application/json" \\
+  -d '{"numbers":["229XXXXXXXX","229YYYYYYYY"],"profile_id":1}'`}</code></pre>
+          </div>
         </div>
       )}
     </section>
@@ -156,6 +176,28 @@ export default function ApiAccess({ onBack }) {
         <h2>{t('Your keys')}</h2>
         {loading ? <p>{t('Loading...')}</p> : keys.length === 0 ? <p className="api-muted">{t('No API key created yet.')}</p> : <div className="api-key-list">{keys.map(key => <div className={`api-key-row ${key.revoked_at ? 'revoked' : ''}`} key={key.id}><div><strong>{key.name}</strong><span>{key.prefix}•••••••• · {key.revoked_at ? t('Revoked') : t('Active')}</span></div>{!key.revoked_at && <button className="api-danger-button" onClick={() => revoke(key.id)}>{t('Revoke')}</button>}</div>)}</div>}
       </div>
+
+      <section className="api-access-grid api-reference-grid">
+        <div className="api-access-card">
+          <h2>Règles d’utilisation</h2>
+          <ul className="api-reference-list">
+            <li>Un média ne doit pas dépasser <strong>7 Mo</strong>.</li>
+            <li>Un lot peut contenir au maximum <strong>100 messages</strong> ou <strong>100 numéros</strong>.</li>
+            <li>La limite d’envoi est de <strong>120 requêtes par minute</strong>.</li>
+            <li>Un profil WhatsApp connecté et opérationnel est nécessaire.</li>
+            <li>Utilisez <code>profile_id</code> lorsque plusieurs numéros sont connectés.</li>
+          </ul>
+        </div>
+        <div className="api-access-card">
+          <h2>Réponses d’erreur</h2>
+          <ul className="api-reference-list">
+            <li><code>401</code> : clé absente, invalide ou révoquée.</li>
+            <li><code>403</code> : abonnement requis pour l’accès API.</li>
+            <li><code>502</code> : vérification WhatsApp temporairement indisponible.</li>
+            <li><code>503</code> : aucun profil connecté ou profil indisponible.</li>
+          </ul>
+        </div>
+      </section>
 
       <ApiDocumentation t={t} bottom />
     </section>
