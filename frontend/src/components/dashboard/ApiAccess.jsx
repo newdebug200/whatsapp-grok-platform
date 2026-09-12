@@ -4,72 +4,110 @@ import { useLanguage } from '../../context/LanguageContext';
 import './ApiAccess.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = `${API_URL}/v1`;
 
-function ApiDocumentation({ t, bottom = false }) {
+function ApiCodeExample({ title, description, code, onCopy, copied }) {
   return (
-    <section className={`api-documentation ${bottom ? 'api-documentation-bottom' : 'api-documentation-top'}`}>
+    <article className="api-code-example">
+      <div className="api-code-example-heading">
+        <div>
+          <h3>{title}</h3>
+          {description && <p>{description}</p>}
+        </div>
+        <button type="button" className="api-copy-button" onClick={() => onCopy(code)}>
+          {copied ? 'Copié' : 'Copier'}
+        </button>
+      </div>
+      <pre><code>{code}</code></pre>
+    </article>
+  );
+}
+
+function ApiDocumentation({ onCopy, copiedCode }) {
+  const examples = [
+    {
+      title: '1. Envoyer un message',
+      description: 'Envoie un message texte à un numéro WhatsApp.',
+      code: `curl -X POST "${API_BASE_URL}/messages/send" \\\n  -H "X-API-Key: btr_live_votre_cle" \\\n  -H "Content-Type: application/json" \\\n  -d '{"to":"229XXXXXXXX","message":"Bonjour depuis mon application"}'`,
+    },
+    {
+      title: '2. Envoyer plusieurs messages',
+      description: 'Envoie jusqu’à 100 messages dans une seule requête.',
+      code: `curl -X POST "${API_BASE_URL}/messages/send-batch" \\\n  -H "X-API-Key: btr_live_votre_cle" \\\n  -H "Content-Type: application/json" \\\n  -d '{"messages":[{"to":"229XXXXXXXX","message":"Bonjour Jean"},{"to":"229YYYYYYYY","message":"Bonjour Marie"}]}'`,
+    },
+    {
+      title: '3. Vérifier un numéro WhatsApp',
+      description: 'Retourne is_whatsapp à true ou false pour un numéro.',
+      code: `curl -X POST "${API_BASE_URL}/whatsapp/check-number" \\\n  -H "X-API-Key: btr_live_votre_cle" \\\n  -H "Content-Type: application/json" \\\n  -d '{"phone_number":"229XXXXXXXX","profile_id":1}'`,
+    },
+    {
+      title: '4. Vérifier plusieurs numéros',
+      description: 'Vérifie jusqu’à 100 numéros et retourne le résultat de chacun.',
+      code: `curl -X POST "${API_BASE_URL}/whatsapp/check-numbers" \\\n  -H "X-API-Key: btr_live_votre_cle" \\\n  -H "Content-Type: application/json" \\\n  -d '{"numbers":["229XXXXXXXX","229YYYYYYYY"],"profile_id":1}'`,
+    },
+    {
+      title: '5. Vérifier l’état du service',
+      description: 'Contrôle si le service API d’envoi est opérationnel.',
+      code: `curl -X GET "${API_BASE_URL}/messages/health" \\\n  -H "X-API-Key: btr_live_votre_cle"`,
+    },
+  ];
+
+  return (
+    <section className="api-documentation api-documentation-bottom">
       <div className="api-documentation-heading">
         <span className="api-doc-eyebrow">Documentation API</span>
-        <h2>{bottom ? 'Exemple et détails d’intégration' : 'Utiliser l’API Botora'}</h2>
-        <p>
-          {bottom
-            ? 'Gardez cette référence sous la main pour connecter votre application et envoyer des messages WhatsApp en toute sécurité.'
-            : 'Connectez votre application à Botora pour envoyer des messages via le profil WhatsApp actuellement connecté.'}
-        </p>
+        <h2>Exemples et détails d’intégration</h2>
+        <p>Utilisez ces exemples pour connecter votre application à Botora et exploiter les cinq endpoints disponibles.</p>
       </div>
+
+      <div className="api-base-url-card">
+        <div>
+          <strong>Base URL</strong>
+          <p>Toutes les routes publiques de l’API commencent par cette adresse.</p>
+        </div>
+        <code>{API_BASE_URL}</code>
+        <button type="button" className="api-copy-button" onClick={() => onCopy(API_BASE_URL)}>
+          {copiedCode === API_BASE_URL ? 'Copié' : 'Copier'}
+        </button>
+      </div>
+
       <div className="api-doc-grid">
         <article className="api-doc-block">
-          <h3>{t('Available endpoints')}</h3>
-          <div className="api-endpoint"><code>POST /api/v1/messages/send</code><span>Un message</span></div>
-          <div className="api-endpoint"><code>POST /api/v1/messages/send-batch</code><span>Jusqu’à 100 messages</span></div>
-          <div className="api-endpoint"><code>POST /api/v1/whatsapp/check-number</code><span>Vérifier un numéro</span></div>
-          <div className="api-endpoint"><code>POST /api/v1/whatsapp/check-numbers</code><span>Jusqu’à 100 numéros</span></div>
-          <div className="api-endpoint"><code>GET /api/v1/messages/health</code><span>État du service</span></div>
-          <p className="api-muted">Les requêtes doivent utiliser <code>Content-Type: application/json</code>.</p>
+          <h3>Endpoints disponibles</h3>
+          <div className="api-endpoint"><code>POST /messages/send</code><span>Un message</span></div>
+          <div className="api-endpoint"><code>POST /messages/send-batch</code><span>Jusqu’à 100 messages</span></div>
+          <div className="api-endpoint"><code>POST /whatsapp/check-number</code><span>Un numéro</span></div>
+          <div className="api-endpoint"><code>POST /whatsapp/check-numbers</code><span>Jusqu’à 100 numéros</span></div>
+          <div className="api-endpoint"><code>GET /messages/health</code><span>État du service</span></div>
         </article>
         <article className="api-doc-block">
           <h3>Authentification</h3>
           <p>Envoyez votre clé dans l’un des en-têtes suivants :</p>
           <code className="api-inline-code">X-API-Key: btr_live_votre_cle</code>
           <code className="api-inline-code">Authorization: Bearer btr_live_votre_cle</code>
-          <p className="api-muted">Ne partagez jamais une clé dans une interface publique ou un dépôt Git.</p>
+          <p className="api-muted">Conservez votre clé côté serveur. Elle n’est jamais affichée une seconde fois après sa création.</p>
         </article>
-        {bottom && (
-          <article className="api-doc-block">
-            <h3>Champs disponibles</h3>
-            <p><code>to</code> : numéro du destinataire au format international.</p>
-            <p><code>message</code> : texte du message, facultatif si un média est envoyé.</p>
-            <p><code>media</code> : objet optionnel avec <code>data</code> en base64, <code>mimeType</code> et <code>filename</code>.</p>
-            <p><code>profile_id</code> : identifiant du profil WhatsApp à utiliser. Facultatif si un seul profil est connecté.</p>
-            <p><code>numbers</code> : tableau de numéros pour la vérification groupée, limité à 100 éléments.</p>
-          </article>
-        )}
+        <article className="api-doc-block">
+          <h3>Champs utiles</h3>
+          <p><code>to</code> : numéro du destinataire au format international.</p>
+          <p><code>message</code> : texte du message.</p>
+          <p><code>media</code> : média Base64 optionnel, limité à 7 Mo.</p>
+          <p><code>profile_id</code> : profil WhatsApp précis à utiliser lorsque plusieurs profils sont connectés.</p>
+          <p><code>numbers</code> : tableau de numéros, limité à 100 éléments.</p>
+        </article>
       </div>
-      {bottom && (
-        <div className="api-example-block">
-          <h3>{t('Quick example')}</h3>
-          <pre><code>{`curl -X POST "${API_URL}/v1/messages/send" \\
-  -H "X-API-Key: btr_live_votre_cle" \\
-  -H "Content-Type: application/json" \\
-  -d '{"to":"229XXXXXXXX","message":"Bonjour depuis mon application"}'`}</code></pre>
-          <p className="api-muted">Pour un fichier, ajoutez par exemple <code>media: &#123; data: "...", mimeType: "image/png", filename: "photo.png" &#125;</code>. La légende est facultative.</p>
-          <div className="api-example-secondary">
-            <h3>Vérifier un numéro WhatsApp</h3>
-            <pre><code>{`curl -X POST "${API_URL}/v1/whatsapp/check-number" \\
-  -H "X-API-Key: btr_live_votre_cle" \\
-  -H "Content-Type: application/json" \\
-  -d '{"phone_number":"229XXXXXXXX","profile_id":1}'`}</code></pre>
-            <p className="api-muted">La réponse contient <code>is_whatsapp: true</code> ou <code>false</code>.</p>
-          </div>
-          <div className="api-example-secondary">
-            <h3>Vérifier plusieurs numéros</h3>
-            <pre><code>{`curl -X POST "${API_URL}/v1/whatsapp/check-numbers" \\
-  -H "X-API-Key: btr_live_votre_cle" \\
-  -H "Content-Type: application/json" \\
-  -d '{"numbers":["229XXXXXXXX","229YYYYYYYY"],"profile_id":1}'`}</code></pre>
-          </div>
-        </div>
-      )}
+
+      <div className="api-examples-list">
+        <h3 className="api-examples-title">Exemples copiables</h3>
+        {examples.map(example => (
+          <ApiCodeExample
+            key={example.title}
+            {...example}
+            onCopy={onCopy}
+            copied={copiedCode === example.code}
+          />
+        ))}
+      </div>
     </section>
   );
 }
@@ -82,7 +120,7 @@ export default function ApiAccess({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState('');
 
   const loadKeys = async () => {
     try {
@@ -128,10 +166,10 @@ export default function ApiAccess({ onBack }) {
   const copy = async (value) => {
     try {
       await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      setCopiedCode(value);
+      setTimeout(() => setCopiedCode(''), 1800);
     } catch (_) {
-      setCopied(false);
+      setCopiedCode('');
     }
   };
 
@@ -146,13 +184,11 @@ export default function ApiAccess({ onBack }) {
         {onBack && <button onClick={onBack}>← {t('Back')}</button>}
       </header>
 
-      <ApiDocumentation t={t} />
-
       {error && <div className="api-access-alert error">{error}</div>}
       {newKey && (
         <div className="api-access-alert success">
           <strong>{t('Copy this key now. It will not be displayed again.')}</strong>
-          <div className="api-key-reveal"><code>{newKey}</code><button onClick={() => copy(newKey)}>{copied ? t('Copied') : t('Copy')}</button></div>
+          <div className="api-key-reveal"><code>{newKey}</code><button onClick={() => copy(newKey)}>{copiedCode === newKey ? t('Copied') : t('Copy')}</button></div>
         </div>
       )}
 
@@ -199,7 +235,7 @@ export default function ApiAccess({ onBack }) {
         </div>
       </section>
 
-      <ApiDocumentation t={t} bottom />
+      <ApiDocumentation onCopy={copy} copiedCode={copiedCode} />
     </section>
   );
 }
