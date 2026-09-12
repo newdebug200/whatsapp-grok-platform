@@ -286,7 +286,9 @@ class MessageHandler {
       const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
 
       if (message.hasMedia) {
-        if (botConfig?.media_auto_reply !== false) {
+        // La réponse aux médias est désactivée par défaut. Elle ne doit être
+        // envoyée que si l'utilisateur l'a explicitement activée.
+        if (botConfig?.media_auto_reply === true) {
           const label = mediaTypeLabel?.toLowerCase() || 'fichier';
           const response = `Nous recevons votre ${label} mais nous ne traitons que les messages texte. Merci de reformuler votre demande par écrit.`;
           const sentMediaReply = await client.sendMessage(waId, response);
@@ -526,7 +528,7 @@ class MessageHandler {
           }
         }).catch(() => {});
 
-        if ((sentimentResult === 'colere' || sentimentResult === 'negatif') && botConfig?.sentiment_alert !== false) {
+        if ((sentimentResult === 'colere' || sentimentResult === 'negatif') && botConfig?.sentiment_alert === true) {
           waManager.emitToProfileAccount(profileId, 'sentiment-alert', {
             profileId,
             contactId: freshContact.id,
