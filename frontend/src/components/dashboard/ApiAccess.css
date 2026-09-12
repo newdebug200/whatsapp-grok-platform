@@ -44,9 +44,9 @@
 .api-example-secondary { margin-top: 18px; }
 .api-example-secondary h3 { margin-bottom: 10px; }
 .api-base-url-card { display: flex; align-items: center; gap: 14px; margin: 18px 0; padding: 14px 16px; border: 1px solid rgba(18, 140, 126, .25); border-radius: 12px; background: rgba(18, 140, 126, .06); }
-.api-base-url-card > div { min-width: 180px; }
+.api-base-url-card > div { flex: 1; min-width: 0; }
 .api-base-url-card p { margin: 3px 0 0; font-size: .82rem; color: var(--text-secondary, #667781); }
-.api-base-url-card > code { flex: 1; min-width: 0; overflow-wrap: anywhere; color: #087f72; font-size: .84rem; }
+.api-base-url-card > div > code { display: block; width: 100%; margin-top: 9px; padding: 10px 12px; overflow-wrap: anywhere; border: 1px solid rgba(18, 140, 126, .22); border-radius: 8px; background: var(--bg-secondary, #fff); color: #087f72; font-size: .88rem; font-weight: 700; }
 .api-copy-button { flex: 0 0 auto; border: 1px solid rgba(18, 140, 126, .3); border-radius: 8px; padding: 8px 12px; background: var(--bg-secondary, #fff); color: #087f72; font-weight: 700; cursor: pointer; }
 .api-copy-button:hover { background: rgba(18, 140, 126, .12); }
 .api-examples-list { margin-top: 22px; }

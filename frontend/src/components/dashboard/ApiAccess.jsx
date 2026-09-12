@@ -62,10 +62,10 @@ function ApiDocumentation({ onCopy, copiedCode }) {
 
       <div className="api-base-url-card">
         <div>
-          <strong>Base URL</strong>
-          <p>Toutes les routes publiques de l’API commencent par cette adresse.</p>
+          <strong>Base URL de l’API</strong>
+          <p>Toutes les routes publiques de l’API commencent par cette adresse :</p>
+          <code>{API_BASE_URL}</code>
         </div>
-        <code>{API_BASE_URL}</code>
         <button type="button" className="api-copy-button" onClick={() => onCopy(API_BASE_URL)}>
           {copiedCode === API_BASE_URL ? 'Copié' : 'Copier'}
         </button>
