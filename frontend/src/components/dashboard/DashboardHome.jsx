@@ -65,6 +65,8 @@ export default function DashboardHome({
     { key: 'settings-account', tab: 'account', label: 'Mon compte', desc: 'Profil, sécurité et préférences', emoji: '👤', color: '#8e9baa' },
   ];
 
+  const quickSections = sections.filter(section => ['chat', 'bot', 'subscriptions', 'credits', 'api'].includes(section.key));
+
   return (
     <div className="dh-panel">
       <div className="dh-header">
@@ -112,147 +114,38 @@ export default function DashboardHome({
             : "Impossible de charger l'aperçu pour le moment."}
         </div>
       ) : (
-        <>
-          {/* KPI row */}
-          <div className="dh-kpis">
-            <div className="dh-kpi">
-              <div className="dh-kpi-value">{data.totalContacts}</div>
-              <div className="dh-kpi-label">Contacts au total</div>
+        <div className="dh-overview-soft">
+          <div className="dh-status-card">
+            <div>
+              <span className="dh-status-eyebrow">Vue d’ensemble</span>
+              <h2>{needsAttention ? 'Quelques éléments demandent votre attention' : 'Tout est sous contrôle'}</h2>
+              <p>{needsAttention ? `${data.sentimentAlerts + data.pausedContacts} élément(s) à consulter dans vos conversations.` : 'Votre espace Botora fonctionne normalement.'}</p>
             </div>
-            <div className="dh-kpi">
-              <div className="dh-kpi-value">{data.today.received}</div>
-              <div className="dh-kpi-label">Messages reçus aujourd'hui</div>
-            </div>
-            <div className="dh-kpi">
-              <div className="dh-kpi-value">{data.today.sent}</div>
-              <div className="dh-kpi-label">Réponses envoyées aujourd'hui</div>
-            </div>
-            {creditBalance !== null && (
-              <button className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`} onClick={() => onGoTo('credits')}>
-                <div className="dh-kpi-value">{creditBalance.toFixed(2)}</div>
-                <div className="dh-kpi-label">Crédits restants · Recharger</div>
-              </button>
-            )}
+            {needsAttention && <button className="dh-status-action" onClick={() => onGoTo('chat')}>Voir les discussions</button>}
           </div>
-
-          <div className="dh-grid">
-            {/* À traiter maintenant */}
-            <div className="dh-card dh-card-attention">
-              <div className="dh-card-title">
-                À traiter maintenant
-                {needsAttention && <span className="dh-badge">{data.sentimentAlerts + data.pausedContacts}</span>}
-              </div>
-              {!needsAttention && (
-                <div className="dh-empty">Rien d'urgent — tout est sous contrôle. ✅</div>
-              )}
-              {data.sentimentAlertsList.length > 0 && (
-                <div className="dh-attention-group">
-                  <div className="dh-attention-label">⚠️ Sentiment négatif détecté</div>
-                  {data.sentimentAlertsList.map(m => (
-                    <button
-                      key={m.id}
-                      className="dh-attention-row"
-                      onClick={() => onSelectContact ? onSelectContact(m.contact) : onGoTo('chat')}
-                    >
-                      <span className="dh-attention-name">{m.contact.name || m.contact.phone_number}</span>
-                      <span className="dh-attention-msg">{(m.content || '').slice(0, 60)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {data.pausedContactsList.length > 0 && (
-                <div className="dh-attention-group">
-                  <div className="dh-attention-label">⏸️ IA en pause (intervention requise)</div>
-                  {data.pausedContactsList.map(c => (
-                    <button key={c.id} className="dh-attention-row" onClick={() => onSelectContact ? onSelectContact(c) : onGoTo('chat')}>
-                      <span className="dh-attention-name">{c.name || c.phone_number}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Activité de la semaine */}
-            <div className="dh-card">
-              <div className="dh-card-title">
-                Activité de la semaine
-                <button className="dh-link" onClick={() => onGoTo('stats')}>Voir tout →</button>
-              </div>
-              <div className="dh-sparkline">
-                {data.dailyMessages.map(d => {
-                  const total = d.sent + d.received;
-                  const sentH = maxDaily ? (d.sent / maxDaily) * 100 : 0;
-                  const recvH = maxDaily ? (d.received / maxDaily) * 100 : 0;
-                  return (
-                    <div key={d.date} className="dh-spark-col" title={`${d.label}: ${total} message${total === 1 ? '' : 's'}`}>
-                      <div className="dh-spark-bars">
-                        <div className="dh-spark-bar sent" style={{ height: `${sentH}%` }} />
-                        <div className="dh-spark-bar recv" style={{ height: `${recvH}%` }} />
-                      </div>
-                      <div className="dh-spark-label">{d.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="dh-sparkline-legend">
-                <span><span className="dh-funnel-dot" style={{ background: '#25d366' }} /> Envoyés</span>
-                <span><span className="dh-funnel-dot" style={{ background: '#8e9baa' }} /> Reçus</span>
-              </div>
-            </div>
-
-            {/* Contacts les plus actifs */}
-            <div className="dh-card">
-              <div className="dh-card-title">Contacts les plus actifs (7 jours)</div>
-              {(!data.topContacts || data.topContacts.length === 0) ? (
-                <div className="dh-empty">Pas encore assez d'activité cette semaine.</div>
-              ) : (
-                data.topContacts.map(c => (
-                  <button key={c.id} className="dh-top-contact-row" onClick={() => onSelectContact ? onSelectContact(c) : onGoTo('chat')}>
-                    <span className="dh-top-contact-avatar" style={{ background: getColor(c.id) }}>
-                      {(c.name || c.phone_number || '?').charAt(0).toUpperCase()}
-                    </span>
-                    <span className="dh-top-contact-name">{c.name || c.phone_number}</span>
-                    <span className="dh-top-contact-count">{c.count} msg</span>
-                  </button>
-                ))
-              )}
-            </div>
+          <div className="dh-kpis dh-kpis-soft">
+            <div className="dh-kpi"><div className="dh-kpi-value">{data.totalContacts}</div><div className="dh-kpi-label">Contacts</div></div>
+            <div className="dh-kpi"><div className="dh-kpi-value">{data.today.received + data.today.sent}</div><div className="dh-kpi-label">Messages aujourd’hui</div></div>
+            {creditBalance !== null && <button className={`dh-kpi ${creditBalance <= 0 ? 'danger' : creditBalance < 10 ? 'warn' : ''}`} onClick={() => onGoTo('credits')}><div className="dh-kpi-value">{creditBalance.toFixed(2)}</div><div className="dh-kpi-label">Crédits disponibles</div></button>}
           </div>
-        </>
+        </div>
       )}
 
-      {/* Accès rapides à tous les espaces de Botora */}
+      {/* Accès essentiels */}
       <div className="dh-sections-heading">
         <div>
-          <div className="dh-sections-title">Votre espace Botora</div>
-          <div className="dh-sections-subtitle">Accédez rapidement à chaque fonctionnalité de votre plateforme.</div>
+          <div className="dh-sections-title">Accès essentiels</div>
+          <div className="dh-sections-subtitle">Les actions principales de votre espace, au même endroit.</div>
         </div>
-        <span className="dh-sections-count">{sections.length} espaces</span>
+        <span className="dh-sections-count">{quickSections.length} accès</span>
       </div>
       <div className="dh-sections-grid">
-        {sections.map(s => (
+        {quickSections.map(s => (
           <button key={s.key} className="dh-section-card" onClick={() => onGoTo(s.key)} style={{ '--dh-card-color': s.color }}>
             <span className="dh-section-icon-wrap"><span className="dh-section-emoji">{s.emoji}</span></span>
             <span className="dh-section-label">{s.label}{s.badge && <span className="dh-section-badge">{s.badge}</span>}</span>
             <span className="dh-section-desc">{s.desc}</span>
             <span className="dh-section-open">Ouvrir <span aria-hidden="true">→</span></span>
-          </button>
-        ))}
-      </div>
-
-      <div className="dh-settings-heading">
-        <div>
-          <div className="dh-sections-title">Paramètres détaillés</div>
-          <div className="dh-sections-subtitle">Chaque espace de configuration est accessible directement depuis cet accueil.</div>
-        </div>
-        <span className="dh-settings-pill">{settingsSections.length} réglages</span>
-      </div>
-      <div className="dh-settings-grid">
-        {settingsSections.map(s => (
-          <button key={s.key} className="dh-settings-card" onClick={() => onGoTo(s.key)} style={{ '--dh-card-color': s.color }}>
-            <span className="dh-settings-icon">{s.emoji}</span>
-            <span className="dh-settings-copy"><strong>{s.label}</strong><small>{s.desc}</small></span>
-            <span className="dh-settings-arrow" aria-hidden="true">→</span>
           </button>
         ))}
       </div>
