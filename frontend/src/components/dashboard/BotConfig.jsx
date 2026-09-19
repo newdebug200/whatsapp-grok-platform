@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const CONNECT_COOLDOWN_MS = 9000;
@@ -114,6 +115,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   };
 
   const handleDeleteKeyword = async (id) => {
+    if (!await confirmAction('Supprimer ce sujet sensible ? Cette action est irréversible.')) return;
     try {
       await axios.delete(`${API_URL}/config/keywords/${id}`);
       setKeywords(prev => prev.filter(k => k.id !== id));
