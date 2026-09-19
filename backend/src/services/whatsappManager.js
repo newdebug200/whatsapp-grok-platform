@@ -155,7 +155,9 @@ class WhatsAppManager {
     });
   }
 
-  // ─── Import WhatsApp contacts from phone book ─────────────────────────────
+  // ─── Legacy full imports (kept for controlled/manual migration only) ───────
+  // These methods are intentionally not called during connection. Live message
+  // handlers below create and enrich one contact at a time.
 
   _isUsableContactName(name, phoneNumber, waId) {
     const value = String(name || '').trim();
@@ -565,11 +567,9 @@ class WhatsAppManager {
       // Synchronize user-owned automatic replies before live message processing.
       centralSync.getKeywordAutoReplies(profile.id).catch(error => console.warn(`[WA] Réponses automatiques non synchronisées: ${error.message}`));
 
-      // Import phone book contacts in background
-      this._importContacts(client, profile.id, readyEntry?.syncToken).catch(() => {});
-
-      // Sync full chat history: missed messages + groups
-      this._syncChatHistory(client, profile.id, accountId, readyEntry?.syncToken).catch(() => {});
+      // Connexion légère : aucun carnet de contacts, chat ou historique n’est chargé ici.
+      // Les contacts sont créés/enrichis uniquement lorsqu’un message réel arrive
+      // ou qu’un message est envoyé depuis la plateforme ou le téléphone.
     });
 
     // ── Incoming message ──
@@ -805,51 +805,6 @@ class WhatsAppManager {
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') return null;
     return found.entry.client;
-  }
-
-  // Refresh names for conversations already stored locally. This is required
-  // because WhatsApp may expose the contact name only after the chat is opened
-  // or after getContactById() is called on the active client.
-  async enrichConversationContacts(profileId, contacts) {
-    const client = this.getClient(profileId);
-    if (!client || !Array.isArray(contacts)) return contacts;
-
-    const enriched = [];
-    for (const contact of contacts) {
-      const storedWaId = String(contact?.wa_id || '').trim();
-      const phoneDigits = String(contact?.phone_number || '').replace(/\D/g, '');
-      const storedDigits = storedWaId.replace(/\D/g, '');
-      const waId = storedWaId.includes('@')
-        ? storedWaId
-        : (storedDigits.length >= 7 && storedDigits.length <= 15 ? `${storedDigits}@c.us` : '')
-          || (phoneDigits.length >= 7 && phoneDigits.length <= 15 ? `${phoneDigits}@c.us` : '');
-      if (!waId || waId.includes('@g.us')) {
-        enriched.push(contact);
-        continue;
-      }
-
-      let waContact = null;
-      try { waContact = await client.getContactById(waId); } catch (_) {}
-      let name = await this._resolvePrivateContactName(waContact, contact.phone_number, waId);
-
-      if (!name) {
-        try {
-          const chat = await client.getChatById(waId);
-          name = await this._resolveChatContactName(client, chat, contact.phone_number, waId);
-        } catch (_) {}
-      }
-
-      if (name || !storedWaId) {
-        try {
-          await this.prisma.contact.update({
-            where: { id: contact.id },
-            data: { ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) }
-          });
-        } catch (_) {}
-      }
-      enriched.push({ ...contact, ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) });
-    }
-    return enriched;
   }
 
   // ─── Send message ─────────────────────────────────────────────────────────

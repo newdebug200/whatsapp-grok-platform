@@ -112,8 +112,9 @@ router.get('/conversations', profileMiddleware, async (req, res) => {
       const dateB = b.messages[0]?.created_at || b.created_at;
       return new Date(dateB) - new Date(dateA);
     });
-    const enriched = await whatsappManager.enrichConversationContacts(req.profileId, sorted);
-    res.json(enriched);
+    // Ne pas interroger WhatsApp pour chaque conversation au chargement de la page.
+    // Les noms sont enrichis à la réception ou à l’envoi d’un message, à la demande.
+    res.json(sorted);
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du chargement des conversations' });
   }
