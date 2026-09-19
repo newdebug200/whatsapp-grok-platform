@@ -384,7 +384,7 @@ export default function Dashboard() {
 
   const isAdmin = account?.control_center_access === true || (account?.control_center_access == null && ['admin', 'superadmin'].includes(account?.role));
   const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
-  const discussionsEnabled = featureEnabled('whatsapp_discussions_enabled');
+  const discussionsEnabled = platformConfig.whatsapp_discussions_enabled !== false && platformConfig.whatsapp_discussions_enabled !== 'false';
   const campaignsEnabled = featureEnabled('campaigns_enabled');
   const creditsEnabled = featureEnabled('credits_enabled');
   const iaGlobalEnabled = featureEnabled('ia_enabled_global');

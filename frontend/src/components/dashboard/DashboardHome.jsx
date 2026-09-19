@@ -37,11 +37,12 @@ export default function DashboardHome({
 
   const needsAttention = data && (data.pausedContacts > 0 || data.sentimentAlerts > 0);
   const maxDaily = data ? Math.max(1, ...data.dailyMessages.map(d => d.sent + d.received)) : 1;
-  const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
+  const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== false && platformConfig[key] !== 'false');
+  const discussionsEnabled = platformConfig.whatsapp_discussions_enabled !== false && platformConfig.whatsapp_discussions_enabled !== 'false';
   const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
 
   const sections = [
-    ...(featureEnabled('whatsapp_discussions_enabled') ? [{ key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null }] : []),
+    ...(discussionsEnabled ? [{ key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null }] : []),
     { key: 'subscriptions', label: 'Abonnements', desc: 'Voir les offres Botora', emoji: '◈', color: '#0aa37f' },
     { key: 'credits', label: 'Recharger les crédits', desc: 'Payer avec FedaPay', emoji: '₣', color: '#0aa37f' },
     { key: 'credit-usage', label: 'Utilisation des crédits', desc: 'Consulter votre consommation', emoji: '▤', color: '#087f72' },
@@ -121,7 +122,7 @@ export default function DashboardHome({
               <h2>{needsAttention ? 'Quelques éléments demandent votre attention' : 'Tout est sous contrôle'}</h2>
               <p>{needsAttention ? `${data.sentimentAlerts + data.pausedContacts} élément(s) à consulter dans vos conversations.` : 'Votre espace Botora fonctionne normalement.'}</p>
             </div>
-            {needsAttention && <button className="dh-status-action" onClick={() => onGoTo('chat')}>Voir les discussions</button>}
+            {needsAttention && discussionsEnabled && <button className="dh-status-action" onClick={() => onGoTo('chat')}>Voir les discussions</button>}
           </div>
           <div className="dh-kpis dh-kpis-soft">
             <div className="dh-kpi"><div className="dh-kpi-value">{data.totalContacts}</div><div className="dh-kpi-label">Contacts</div></div>
