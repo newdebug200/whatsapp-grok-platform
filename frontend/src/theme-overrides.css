@@ -53,17 +53,6 @@
 .credit-usage-table-wrap pre { background: var(--surface-subtle); color: var(--ink); }
 .credit-event { background: var(--accent-soft, #dff7ef); color: var(--accent-dark, #08745f); }
 .credit-usage-error { background: color-mix(in srgb, #e5484d 10%, var(--surface-card)); color: #b42318; }
-.toggle-row input[type="checkbox"] {
-  -webkit-appearance: checkbox;
-  appearance: checkbox;
-  width: 19px !important;
-  height: 19px !important;
-  min-width: 19px;
-  margin: 0 4px 0 16px;
-  accent-color: var(--accent, #0aa37f);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
 .credit-usage-back:hover,
 .credit-usage-pagination button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-dark); }
 

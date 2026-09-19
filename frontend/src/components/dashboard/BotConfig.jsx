@@ -348,18 +348,22 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           </button>
         </div>
 
-        <label className="toggle-row" style={{ marginTop: 12, cursor: 'pointer' }}>
+        <div className="toggle-row" style={{ marginTop: 12 }}>
           <div>
             <div className="toggle-label">👥 Autoriser l’IA dans les groupes</div>
             <div className="toggle-desc">Par défaut, les messages de groupe sont enregistrés sans réponse automatique de l’IA</div>
           </div>
-          <input
-            type="checkbox"
-            checked={config.ia_group_enabled === true}
-            onChange={e => setConfig(c => ({ ...c, ia_group_enabled: e.target.checked }))}
-            style={{ width: 18, height: 18, accentColor: 'var(--accent, #25d366)' }}
-          />
-        </label>
+          <button
+            type="button"
+            className={`toggle-btn ${config.ia_group_enabled ? 'on' : 'off'}`}
+            role="switch"
+            aria-checked={config.ia_group_enabled === true}
+            aria-label="Autoriser l’IA dans les groupes"
+            onClick={() => setConfig(c => ({ ...c, ia_group_enabled: !c.ia_group_enabled }))}
+          >
+            <span className="toggle-knob" />
+          </button>
+        </div>
 
         <div className="field-group" style={{ marginTop: 16 }}>
           <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
