@@ -115,14 +115,14 @@ export default function DashboardHome({
             : "Impossible de charger l'aperçu pour le moment."}
         </div>
       ) : (
-        <div className="dh-overview-soft">
+        discussionsEnabled && <div className="dh-overview-soft">
           <div className="dh-status-card">
             <div>
               <span className="dh-status-eyebrow">Vue d’ensemble</span>
               <h2>{needsAttention ? 'Quelques éléments demandent votre attention' : 'Tout est sous contrôle'}</h2>
               <p>{needsAttention ? `${data.sentimentAlerts + data.pausedContacts} élément(s) à consulter dans vos conversations.` : 'Votre espace Botora fonctionne normalement.'}</p>
             </div>
-            {needsAttention && discussionsEnabled && <button className="dh-status-action" onClick={() => onGoTo('chat')}>Voir les discussions</button>}
+            {needsAttention && <button className="dh-status-action" onClick={() => onGoTo('chat')}>Voir les discussions</button>}
           </div>
           <div className="dh-kpis dh-kpis-soft">
             <div className="dh-kpi"><div className="dh-kpi-value">{data.totalContacts}</div><div className="dh-kpi-label">Contacts</div></div>
