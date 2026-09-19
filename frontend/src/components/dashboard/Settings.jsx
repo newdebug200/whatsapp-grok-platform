@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../App';
 import { useLanguage } from '../../context/LanguageContext';
+import { confirmAction } from '../../utils/confirmAction';
 import './Settings.css';
 
 export default function Settings() {
@@ -17,6 +18,9 @@ export default function Settings() {
   const [deleteReasonText, setDeleteReasonText] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const handleLogout = async () => {
+    if (await confirmAction('Voulez-vous vraiment vous déconnecter de Botora ?')) logout();
+  };
 
   useEffect(() => {
     localStorage.setItem('botora-notif-sound', soundEnabled ? 'on' : 'off');
@@ -178,7 +182,7 @@ export default function Settings() {
             <div className="settings-account-email">{account?.email}</div>
           </div>
         </div>
-        <button className="settings-logout-btn" onClick={logout}>
+        <button className="settings-logout-btn" onClick={handleLogout}>
           <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
           {t('Sign out')}
         </button>

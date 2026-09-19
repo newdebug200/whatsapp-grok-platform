@@ -17,6 +17,7 @@ import CreditUsage from './CreditUsage';
 import Sentiments from './Sentiments';
 import ApiAccess from './ApiAccess';
 import { useLanguage } from '../../context/LanguageContext';
+import { confirmAction } from '../../utils/confirmAction';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -46,6 +47,9 @@ function playNotifSound() {
 export default function Dashboard() {
   const { account, token, logout, profiles, activeProfile, selectProfile, loadProfiles, refreshAccount } = useAuth();
   const { t } = useLanguage();
+  const confirmLogout = async () => {
+    if (await confirmAction('Voulez-vous vraiment vous déconnecter de Botora ?')) logout();
+  };
   const [socket, setSocket] = useState(null);
   const [waStatus, setWaStatus] = useState({ isConnected: false, qrCode: null, status: 'not_initialized' });
   const [selectedContact, setSelectedContact] = useState(null);
@@ -270,6 +274,7 @@ export default function Dashboard() {
   const handleLogoutWhatsApp = async (profileId) => {
     const pid = profileId || activeProfile?.id;
     if (!pid) return;
+    if (!await confirmAction('Voulez-vous vraiment déconnecter cette session WhatsApp ?')) return;
     try {
       await axios.post(`${API_URL}/messages/logout`, { profileId: pid });
       setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'Session WhatsApp déconnectée.' });
@@ -436,7 +441,7 @@ export default function Dashboard() {
           campaignsEnabled={campaignsEnabled}
           unreadCount={unreadCount}
           platformConfig={platformConfig}
-          onLogout={logout}
+          onLogout={confirmLogout}
           onGoTo={(key) => {
             if (key.startsWith('settings-')) return goToSettings(key.replace('settings-', ''));
             if (key === 'admin') return isAdmin ? setActivePanel('admin') : goHome();
@@ -568,7 +573,7 @@ export default function Dashboard() {
           )}
           <div className="app-navigation-footer">
             <button onClick={goHome}>← {t('Dashboard')}</button>
-            <button className="app-navigation-logout" onClick={logout} title={t('Logout')} aria-label={t('Logout')}>
+            <button className="app-navigation-logout" onClick={confirmLogout} title={t('Logout')} aria-label={t('Logout')}>
               <svg className="app-navigation-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M10 17l5-5-5-5" />
                 <path d="M15 12H3" />
@@ -678,7 +683,7 @@ export default function Dashboard() {
                     <div className="dropdown-section-label">{t('Account')}</div>
                     <button className="dropdown-item" onClick={() => { goToSettings('account'); }}>Mon compte</button>
                     <div className="dropdown-divider" />
-                    <button className="dropdown-item danger" onClick={logout}>{t('Logout')}</button>
+                    <button className="dropdown-item danger" onClick={confirmLogout}>{t('Logout')}</button>
                   </div>
                 )}
               </div>
