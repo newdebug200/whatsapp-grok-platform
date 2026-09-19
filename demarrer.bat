@@ -36,6 +36,18 @@ if not exist "%ROOT%\backend\package.json" (
     echo  Dossier detecte : %ROOT%
     pause & exit /b 1
 )
+where node >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  [ERREUR] Node.js est requis pour lancer Botora.
+    echo  Installez Node.js LTS depuis https://nodejs.org puis relancez ce fichier.
+    pause & exit /b 1
+)
+where npm >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  [ERREUR] npm est introuvable. Reinstallez Node.js LTS puis relancez ce fichier.
+    pause & exit /b 1
+)
+echo  [OK] Node.js et npm sont disponibles.
 
 REM ══════════════════════════════════════════════════════════════════════════
 REM  ÉTAPE 1 — Mise à jour du code (git pull)
@@ -165,18 +177,15 @@ REM ═════════════════════════�
 echo  [5/8] Dependances backend...
 cd /d "%ROOT%\backend"
 
-if not exist "node_modules" (
-    echo  [INSTALL] Premiere installation — peut prendre 2 a 5 minutes...
-    call npm install --prefer-offline --no-audit --no-fund
-    if %errorlevel% neq 0 (
-        echo  [ERREUR] npm install backend a echoue. Verifiez votre connexion.
-        cd /d "%ROOT%"
-        pause & exit /b 1
-    )
-    echo  [OK] Dependances backend installees.
-) else (
-    echo  [OK] node_modules backend deja present.
+echo  [INSTALL] Verification et installation des dependances backend...
+echo  Cette etape installe aussi toute nouvelle dependance manquante.
+call npm install --prefer-offline --no-audit --no-fund
+if %errorlevel% neq 0 (
+    echo  [ERREUR] npm install backend a echoue. Verifiez votre connexion.
+    cd /d "%ROOT%"
+    pause & exit /b 1
 )
+echo  [OK] Dependances backend presentes.
 
 REM ── Installer les nouvelles dependances si elles manquent ────────────────
 if not exist "node_modules\ffmpeg-static" (
@@ -260,18 +269,15 @@ REM ═════════════════════════�
 echo  [7/8] Dependances frontend...
 cd /d "%ROOT%\frontend"
 
-if not exist "node_modules" (
-    echo  [INSTALL] Installation frontend...
-    call npm install --prefer-offline --no-audit --no-fund
-    if %errorlevel% neq 0 (
-        echo  [ERREUR] npm install frontend a echoue.
-        cd /d "%ROOT%"
-        pause & exit /b 1
-    )
-    echo  [OK] Dependances frontend installees.
-) else (
-    echo  [OK] node_modules frontend deja present.
+echo  [INSTALL] Verification et installation des dependances frontend...
+echo  SweetAlert2 et toute autre dependance manquante seront installees ici.
+call npm install --prefer-offline --no-audit --no-fund
+if %errorlevel% neq 0 (
+    echo  [ERREUR] npm install frontend a echoue.
+    cd /d "%ROOT%"
+    pause & exit /b 1
 )
+echo  [OK] Dependances frontend presentes, dont SweetAlert2 si declare.
 cd /d "%ROOT%"
 echo.
 
