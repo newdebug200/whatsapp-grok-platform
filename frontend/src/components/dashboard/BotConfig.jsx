@@ -181,9 +181,9 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
       {/* ── WhatsApp ── */}
       <div className="wa-section">
         <div className="section-label">WhatsApp</div>
-        <div className={`wa-status-row ${waStatus.status === 'syncing' || waStatus.status === 'synced' || waStatus.status === 'sync-failed' ? 'connected' : 'disconnected'}`}>
+        <div className={`wa-status-row ${waStatus.status === 'syncing' || waStatus.status === 'synced' || waStatus.status === 'sync-failed' || waStatus.status === 'reconnecting' ? 'connected' : 'disconnected'}`}>
           <span className="wa-dot" />
-          <span>{waStatus.status === 'syncing' ? 'Session conservée · synchronisation…' : waStatus.isConnected ? 'Connecté · session conservée' : waStatus.status === 'qr' || waStatus.status === 'auth_failure' || waStatus.status === 'disconnected' ? 'Session WhatsApp perdue' : 'Non connecté'}</span>
+          <span>{waStatus.status === 'syncing' ? 'Session conservée · synchronisation…' : waStatus.status === 'reconnecting' ? 'Session conservée · reconnexion…' : waStatus.isConnected ? 'Connecté · session conservée' : waStatus.status === 'qr' || waStatus.status === 'auth_failure' || waStatus.status === 'disconnected' ? 'Session WhatsApp perdue' : 'Non connecté'}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             {!waStatus.isConnected && (
               <button className="btn-connect" onClick={handleConnect} disabled={isConnectDisabled}>
@@ -207,6 +207,12 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           <div className="wa-session-notice wa-session-syncing" role="status">
             <div className="wa-session-spinner" />
             <div><strong>Session WhatsApp conservée</strong><span>Synchronisation des conversations et des données en cours…</span></div>
+          </div>
+        )}
+        {waStatus.status === 'reconnecting' && (
+          <div className="wa-session-notice wa-session-syncing" role="status">
+            <div className="wa-session-spinner" />
+            <div><strong>Reconnexion automatique</strong><span>{waStatus.message || 'La session WhatsApp est conservée. Nouvelle tentative en cours…'}</span></div>
           </div>
         )}
         {waStatus.status === 'synced' && waStatus.message && (
@@ -446,7 +452,12 @@ function QRCodeDisplay({ value }) {
     if (!value || !canvasRef.current) return;
     import('qrcode').then(mod => {
       const QRCode = mod.default || mod;
-      QRCode.toCanvas(canvasRef.current, value, { width: 220, margin: 2 }, err => {
+      QRCode.toCanvas(canvasRef.current, value, {
+        width: 360,
+        margin: 5,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#111111', light: '#ffffff' }
+      }, err => {
         if (err) console.error('QR error:', err);
       });
     }).catch(err => console.error('Import qrcode failed:', err));

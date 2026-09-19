@@ -26,6 +26,7 @@ try {
 }
 
 const REINIT_COOLDOWN_MS = 10000;
+const RECONNECT_DELAYS_MS = [5000, 15000, 30000, 60000];
 const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
 const CONTEXT_MAX = 20;
 
@@ -37,6 +38,9 @@ class WhatsAppManager {
     this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
     this._botSentIds = new Set(); // WA message IDs sent by Botora API — used to skip duplicates in message_create
     this._incomingHandledIds = new Set(); // Prevent message + message_create double processing
+    this.reconnectAttempts = new Map();
+    this.reconnectTimers = new Map();
+    this.manualLogoutProfiles = new Set();
     this.io = null;
     this.prisma = null;
   }
@@ -110,11 +114,33 @@ class WhatsAppManager {
     return typeof clientKey === 'number' ? `profile_${clientKey}` : clientKey;
   }
 
+  _sessionDir(clientKey, legacy = false) {
+    const prefix = legacy ? 'session-session-' : 'session-';
+    return path.join(SESSION_BASE, `${prefix}${this._sessionId(clientKey)}`);
+  }
+
+  _prepareSessionDirectory(clientKey) {
+    const currentDir = this._sessionDir(clientKey);
+    const legacyDir = this._sessionDir(clientKey, true);
+    if (!fs.existsSync(currentDir) && fs.existsSync(legacyDir)) {
+      try {
+        fs.renameSync(legacyDir, currentDir);
+        console.log(`[WA] Session legacy migrée : ${path.basename(legacyDir)} → ${path.basename(currentDir)}`);
+      } catch (err) {
+        console.warn(`[WA] Migration session impossible : ${err.message}`);
+      }
+    }
+    return currentDir;
+  }
+
+  _hasSession(clientKey) {
+    return fs.existsSync(this._sessionDir(clientKey)) || fs.existsSync(this._sessionDir(clientKey, true));
+  }
+
   _cleanChromeLocks(clientKey) {
-    const sessionDir = path.join(SESSION_BASE, `session-${this._sessionId(clientKey)}`);
-    if (!fs.existsSync(sessionDir)) return;
+    const sessionDirs = [this._sessionDir(clientKey), this._sessionDir(clientKey, true)];
     const lockNames = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
-    const searchDirs = [sessionDir, path.join(sessionDir, 'Default')];
+    const searchDirs = sessionDirs.flatMap(sessionDir => [sessionDir, path.join(sessionDir, 'Default')]);
     for (const dir of searchDirs) {
       for (const lock of lockNames) {
         const p = path.join(dir, lock);
@@ -386,7 +412,30 @@ class WhatsAppManager {
       }
     }
     this._cleanChromeLocks(profileId);
+    this._prepareSessionDirectory(profileId);
     return this.initializeClient(accountId, profileId);
+  }
+
+  _scheduleReconnect(accountId, profileId) {
+    if (this.manualLogoutProfiles.has(profileId) || this.reconnectTimers.has(profileId)) return;
+    const attempt = this.reconnectAttempts.get(profileId) || 0;
+    const delay = RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)];
+    this.reconnectAttempts.set(profileId, attempt + 1);
+    this.io?.to(`account_${accountId}`).emit('status', {
+      isConnected: false, qrCode: null, status: 'reconnecting', profileId,
+      attempt: attempt + 1, message: `Connexion interrompue. Reconnexion automatique dans ${Math.ceil(delay / 1000)} s…`
+    });
+    const timer = setTimeout(async () => {
+      this.reconnectTimers.delete(profileId);
+      if (this.manualLogoutProfiles.has(profileId)) return;
+      try {
+        await this.reconnectClient(accountId, profileId);
+      } catch (err) {
+        console.warn(`[WA] Reconnexion automatique échouée pour le profil ${profileId}: ${err.message}`);
+        this._scheduleReconnect(accountId, profileId);
+      }
+    }, delay);
+    this.reconnectTimers.set(profileId, timer);
   }
 
   // ─── Initialize a WhatsApp client ─────────────────────────────────────────
@@ -447,6 +496,7 @@ class WhatsAppManager {
 
     const clientKey = profileId !== null ? profileId : this._tempKey(accountId);
     const sessionId = this._sessionId(clientKey);
+    this._prepareSessionDirectory(clientKey);
     this._cleanChromeLocks(clientKey);
 
     const isWindows = process.platform === 'win32';
@@ -461,7 +511,7 @@ class WhatsAppManager {
     console.log(`[WA] Initialisation — compte ${accountId}, clé ${clientKey}`);
 
     const client = new Client({
-      authStrategy: new LocalAuth({ clientId: `session-${sessionId}`, dataPath: SESSION_BASE }),
+      authStrategy: new LocalAuth({ clientId: sessionId, dataPath: SESSION_BASE }),
       puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 600000 }
     });
 
@@ -483,6 +533,12 @@ class WhatsAppManager {
 
     // ── Ready ──
     client.on('ready', async () => {
+      if (profileId !== null) {
+        this.reconnectAttempts.delete(profileId);
+        const timer = this.reconnectTimers.get(profileId);
+        if (timer) clearTimeout(timer);
+        this.reconnectTimers.delete(profileId);
+      }
       const phoneNumber = '+' + client.info.wid.user;
       console.log(`[WA] Connecté — ${phoneNumber}`);
 
@@ -701,7 +757,10 @@ class WhatsAppManager {
         phone_number: resolvedPhoneNumber,
         reason: String(reason || 'unknown')
       }).catch(() => {});
-      if (resolvedProfileId) {
+      const isManualLogout = resolvedProfileId && this.manualLogoutProfiles.has(resolvedProfileId);
+      const disconnectReason = String(reason || '').toUpperCase();
+      const isRemoteLogout = ['LOGOUT', 'UNPAIRED', 'UNPAIRED_IDLE'].includes(disconnectReason);
+      if (resolvedProfileId && (isManualLogout || isRemoteLogout)) {
         try {
           await this.prisma.whatsAppProfile.update({
             where: { id: resolvedProfileId }, data: { is_connected: false }
@@ -714,8 +773,13 @@ class WhatsAppManager {
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'disconnected',
         profileId: resolvedProfileId || null,
-        message: 'La session WhatsApp de ce profil est perdue. Scannez le QR code pour vous reconnecter.'
+        message: (isManualLogout || isRemoteLogout)
+          ? 'La session WhatsApp est déconnectée.'
+          : 'Connexion interrompue. Tentative de reconnexion automatique…'
       });
+      if (resolvedProfileId && !isManualLogout && !isRemoteLogout) {
+        this._scheduleReconnect(accountId, resolvedProfileId);
+      }
     });
 
     // ── Auth failure ──
@@ -865,6 +929,11 @@ class WhatsAppManager {
   // ─── Logout ───────────────────────────────────────────────────────────────
 
   async logout(profileId) {
+    this.manualLogoutProfiles.add(profileId);
+    const timer = this.reconnectTimers.get(profileId);
+    if (timer) clearTimeout(timer);
+    this.reconnectTimers.delete(profileId);
+    this.reconnectAttempts.delete(profileId);
     const found = this._getEntryByProfileId(profileId);
     if (found) {
       if (found.entry.syncToken) found.entry.syncToken.cancelled = true;
@@ -874,8 +943,9 @@ class WhatsAppManager {
       this.clearCache(profileId);
     }
     try { await this.prisma.whatsAppProfile.update({ where: { id: profileId }, data: { is_connected: false } }); } catch (_) {}
-    const sessionDir = path.join(SESSION_BASE, `session-profile_${profileId}`);
-    if (fs.existsSync(sessionDir)) {
+    const sessionDirs = [this._sessionDir(profileId), this._sessionDir(profileId, true)];
+    for (const sessionDir of sessionDirs) {
+      if (!fs.existsSync(sessionDir)) continue;
       const deleteWithRetry = (retries = 4, delay = 1500) => {
         try { fs.rmSync(sessionDir, { recursive: true, force: true }); } catch (err) {
           if (retries > 0 && ['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(err.code)) {
@@ -885,6 +955,7 @@ class WhatsAppManager {
       };
       deleteWithRetry();
     }
+    setTimeout(() => this.manualLogoutProfiles.delete(profileId), 10000);
   }
 
   // ─── Restore sessions ─────────────────────────────────────────────────────
@@ -895,10 +966,12 @@ class WhatsAppManager {
       return;
     }
     try {
-      const profiles = await this.prisma.whatsAppProfile.findMany({ where: { is_connected: true } });
-      console.log(`Restauration de ${profiles.length} session(s) WhatsApp`);
-      for (const profile of profiles) {
+      const profiles = await this.prisma.whatsAppProfile.findMany();
+      const restorableProfiles = profiles.filter(profile => profile.is_connected || this._hasSession(profile.id));
+      console.log(`Restauration de ${restorableProfiles.length} session(s) WhatsApp`);
+      for (const profile of restorableProfiles) {
         this._cleanChromeLocks(profile.id);
+        this._prepareSessionDirectory(profile.id);
         await this.initializeClient(profile.account_id, profile.id);
         await new Promise(r => setTimeout(r, 3000));
       }
