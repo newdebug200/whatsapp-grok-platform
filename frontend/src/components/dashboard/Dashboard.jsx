@@ -18,6 +18,7 @@ import Sentiments from './Sentiments';
 import ApiAccess from './ApiAccess';
 import { useLanguage } from '../../context/LanguageContext';
 import { confirmAction } from '../../utils/confirmAction';
+import { isFeatureEnabled } from '../../utils/featureFlags';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -842,7 +843,7 @@ export default function Dashboard() {
             contact={selectedContact}
             socket={socket}
             waStatus={waStatus}
-            quickRepliesEnabled={platformConfig.quick_replies_enabled !== false && platformConfig.quick_replies_enabled !== 'false'}
+            quickRepliesEnabled={isFeatureEnabled(platformConfig.quick_replies_enabled)}
             onBack={handleBack}
           />
         ) : (
