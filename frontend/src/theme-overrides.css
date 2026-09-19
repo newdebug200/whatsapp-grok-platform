@@ -1,0 +1,169 @@
+/* Botora visual system: shared contrast and responsive safeguards. */
+:root {
+  --surface-page: var(--bg-secondary, #f0f2f5);
+  --surface-card: var(--bg-primary, #ffffff);
+  --surface-subtle: var(--bg-input, #f0f2f5);
+  --line-soft: var(--border, #e9edef);
+  --ink: var(--text-primary, #111b21);
+  --ink-muted: var(--text-secondary, #667781);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent, #0aa37f) 24%, transparent);
+}
+
+.central-offline-alert {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 10px 16px;
+  text-align: center;
+  background: #fff1f2;
+  color: #b42318;
+  border-bottom: 1px solid #fecdd3;
+  font-size: 14px;
+}
+[data-theme="dark"] .central-offline-alert {
+  background: #3b1f27;
+  color: #ffb4ab;
+  border-bottom-color: #78343d;
+}
+
+/* Pages that historically used fixed light colors. */
+.credit-usage-page { background: var(--surface-page); color: var(--ink); }
+.credit-usage-header p,
+.credit-usage-summary span,
+.credit-usage-summary small,
+.credit-usage-toolbar span,
+.credit-usage-toolbar label,
+.credit-usage-table-wrap td small,
+.credit-usage-empty,
+.credit-usage-pagination { color: var(--ink-muted); }
+.credit-usage-back,
+.credit-usage-toolbar select,
+.credit-usage-pagination button { background: var(--surface-card); color: var(--ink); border-color: var(--line-soft); }
+.credit-usage-summary article,
+.credit-usage-card { background: var(--surface-card); border-color: var(--line-soft); box-shadow: 0 8px 24px var(--shadow, rgba(0,0,0,.05)); }
+.credit-usage-summary strong,
+.credit-usage-toolbar h2 { color: var(--ink); }
+.credit-usage-toolbar { border-bottom-color: var(--line-soft); }
+.credit-usage-table-wrap th { background: var(--surface-subtle); color: var(--ink-muted); }
+.credit-usage-table-wrap th,
+.credit-usage-table-wrap td { border-bottom-color: var(--line-soft); }
+.credit-usage-table-wrap td { color: var(--ink); }
+.credit-usage-table-wrap pre { background: var(--surface-subtle); color: var(--ink); }
+.credit-event { background: var(--accent-soft, #dff7ef); color: var(--accent-dark, #08745f); }
+.credit-usage-error { background: color-mix(in srgb, #e5484d 10%, var(--surface-card)); color: #b42318; }
+.credit-usage-back:hover,
+.credit-usage-pagination button:not(:disabled):hover { border-color: var(--accent); color: var(--accent-dark); }
+
+/* Broadcast and tags use the same surfaces in both themes. */
+.bc-panel,
+.tm-panel { background: var(--surface-page); color: var(--ink); }
+.bc-card,
+.tm-card,
+.tm-form,
+.tm-toolbar,
+.tm-empty { background: var(--surface-card); color: var(--ink); border-color: var(--line-soft); }
+.bc-card-name,
+.tm-card-name,
+.tm-title,
+.tm-label { color: var(--ink); }
+.bc-card-meta,
+.bc-empty-text,
+.tm-card-meta,
+.tm-empty-text { color: var(--ink-muted); }
+.bc-btn-secondary,
+.bc-toolbar-actions .bc-back,
+.tm-btn-secondary { background: var(--surface-card); color: var(--ink); border-color: var(--line-soft); }
+.bc-progress-track { background: color-mix(in srgb, var(--ink-muted) 20%, transparent); }
+
+/* Central administration remains readable when an administrator switches theme. */
+.central-admin-state,
+.central-admin-card,
+.central-admin-stat { background: var(--surface-card); color: var(--ink); border-color: var(--line-soft); }
+.central-admin-state,
+.central-admin-state.error,
+.central-admin-toolbar h3,
+.central-admin-stat strong,
+.central-plan h4,
+.central-balance { color: var(--ink); }
+.central-admin-stat span,
+.central-admin-stat small,
+.central-admin-toolbar p,
+.central-admin-row span,
+.central-admin-row small,
+.central-plan p,
+.central-plan small { color: var(--ink-muted); }
+.central-admin-search input,
+.central-admin-toolbar select,
+.central-credit-form input { background: var(--surface-card); color: var(--ink); border-color: var(--line-soft); }
+.central-admin-row { border-bottom-color: var(--line-soft); }
+.central-plan { background: var(--surface-subtle); border-color: var(--line-soft); }
+.central-feature-list label { border-color: var(--line-soft); background: var(--surface-card); color: var(--ink); }
+
+/* Consistent focus visibility for keyboard and touch users. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Wide screens: prevent excessive line lengths while using available workspace. */
+@media (min-width: 1440px) {
+  .credit-usage-page,
+  .recharge-page,
+  .api-access-page,
+  .stats-panel,
+  .subscription-public,
+  .subscription-admin { padding-left: clamp(32px, 5vw, 96px); padding-right: clamp(32px, 5vw, 96px); }
+}
+
+/* Tablet: stack dense toolbars and keep cards readable. */
+@media (max-width: 1024px) {
+  .credit-usage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .credit-usage-table-wrap { max-height: calc(100vh - 400px); }
+  .recharge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .api-access-grid,
+  .api-reference-grid { grid-template-columns: 1fr; }
+}
+
+/* Phone: avoid clipped headings, controls and tables. */
+@media (max-width: 640px) {
+  .credit-usage-page,
+  .recharge-page,
+  .api-access-page,
+  .subscription-public { padding: 18px 14px 28px; }
+  .credit-usage-header h1 { font-size: clamp(24px, 8vw, 32px); }
+  .credit-usage-summary { grid-template-columns: 1fr; gap: 10px; }
+  .credit-usage-summary article { padding: 16px; }
+  .credit-usage-toolbar { padding: 16px; }
+  .credit-usage-toolbar select { width: 100%; min-height: 42px; }
+  .credit-usage-table-wrap { max-height: 55vh; margin: 0 -2px; }
+  .credit-usage-pagination { padding: 14px 16px; }
+  .credit-usage-pagination div { width: 100%; }
+  .credit-usage-pagination button { flex: 1; min-height: 40px; }
+  .recharge-grid { grid-template-columns: 1fr; }
+  .recharge-header,
+  .recharge-form-card,
+  .recharge-info-card { padding-left: 16px; padding-right: 16px; }
+  .bc-toolbar-actions > button,
+  .central-admin-search button,
+  .central-credit-form button { min-height: 42px; }
+  .central-admin-card { padding: 16px; }
+}
+
+@media (max-width: 420px) {
+  .credit-usage-header p { font-size: 13px; line-height: 1.45; }
+  .credit-usage-table-wrap table { min-width: 760px; }
+  .credit-usage-pagination { display: block; }
+  .credit-usage-pagination div { margin-top: 10px; }
+  .sh-page-header h1 { overflow-wrap: anywhere; }
+}
+
+[data-theme="dark"] .credit-usage-error { color: #ffb4ab; }
+[data-theme="dark"] .central-status { background: rgba(56,214,171,.16); color: #8df0cf; }
+[data-theme="dark"] .central-status.suspended,
+[data-theme="dark"] .central-status.expired { background: rgba(255,145,100,.16); color: #ffb89b; }
+[data-theme="dark"] .bc-btn-secondary:hover,
+[data-theme="dark"] .credit-usage-back:hover,
+[data-theme="dark"] .credit-usage-pagination button:not(:disabled):hover { background: var(--bg-hover); }

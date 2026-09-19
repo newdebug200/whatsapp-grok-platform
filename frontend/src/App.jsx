@@ -6,6 +6,7 @@ import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/dashboard/Dashboard';
 import InstallPrompt from './components/pwa/InstallPrompt';
 import './App.css';
+import './theme-overrides.css';
 
 export const ThemeContext = createContext({ theme: 'light', setTheme: () => {} });
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -44,7 +45,7 @@ function AppContent() {
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
-      {centralStatus.state === 'offline' && <div role="alert" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, padding: '10px 16px', textAlign: 'center', background: '#fff1f2', color: '#b42318', borderBottom: '1px solid #fecdd3', fontSize: 14 }}>{centralStatus.message}</div>}
+      {centralStatus.state === 'offline' && <div className="central-offline-alert" role="alert">{centralStatus.message}</div>}
       {account ? <Dashboard /> : <AuthPage />}
       <InstallPrompt />
     </ThemeContext.Provider>
