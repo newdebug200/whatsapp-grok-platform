@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { confirmAction } from '../../utils/confirmAction';
 import './AdminPanel.css';
 import SubscriptionManager from './SubscriptionManager';
 
@@ -577,7 +578,7 @@ function DressurQueueSection() {
   };
 
   const clearLocalQueue = async () => {
-    if (!window.confirm('Vider toute la file locale ? Les statuts locaux seront supprimés.')) return;
+    if (!await confirmAction('Vider toute la file locale ? Les statuts locaux seront supprimés.')) return;
     try { await axios.delete(`${API_URL}/admin/dressur-queue/local`); setLocalItems([]); showMsg('File locale vidée'); }
     catch (err) { showMsg(err.response?.data?.error || 'Impossible de vider la file locale', true); }
   };

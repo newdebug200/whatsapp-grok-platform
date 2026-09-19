@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 import './StatusManager.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -95,7 +96,7 @@ export default function StatusManager({ socket }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Supprimer ce statut ?')) return;
+    if (!await confirmAction('Supprimer ce statut ?')) return;
     try {
       await axios.delete(`${API_URL}/status/${id}`);
       setStatuses(prev => prev.filter(s => s.id !== id));

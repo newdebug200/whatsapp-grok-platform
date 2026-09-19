@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 import './Broadcast.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -351,7 +352,7 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
 
   const handleDeleteCampaign = async (id, e) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Supprimer cette campagne définitivement ?')) return;
+    if (!await confirmAction('Supprimer cette campagne définitivement ?')) return;
     setError('');
     try {
       await axios.delete(`${API_URL}/broadcast/campaigns/${id}`);

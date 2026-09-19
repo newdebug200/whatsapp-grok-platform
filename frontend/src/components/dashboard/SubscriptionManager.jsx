@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 import './SubscriptionManager.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -18,7 +19,7 @@ export default function SubscriptionManager() {
   const change = e => setForm(prev => ({ ...prev, [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
   const submit = async e => { e.preventDefault(); setSaving(true); setError(''); setMessage(''); try { if (editing) await axios.patch(`${API_URL}/admin/subscription-plans/${editing}`, form); else await axios.post(`${API_URL}/admin/subscription-plans`, form); setMessage(editing ? 'Abonnement modifié.' : 'Abonnement créé.'); setForm(empty); setEditing(null); await load(); } catch (err) { setError(err.response?.data?.error || 'Enregistrement impossible.'); } finally { setSaving(false); } };
   const edit = plan => { setEditing(plan.id); setForm({ ...plan, features: plan.features || '', description: plan.description || '' }); };
-  const remove = async plan => { if (!window.confirm(`Supprimer l’abonnement « ${plan.name} » ?`)) return; try { await axios.delete(`${API_URL}/admin/subscription-plans/${plan.id}`); setMessage('Abonnement supprimé.'); await load(); } catch { setError('Suppression impossible.'); } };
+  const remove = async plan => { if (!await confirmAction(`Supprimer l’abonnement « ${plan.name} » ?`)) return; try { await axios.delete(`${API_URL}/admin/subscription-plans/${plan.id}`); setMessage('Abonnement supprimé.'); await load(); } catch { setError('Suppression impossible.'); } };
   return <section className="subscription-admin">
     <header className="subscription-admin-head"><div><span className="subscription-eyebrow">Administration commerciale</span><h2>Abonnements</h2><p>Créez les offres, définissez le taux de crédits et choisissez celles visibles par les utilisateurs.</p></div><span className="subscription-admin-badge">Admin uniquement</span></header>
     {(message || error) && <div className={`subscription-feedback ${error ? 'error' : ''}`}>{error || message}</div>}

@@ -239,6 +239,36 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   color: #06261f;
 }
 
+/* SweetAlert2 confirmations: consistent Botora actions in light and dark mode. */
+.botora-swal-popup {
+  border: 1px solid var(--border, #dfe7e8);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(16, 35, 44, .22);
+}
+.botora-swal-title { font-size: 1.2rem !important; }
+.botora-swal-text { color: var(--text-secondary, #667781) !important; }
+.botora-swal-confirm,
+.botora-swal-cancel {
+  min-width: 108px;
+  margin: 0 5px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.botora-swal-confirm { background: var(--accent, #00a884); color: #06261f; }
+.botora-swal-confirm:hover { background: var(--accent-dark, #08745f); color: #fff; }
+.botora-swal-cancel { background: var(--bg-hover, #eef3f4); color: var(--text-primary, #18252d); }
+.botora-swal-cancel:hover { background: var(--border, #dfe7e8); }
+[data-theme="dark"] .botora-swal-popup { border-color: #2c4a52; box-shadow: 0 20px 60px rgba(0, 0, 0, .45); }
+[data-theme="dark"] .botora-swal-text { color: #b8c9cd !important; }
+[data-theme="dark"] .botora-swal-confirm { background: #5ae5c5; color: #06261f; }
+[data-theme="dark"] .botora-swal-confirm:hover { background: #8df0cf; color: #06261f; }
+[data-theme="dark"] .botora-swal-cancel { background: #26383e; color: #effffd; }
+[data-theme="dark"] .botora-swal-cancel:hover { background: #34545c; }
+
 /* The dashboard destination is also rendered as a back button on feature pages. */
 .sh-page-back:hover,
 .sh-page-back:focus-visible {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 import './KeywordAutoReplyManager.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -50,7 +51,7 @@ export default function KeywordAutoReplyManager({ activeProfile }) {
   };
 
   const remove = async (rule) => {
-    if (!window.confirm(`Supprimer la réponse pour « ${rule.keyword} » ?`)) return;
+    if (!await confirmAction(`Supprimer la réponse pour « ${rule.keyword} » ?`)) return;
     setError('');
     try { await axios.delete(`${API_URL}/config/keyword-replies/${rule.id}`); await loadRules(); setNotice('Réponse automatique supprimée.'); }
     catch (err) { setError(err.response?.data?.error || 'Impossible de supprimer cette réponse.'); }

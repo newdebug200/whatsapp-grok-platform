@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -57,7 +58,7 @@ export default function FAQManager() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer cette FAQ ?')) return;
+    if (!await confirmAction('Supprimer cette FAQ ?')) return;
     try {
       await axios.delete(`${API_URL}/faq/${id}`);
       await loadFaqs();

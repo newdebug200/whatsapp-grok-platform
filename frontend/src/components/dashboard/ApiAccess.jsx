@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../../context/LanguageContext';
+import { confirmAction } from '../../utils/confirmAction';
 import './ApiAccess.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -154,7 +155,7 @@ export default function ApiAccess({ onBack }) {
   };
 
   const revoke = async (id) => {
-    if (!window.confirm(t('Revoke this API key?'))) return;
+    if (!await confirmAction(t('Revoke this API key?'), { title: t('Revoke API key') })) return;
     try {
       await axios.delete(`${API_URL}/api-keys/${id}`);
       await loadKeys();

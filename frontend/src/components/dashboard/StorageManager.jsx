@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 import './StorageManager.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -36,7 +37,7 @@ export default function StorageManager({ isAdmin = false, noProfile = false, onG
   );
 
   const cleanup = async (kind, label) => {
-    if (!window.confirm(`Confirmer la suppression de ${label} ? Cette action est irréversible.`)) return;
+    if (!await confirmAction(`Confirmer la suppression de ${label} ? Cette action est irréversible.`)) return;
     setDeleting(kind); setNotice(''); setError('');
     try {
       const response = await axios.delete(`${API_URL}/dashboard/storage/${kind}`);

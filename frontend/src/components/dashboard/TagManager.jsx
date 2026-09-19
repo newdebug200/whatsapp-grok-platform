@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { confirmAction } from '../../utils/confirmAction';
 import './TagManager.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -83,7 +84,7 @@ export default function TagManager({ activeProfile }) {
   };
 
   const handleDelete = async (tag) => {
-    if (!window.confirm(`Supprimer le tag "${tag.name}" ? Il sera retiré de tous les contacts.`)) return;
+    if (!await confirmAction(`Supprimer le tag "${tag.name}" ? Il sera retiré de tous les contacts.`)) return;
     try {
       await axios.delete(`${API_URL}/tags/${tag.id}`);
       setTags(prev => prev.filter(t => t.id !== tag.id));
