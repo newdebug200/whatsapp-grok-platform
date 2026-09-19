@@ -112,7 +112,7 @@
 
 .keyword-replies-fields {
   display: grid;
-  grid-template-columns: minmax(220px, .7fr) minmax(320px, 1.3fr);
+  grid-template-columns: 1fr;
   gap: 16px;
 }
 

@@ -61,7 +61,7 @@ export default function KeywordAutoReplyManager({ activeProfile }) {
 
   return <section className="keyword-replies-panel">
     <div className="keyword-replies-header">
-      <div><h2>Réponses automatiques</h2><p>Répondez automatiquement à un message exact. La casse est ignorée : « Bonjour », « bonjour » et « BONJOUR » correspondent au même mot-clé.</p></div>
+      <div><p>Répondez automatiquement à un message exact. La casse est ignorée : « Bonjour », « bonjour » et « BONJOUR » correspondent au même mot-clé.</p></div>
     </div>
     {error && <div className="keyword-replies-alert keyword-replies-alert-error" role="alert"><strong>Un problème est survenu</strong><span>{error}</span></div>}
     {notice && <div className="keyword-replies-alert keyword-replies-alert-success" role="status"><strong>Modification enregistrée</strong><span>{notice}</span></div>}

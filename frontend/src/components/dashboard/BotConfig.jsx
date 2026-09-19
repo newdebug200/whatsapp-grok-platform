@@ -415,22 +415,21 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
         {kwMsg && <div style={{ background: '#fdecea', color: '#c0392b', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem', marginBottom: 8 }}>{kwMsg}</div>}
 
         {keywords.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '18px 0', color: 'var(--text-secondary, #aaa)', fontSize: '0.85rem' }}>Aucun mot-clé configuré</div>
+          <div className="keyword-replies-state keyword-replies-state-empty"><span className="keyword-replies-state-icon">＋</span><strong>Aucun sujet sensible</strong><p>Ajoutez un mot ou groupe de mots à surveiller ci-dessus.</p></div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="keyword-replies-list">
             {keywords.map(kw => (
-              <div key={kw.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-secondary, #f5f5f5)', border: '1px solid var(--border, #e0e0e0)', borderRadius: 8, padding: '8px 12px', opacity: kw.is_active ? 1 : 0.5 }}>
-                <span style={{ fontSize: '1rem' }}>🔑</span>
-                <span style={{ flex: 1, fontWeight: 500, fontSize: '0.9rem', color: 'var(--text-primary, #111)' }}>{kw.keyword}</span>
-                <button onClick={() => handleToggleKeyword(kw)} title={kw.is_active ? 'Désactiver' : 'Activer'}
-                  style={{ padding: '3px 10px', borderRadius: 20, border: '1px solid var(--border, #ddd)', background: kw.is_active ? '#eafbea' : 'var(--bg-primary, #fff)', color: kw.is_active ? '#27ae60' : 'var(--text-secondary, #999)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
-                  {kw.is_active ? 'Actif' : 'Inactif'}
+              <article key={kw.id} className={`keyword-replies-item ${kw.is_active ? '' : 'is-disabled'}`}>
+                <div className="keyword-replies-item-content"><div className="keyword-replies-item-keyword"><span className="keyword-replies-keyword-dot" />{kw.keyword}<span className={`keyword-replies-status ${kw.is_active ? 'active' : 'inactive'}`}>{kw.is_active ? 'Actif' : 'Inactif'}</span></div><p>Le bot transmet ce sujet à un humain sans répondre automatiquement.</p></div>
+                <div className="keyword-replies-item-actions">
+                <button type="button" className="keyword-replies-action" onClick={() => handleToggleKeyword(kw)} title={kw.is_active ? 'Désactiver' : 'Activer'}>
+                  {kw.is_active ? 'Désactiver' : 'Activer'}
                 </button>
-                <button onClick={() => handleDeleteKeyword(kw.id)} title="Supprimer"
-                  style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '1rem', padding: '2px 4px', lineHeight: 1 }}>
-                  ✕
+                <button type="button" className="keyword-replies-action keyword-replies-danger" onClick={() => handleDeleteKeyword(kw.id)} title="Supprimer">
+                  Supprimer
                 </button>
-              </div>
+                </div>
+              </article>
             ))}
           </div>
         )}

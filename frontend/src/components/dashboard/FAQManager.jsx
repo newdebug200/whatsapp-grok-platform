@@ -74,70 +74,69 @@ export default function FAQManager() {
   };
 
   return (
-    <div className="panel-content">
-      <div className="panel-title">Gestion des FAQ</div>
-      <p className="panel-desc">Les FAQ sont utilisées par le bot pour répondre aux questions fréquentes.</p>
+    <section className="keyword-replies-panel legacy-replies-page">
+      <div className="keyword-replies-header"><div><p>Les FAQ sont utilisées par le bot pour répondre aux questions fréquentes.</p></div></div>
 
-      <form className="faq-form" onSubmit={handleSubmit}>
-        <div className="field-group">
-          <label>Question</label>
+      <form className="keyword-replies-form" onSubmit={handleSubmit}>
+        <div className="keyword-replies-form-heading"><div><span className="keyword-replies-section-label">Nouvelle FAQ</span><h3>{editingId ? 'Modifier la FAQ' : 'Créer une FAQ'}</h3><p>Ajoutez une question fréquente et la réponse que le bot doit utiliser.</p></div><span className="keyword-replies-form-badge">{editingId ? 'Modification' : 'Disponible'}</span></div>
+        <div className="keyword-replies-fields">
+        <label><span>Question</span><small>La question à reconnaître</small>
           <input
             type="text"
             value={form.question}
             onChange={e => setForm({ ...form, question: e.target.value })}
             placeholder="Ex : Quels sont vos horaires ?"
           />
-        </div>
-        <div className="field-group">
-          <label>Réponse</label>
+        </label>
+        <label><span>Réponse</span><small>Le message envoyé automatiquement</small>
           <textarea
             value={form.answer}
             onChange={e => setForm({ ...form, answer: e.target.value })}
             placeholder="Ex : Nous sommes ouverts du lundi au vendredi de 9h à 18h."
             rows={3}
           />
+        </label>
         </div>
         {error && <div className="config-error">{error}</div>}
-        <div className="faq-form-actions">
+        <div className="keyword-replies-form-actions">
           {editingId && (
-            <button type="button" className="btn-cancel" onClick={handleCancel}>
+            <button type="button" className="keyword-replies-secondary-action" onClick={handleCancel}>
               Annuler
             </button>
           )}
-          <button type="submit" className="save-btn" disabled={saving}>
-            {saving ? 'Sauvegarde...' : editingId ? 'Modifier' : '+ Ajouter'}
+          <button type="submit" className="keyword-replies-primary-action" disabled={saving}>
+            {saving ? 'Sauvegarde...' : editingId ? 'Modifier la FAQ' : 'Ajouter la FAQ'}
           </button>
         </div>
       </form>
 
-      <div className="faq-list">
+      <div className="keyword-replies-list-section">
+        <div className="keyword-replies-list-heading"><div><span className="keyword-replies-section-label">FAQ enregistrées</span><h3>Vos questions fréquentes</h3></div><span className="keyword-replies-count">{faqs.length} {faqs.length === 1 ? 'FAQ' : 'FAQ'}</span></div>
+      <div className="keyword-replies-list">
         {loading ? (
-          <div className="faq-loading">Chargement...</div>
+          <div className="keyword-replies-state"><span className="keyword-replies-spinner" />Chargement des FAQ…</div>
         ) : faqs.length === 0 ? (
-          <div className="faq-empty">Aucune FAQ. Ajoutez-en une ci-dessus.</div>
+          <div className="keyword-replies-state keyword-replies-state-empty"><span className="keyword-replies-state-icon">＋</span><strong>Aucune FAQ enregistrée</strong><p>Créez votre première question et sa réponse ci-dessus.</p></div>
         ) : (
           faqs.map(faq => (
-            <div key={faq.id} className={`faq-item ${editingId === faq.id ? 'editing' : ''}`}>
-              <div className="faq-item-content">
-                <div className="faq-q">Q : {faq.question}</div>
-                <div className="faq-a">R : {faq.answer}</div>
+            <article key={faq.id} className={`keyword-replies-item ${editingId === faq.id ? 'is-editing' : ''}`}>
+              <div className="keyword-replies-item-content">
+                <div className="keyword-replies-item-keyword"><span className="keyword-replies-keyword-dot" />{faq.question}</div>
+                <p>{faq.answer}</p>
               </div>
-              <div className="faq-item-actions">
-                <button className="faq-edit-btn" onClick={() => handleEdit(faq)} title="Modifier">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                  </svg>
+              <div className="keyword-replies-item-actions">
+                <button type="button" className="keyword-replies-action" onClick={() => handleEdit(faq)} title="Modifier">
+                  Modifier
                 </button>
-                <button className="faq-delete-btn" onClick={() => handleDelete(faq.id)} title="Supprimer">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                  </svg>
+                <button type="button" className="keyword-replies-action keyword-replies-danger" onClick={() => handleDelete(faq.id)} title="Supprimer">
+                  Supprimer
                 </button>
               </div>
-            </div>
+            </article>
           ))
         )}
       </div>
-    </div>
+      </div>
+    </section>
   );
 }

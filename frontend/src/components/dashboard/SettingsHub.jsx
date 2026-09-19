@@ -10,6 +10,7 @@ import TagManager from './TagManager';
 import './SettingsHub.css';
 import { useLanguage } from '../../context/LanguageContext';
 import './SettingsShared.css';
+import './KeywordAutoReplyManager.css';
 
 const BOT_TABS = [
   {

@@ -70,15 +70,13 @@ export default function QuickReplyManager() {
   };
 
   return (
-    <div className="panel-content">
-      <div className="panel-title">Templates de réponses rapides</div>
-      <p className="panel-desc">
-        Créez des messages prêts à l'emploi accessibles en un clic dans le chat via le bouton ⚡.
-      </p>
+    <section className="keyword-replies-panel legacy-replies-page">
+      <div className="keyword-replies-header"><div><p>Créez des messages prêts à l'emploi accessibles en un clic dans le chat via le bouton ⚡.</p></div></div>
 
-      <form className="faq-form" onSubmit={handleSubmit}>
-        <div className="field-group">
-          <label>Titre du template</label>
+      <form className="keyword-replies-form" onSubmit={handleSubmit}>
+        <div className="keyword-replies-form-heading"><div><span className="keyword-replies-section-label">Nouveau message</span><h3>{editingId ? 'Modifier la réponse rapide' : 'Créer une réponse rapide'}</h3><p>Préparez un message réutilisable pour répondre plus rapidement à vos contacts.</p></div><span className="keyword-replies-form-badge">{editingId ? 'Modification' : 'Disponible'}</span></div>
+        <div className="keyword-replies-fields">
+        <label><span>Titre du template</span><small>Le nom affiché dans le chat</small>
           <input
             type="text"
             value={form.title}
@@ -86,62 +84,52 @@ export default function QuickReplyManager() {
             placeholder="Ex : Confirmation commande, Horaires, Merci..."
             maxLength={80}
           />
-        </div>
-        <div className="field-group">
-          <label>Contenu du message</label>
+        </label>
+        <label><span>Contenu du message</span><small>Le texte inséré automatiquement</small>
           <textarea
             value={form.content}
             onChange={e => setForm({ ...form, content: e.target.value })}
             placeholder="Ex : Bonjour, merci pour votre commande ! Nous la traitons dans les 24h."
             rows={4}
           />
+        </label>
         </div>
         {error && <div className="config-error">{error}</div>}
-        <div className="faq-form-actions">
+        <div className="keyword-replies-form-actions">
           {editingId && (
-            <button type="button" className="btn-cancel" onClick={handleCancel}>
+            <button type="button" className="keyword-replies-secondary-action" onClick={handleCancel}>
               Annuler
             </button>
           )}
-          <button type="submit" className="save-btn" disabled={saving}>
-            {saving ? 'Sauvegarde...' : editingId ? 'Modifier' : '+ Ajouter'}
+          <button type="submit" className="keyword-replies-primary-action" disabled={saving}>
+            {saving ? 'Sauvegarde...' : editingId ? 'Modifier la réponse' : 'Ajouter la réponse'}
           </button>
         </div>
       </form>
 
-      <div className="faq-list">
+      <div className="keyword-replies-list-section">
+        <div className="keyword-replies-list-heading"><div><span className="keyword-replies-section-label">Réponses enregistrées</span><h3>Vos réponses rapides</h3></div><span className="keyword-replies-count">{replies.length} {replies.length === 1 ? 'réponse' : 'réponses'}</span></div>
+      <div className="keyword-replies-list">
         {loading ? (
-          <div className="faq-loading">Chargement...</div>
+          <div className="keyword-replies-state"><span className="keyword-replies-spinner" />Chargement des réponses…</div>
         ) : replies.length === 0 ? (
-          <div className="faq-empty">Aucun template. Ajoutez-en un ci-dessus.</div>
+          <div className="keyword-replies-state keyword-replies-state-empty"><span className="keyword-replies-state-icon">＋</span><strong>Aucune réponse rapide</strong><p>Créez votre premier message réutilisable ci-dessus.</p></div>
         ) : (
           replies.map(qr => (
-            <div key={qr.id} className={`faq-item ${editingId === qr.id ? 'editing' : ''}`}>
-              <div className="faq-item-content">
-                <div className="faq-q" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.8rem', background: 'var(--accent, #25d366)', color: '#fff', padding: '1px 7px', borderRadius: 10, fontWeight: 600 }}>
-                    ⚡
-                  </span>
-                  {qr.title}
-                </div>
-                <div className="faq-a" style={{ whiteSpace: 'pre-wrap' }}>{qr.content}</div>
+            <article key={qr.id} className={`keyword-replies-item ${editingId === qr.id ? 'is-editing' : ''}`}>
+              <div className="keyword-replies-item-content">
+                <div className="keyword-replies-item-keyword"><span className="keyword-replies-keyword-dot" />{qr.title}</div>
+                <p style={{ whiteSpace: 'pre-wrap' }}>{qr.content}</p>
               </div>
-              <div className="faq-item-actions">
-                <button className="faq-edit-btn" onClick={() => handleEdit(qr)} title="Modifier">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                  </svg>
-                </button>
-                <button className="faq-delete-btn" onClick={() => handleDelete(qr.id)} title="Supprimer">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                  </svg>
-                </button>
+              <div className="keyword-replies-item-actions">
+                <button type="button" className="keyword-replies-action" onClick={() => handleEdit(qr)} title="Modifier">Modifier</button>
+                <button type="button" className="keyword-replies-action keyword-replies-danger" onClick={() => handleDelete(qr.id)} title="Supprimer">Supprimer</button>
               </div>
-            </div>
+            </article>
           ))
         )}
       </div>
-    </div>
+      </div>
+    </section>
   );
 }
