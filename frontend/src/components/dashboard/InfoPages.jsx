@@ -3,7 +3,7 @@ import './InfoPages.css';
 
 const steps = [
   ['01', 'Créez votre espace', 'Inscrivez-vous en quelques instants et découvrez votre espace Botora. Pendant votre période d’essai, vous pouvez prendre le temps de comprendre les outils et de préparer votre organisation.'],
-  ['02', 'Connectez votre WhatsApp', 'Depuis les réglages, associez le profil WhatsApp que vous utilisez pour votre activité. Une fois la connexion établie, vos échanges peuvent être suivis depuis un espace unique.'],
+  ['02', 'Connectez votre WhatsApp', 'Depuis les réglages, associez le profil WhatsApp que vous utilisez pour votre activité. La connexion est volontairement légère : Botora ne charge pas automatiquement toutes les discussions et tous les contacts déjà présents sur votre téléphone.'],
   ['03', 'Définissez vos préférences', 'Choisissez les fonctions qui vous intéressent : assistance dans les conversations, réponses rapides, réponses automatiques par mot-clé, FAQ et alertes. Vous gardez toujours la décision d’activer ou non chaque option.'],
   ['04', 'Organisez votre relation client', 'Retrouvez vos conversations, identifiez vos contacts, utilisez les étiquettes et préparez vos campagnes avec une organisation adaptée à votre activité.'],
   ['05', 'Observez et améliorez', 'Consultez les statistiques, les alertes et les tendances de vos échanges pour mieux comprendre vos clients et améliorer progressivement vos réponses.'],
@@ -37,6 +37,18 @@ export function HowItWorksPage({ onBack }) {
     onBack={onBack}
   >
     <div className="info-steps">{steps.map(([number, title, text]) => <article className="info-step" key={number}><span className="info-step-number">{number}</span><div><h2>{title}</h2><p>{text}</p></div></article>)}</div>
+    <div className="info-about-grid">
+      <article className="info-highlight">
+        <span className="info-symbol">↗</span>
+        <h2>Les contacts arrivent au bon moment</h2>
+        <p>Lorsqu’un nouveau message arrive, Botora identifie son numéro, récupère son nom auprès de WhatsApp si nécessaire, puis crée ou met à jour uniquement ce contact et enregistre le message.</p>
+      </article>
+      <article className="info-highlight">
+        <span className="info-symbol">◌</span>
+        <h2>Pourquoi mes anciennes discussions ne s’affichent pas ?</h2>
+        <p>Pour accélérer la connexion et préserver les ressources, Botora n’importe pas l’historique au démarrage. Les discussions déjà présentes sur votre téléphone apparaîtront dans Botora lorsqu’un nouveau message sera reçu ou envoyé pour ces contacts.</p>
+      </article>
+    </div>
     <div className="info-tip"><strong>Pour commencer</strong><span>Connectez d’abord votre profil WhatsApp, puis activez uniquement les fonctions dont vous avez besoin. Vous pourrez modifier vos choix à tout moment.</span></div>
     <div className="info-highlight info-final-card"><span className="info-symbol">→</span><h2>Une utilisation progressive</h2><p>Vous n’avez pas besoin de tout configurer dès le début. Commencez par vos conversations et vos réponses essentielles, puis ajoutez les campagnes, les étiquettes et les outils de suivi au fur et à mesure.</p></div>
   </InfoLayout>;
