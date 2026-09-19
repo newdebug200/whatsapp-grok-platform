@@ -271,7 +271,8 @@ cd /d "%ROOT%\frontend"
 
 echo  [INSTALL] Verification et installation des dependances frontend...
 echo  SweetAlert2 et toute autre dependance manquante seront installees ici.
-call npm install --prefer-offline --no-audit --no-fund
+echo  Installation depuis package.json (anciens lockfiles ignores pour eviter les erreurs ETARGET).
+call npm install --package-lock=false --prefer-offline --no-audit --no-fund
 if %errorlevel% neq 0 (
     echo  [ERREUR] npm install frontend a echoue.
     cd /d "%ROOT%"
