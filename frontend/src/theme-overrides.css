@@ -178,3 +178,47 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 [data-theme="dark"] .bc-btn-secondary:hover,
 [data-theme="dark"] .credit-usage-back:hover,
 [data-theme="dark"] .credit-usage-pagination button:not(:disabled):hover { background: var(--bg-hover); }
+
+/* FAQ and quick replies: labels must remain visible above their controls. */
+.faq-form .field-group label,
+.faq-form .field-group > label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--text-primary, #18252d);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+.faq-form .field-group input,
+.faq-form .field-group textarea {
+  background: var(--bg-card, #fff);
+  color: var(--text-primary, #18252d);
+  border-color: var(--border, #dfe7e8);
+}
+.faq-form .field-group input::placeholder,
+.faq-form .field-group textarea::placeholder { color: var(--text-muted, #8696a0); }
+
+/* Sidebar hover states use theme-aware surfaces and readable foregrounds. */
+.app-navigation-link:hover,
+.app-navigation-sub-link:hover,
+.app-navigation-link:focus-visible,
+.app-navigation-sub-link:focus-visible {
+  background: var(--accent-soft, #dff7ef);
+  color: var(--text-primary, #18252d);
+}
+.app-navigation-link:hover .app-navigation-icon,
+.app-navigation-sub-link:hover .app-navigation-sub-icon,
+.app-navigation-link:focus-visible .app-navigation-icon,
+.app-navigation-sub-link:focus-visible .app-navigation-sub-icon { color: var(--accent-dark, #08745f); }
+[data-theme="dark"] .faq-form .field-group label,
+[data-theme="dark"] .faq-form .field-group > label { color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .faq-form .field-group input,
+[data-theme="dark"] .faq-form .field-group textarea { background: var(--bg-input, #2a3942); color: var(--text-primary, #e9edef); border-color: var(--border, #2a3942); }
+[data-theme="dark"] .app-navigation-link:hover,
+[data-theme="dark"] .app-navigation-sub-link:hover,
+[data-theme="dark"] .app-navigation-link:focus-visible,
+[data-theme="dark"] .app-navigation-sub-link:focus-visible { background: rgba(56, 214, 171, .16); color: var(--text-primary, #e9edef); }
+[data-theme="dark"] .app-navigation-link:hover .app-navigation-icon,
+[data-theme="dark"] .app-navigation-sub-link:hover .app-navigation-sub-icon,
+[data-theme="dark"] .app-navigation-link:focus-visible .app-navigation-icon,
+[data-theme="dark"] .app-navigation-sub-link:focus-visible .app-navigation-sub-icon { color: var(--brand-mint, #6ee7a0); }
