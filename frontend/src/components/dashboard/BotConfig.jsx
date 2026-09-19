@@ -4,38 +4,6 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const CONNECT_COOLDOWN_MS = 9000;
 
-const DAYS = [
-  { value: 1, label: 'Lun' },
-  { value: 2, label: 'Mar' },
-  { value: 3, label: 'Mer' },
-  { value: 4, label: 'Jeu' },
-  { value: 5, label: 'Ven' },
-  { value: 6, label: 'Sam' },
-  { value: 0, label: 'Dim' },
-];
-
-const BROWSER_TZ = (() => {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (_) { return 'UTC'; }
-})();
-
-const BASE_TIMEZONES = [
-  'UTC',
-  'Europe/Paris', 'Europe/Brussels', 'Europe/Zurich', 'Europe/London',
-  'Europe/Madrid', 'Europe/Rome', 'Europe/Berlin', 'Europe/Amsterdam',
-  'Africa/Casablanca', 'Africa/Tunis', 'Africa/Algiers', 'Africa/Dakar',
-  'Africa/Lagos', 'Africa/Nairobi', 'Africa/Cairo', 'Africa/Abidjan',
-  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-  'America/Sao_Paulo', 'America/Toronto', 'America/Montreal',
-  'Asia/Dubai', 'Asia/Beirut', 'Asia/Riyadh', 'Asia/Kuwait',
-  'Asia/Amman', 'Asia/Baghdad', 'Asia/Jerusalem', 'Asia/Kolkata',
-  'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Singapore',
-  'Australia/Sydney', 'Pacific/Auckland',
-];
-
-const TIMEZONES = BASE_TIMEZONES.includes(BROWSER_TZ)
-  ? BASE_TIMEZONES
-  : [BROWSER_TZ, ...BASE_TIMEZONES];
-
 const PERSONALITIES = [
   { value: 'professional', label: '💼 Professionnel', desc: 'Ton formel, clair et structuré' },
   { value: 'friendly',     label: '😊 Amical',        desc: 'Chaleureux, proche, naturel' },
@@ -49,14 +17,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     bot_info: '',
     bot_behavior: '',
     ia_enabled: false,
-    response_delay_seconds: 5,
-    business_hours_enabled: false,
-    open_days: '1,2,3,4,5',
-    open_time: '09:00',
-    close_time: '18:00',
-    timezone: BROWSER_TZ,
-    away_message: '',
-    away_once_per_session: true,
+    response_delay_seconds: 15,
     personality: 'professional',
     sentiment_enabled: false,
     sentiment_alert: false,
@@ -160,16 +121,6 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   };
 
   const handleKwKeyDown = (e) => { if (e.key === 'Enter') handleAddKeyword(); };
-
-  const getOpenDaysArray = () => (config.open_days || '1,2,3,4,5').split(',').map(Number).filter(n => !isNaN(n));
-
-  const toggleDay = (dayValue) => {
-    const current = getOpenDaysArray();
-    const next = current.includes(dayValue)
-      ? current.filter(d => d !== dayValue)
-      : [...current, dayValue].sort();
-    setConfig(c => ({ ...c, open_days: next.join(',') }));
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -414,10 +365,13 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Délai de regroupement des messages</span>
             <span style={{ fontWeight: 600, color: 'var(--accent, #25d366)', fontSize: '0.85rem' }}>
-              {formatDelay(config.response_delay_seconds ?? 5)}
+              {formatDelay(config.response_delay_seconds ?? 15)}
             </span>
           </label>
-          <input type="range" min="1" max="300" step="1" value={config.response_delay_seconds ?? 5}
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)', margin: '0 0 10px', lineHeight: 1.5 }}>
+            Botora attend ce délai après le dernier message reçu afin de regrouper les messages rapprochés en une seule réponse. Le délai par défaut est de 15 secondes.
+          </p>
+          <input type="range" min="1" max="300" step="1" value={config.response_delay_seconds ?? 15}
             onChange={e => setConfig({ ...config, response_delay_seconds: parseInt(e.target.value) })}
             style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--accent, #25d366)' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary, #888)', marginTop: 2 }}>
@@ -429,117 +383,6 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
 
         {error && <div className="config-error">{error}</div>}
         <button className="save-btn" onClick={handleSave} disabled={saving}>
-          {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegardé !' : 'Sauvegarder'}
-        </button>
-      </div>
-
-      {/* ── Heures de bureau ── */}
-      <div className="config-section" style={sectionStyle}>
-        <div className="section-label">Heures de bureau</div>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 14, lineHeight: 1.5 }}>
-          En dehors des horaires configurés, le bot envoie un message d'absence automatique et ne répond plus.
-        </p>
-
-        <div className="toggle-row" style={{ marginBottom: 16 }}>
-          <div>
-            <div className="toggle-label">Activer les heures de bureau</div>
-            <div className="toggle-desc">Le bot se tait hors des plages horaires définies</div>
-          </div>
-          <button
-            className={`toggle-btn ${config.business_hours_enabled ? 'on' : 'off'}`}
-            onClick={() => setConfig(c => ({ ...c, business_hours_enabled: !c.business_hours_enabled }))}
-          >
-            <span className="toggle-knob" />
-          </button>
-        </div>
-
-        {config.business_hours_enabled && (
-          <>
-            <div style={{ marginBottom: 14 }}>
-              <div style={labelStyle}>Jours d'ouverture</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {DAYS.map(day => {
-                  const isActive = getOpenDaysArray().includes(day.value);
-                  return (
-                    <button
-                      key={day.value}
-                      onClick={() => toggleDay(day.value)}
-                      style={{
-                        padding: '6px 12px', borderRadius: 20, fontSize: '0.82rem', fontWeight: 600,
-                        border: '1px solid var(--border, #e0e0e0)', cursor: 'pointer',
-                        background: isActive ? 'var(--accent, #25d366)' : 'var(--bg-secondary, #f5f5f5)',
-                        color: isActive ? '#fff' : 'var(--text-secondary, #888)',
-                        transition: 'all 0.15s'
-                      }}
-                    >
-                      {day.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <div>
-                <div style={labelStyle}>Heure d'ouverture</div>
-                <input type="time" value={config.open_time} onChange={e => setConfig(c => ({ ...c, open_time: e.target.value }))}
-                  style={{ ...fieldStyle, width: '100%' }} />
-              </div>
-              <div>
-                <div style={labelStyle}>Heure de fermeture</div>
-                <input type="time" value={config.close_time} onChange={e => setConfig(c => ({ ...c, close_time: e.target.value }))}
-                  style={{ ...fieldStyle, width: '100%' }} />
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ ...labelStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Fuseau horaire</span>
-                <button
-                  type="button"
-                  onClick={() => setConfig(c => ({ ...c, timezone: BROWSER_TZ }))}
-                  title={`Utiliser le fuseau détecté : ${BROWSER_TZ}`}
-                  style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent, #25d366)', background: 'none', border: '1px solid var(--accent, #25d366)', borderRadius: 12, padding: '2px 8px', cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}
-                >
-                  Détecter ({BROWSER_TZ})
-                </button>
-              </div>
-              <select value={config.timezone} onChange={e => setConfig(c => ({ ...c, timezone: e.target.value }))}
-                style={{ ...fieldStyle, width: '100%' }}>
-                {TIMEZONES.map(tz => (
-                  <option key={tz} value={tz}>
-                    {tz === BROWSER_TZ ? `${tz} (votre PC)` : tz}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field-group">
-              <label>Message hors-horaires</label>
-              <textarea
-                value={config.away_message}
-                onChange={e => setConfig(c => ({ ...c, away_message: e.target.value }))}
-                placeholder={`Ex : Bonjour ! Nous sommes actuellement fermés. Nos horaires : Lun-Ven 9h-18h. Nous vous répondrons dès notre retour.`}
-                rows={3}
-              />
-            </div>
-
-            <div className="toggle-row" style={{ marginTop: 8 }}>
-              <div>
-                <div className="toggle-label">Une seule réponse par période fermée</div>
-                <div className="toggle-desc">Ne répète pas le message si le contact envoie plusieurs messages</div>
-              </div>
-              <button
-                className={`toggle-btn ${config.away_once_per_session ? 'on' : 'off'}`}
-                onClick={() => setConfig(c => ({ ...c, away_once_per_session: !c.away_once_per_session }))}
-              >
-                <span className="toggle-knob" />
-              </button>
-            </div>
-          </>
-        )}
-
-        <button className="save-btn" style={{ marginTop: 16 }} onClick={handleSave} disabled={saving}>
           {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegardé !' : 'Sauvegarder'}
         </button>
       </div>

@@ -22,7 +22,7 @@ router.get('/bot', async (req, res) => {
           bot_info: '',
           bot_behavior: '',
           ia_enabled: false,
-          response_delay_seconds: 5,
+          response_delay_seconds: 15,
           business_hours_enabled: false,
           open_days: '1,2,3,4,5',
           open_time: '09:00',
@@ -56,7 +56,7 @@ router.put('/bot', async (req, res) => {
     } = req.body;
 
     const delaySeconds = response_delay_seconds !== undefined
-      ? Math.max(1, Math.min(300, parseInt(response_delay_seconds) || 5))
+      ? Math.max(1, Math.min(300, parseInt(response_delay_seconds) || 15))
       : undefined;
 
     const VALID_PERSONALITIES = ['professional', 'friendly', 'commercial', 'support'];
@@ -92,7 +92,7 @@ router.put('/bot', async (req, res) => {
           bot_info: bot_info || '',
           bot_behavior: bot_behavior || '',
           ia_enabled: ia_enabled !== undefined ? ia_enabled : false,
-          response_delay_seconds: delaySeconds ?? 5,
+          response_delay_seconds: delaySeconds ?? 15,
           business_hours_enabled: business_hours_enabled ?? false,
           open_days: open_days || '1,2,3,4,5',
           open_time: open_time || '09:00',
@@ -120,7 +120,7 @@ router.put('/bot', async (req, res) => {
         delete safeData.ia_group_enabled;
         config = await prisma.botConfig.upsert({
           where: { profile_id: req.profileId },
-          create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: false, response_delay_seconds: 5 },
+          create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: false, response_delay_seconds: 15 },
           update: safeData
         });
       } else throw err;

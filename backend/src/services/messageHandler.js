@@ -41,24 +41,6 @@ class MessageHandler {
     return true;
   }
 
-  async _isWithinBusinessHours(botConfig) {
-    if (!botConfig.business_hours_enabled) return true;
-    const tz = botConfig.timezone || 'UTC';
-    let tzDate;
-    try {
-      tzDate = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
-    } catch (_) {
-      tzDate = new Date();
-    }
-    const dayOfWeek = tzDate.getDay();
-    const openDays = (botConfig.open_days || '1,2,3,4,5').split(',').map(Number);
-    if (!openDays.includes(dayOfWeek)) return false;
-    const currentMinutes = tzDate.getHours() * 60 + tzDate.getMinutes();
-    const [openH, openM] = (botConfig.open_time || '09:00').split(':').map(Number);
-    const [closeH, closeM] = (botConfig.close_time || '18:00').split(':').map(Number);
-    return currentMinutes >= openH * 60 + openM && currentMinutes < closeH * 60 + closeM;
-  }
-
   async _analyzeSentiment(text, apiKey, onUsage = null) {
     if (!text || !apiKey) return null;
     try {
@@ -299,7 +281,7 @@ class MessageHandler {
       // Sentiment analysis and memory update are no longer triggered here.
       // They now happen inside _processTextMessage, once we've confirmed the
       // bot is actually going to generate and send a reply (see below).
-      const delayMs = (botConfig?.response_delay_seconds ?? 5) * 1000;
+      const delayMs = (botConfig?.response_delay_seconds ?? 15) * 1000;
       this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs, botConfig);
     } catch (error) {
       console.error('Erreur traitement message:', error);
@@ -428,28 +410,6 @@ class MessageHandler {
 
       const botConfig = cachedBotConfig || await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
       if (!botConfig || !botConfig.ia_enabled) return;
-
-      if (botConfig.business_hours_enabled && !this._isWithinBusinessHours(botConfig)) {
-        const awayMsg = botConfig.away_message?.trim();
-        if (awayMsg) {
-          const awayKey = `${profileId}_${contact.id}`;
-          const lastSent = this.awaySentMap.get(awayKey);
-          const cooldownMs = 8 * 60 * 60 * 1000;
-          const shouldSend = !botConfig.away_once_per_session || !lastSent || (Date.now() - lastSent > cooldownMs);
-          if (shouldSend) {
-            this.awaySentMap.set(awayKey, Date.now());
-            try {
-              const sentAway = await client.sendMessage(from, awayMsg);
-              waManager.trackBotSentId(sentAway?.id?._serialized);
-              waManager.addToCache(profileId, contact.id, 'sent', awayMsg);
-              prisma.message.create({
-                data: { contact_id: contact.id, content: awayMsg, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
-              }).catch(() => {});
-            } catch (err) { console.error('[Heures bureau] Erreur:', err.message); }
-          }
-        }
-        return;
-      }
 
       const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
       if (!apiKey) {
