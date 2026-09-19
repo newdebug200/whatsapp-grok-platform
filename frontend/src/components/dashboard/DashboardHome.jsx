@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './DashboardHome.css';
-import { isFeatureEnabled } from '../../utils/featureFlags';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -40,7 +39,6 @@ export default function DashboardHome({
   const maxDaily = data ? Math.max(1, ...data.dailyMessages.map(d => d.sent + d.received)) : 1;
   const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== false && platformConfig[key] !== 'false');
   const discussionsEnabled = platformConfig.whatsapp_discussions_enabled !== false && platformConfig.whatsapp_discussions_enabled !== 'false';
-  const quickRepliesEnabled = isFeatureEnabled(platformConfig.quick_replies_enabled);
   const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
 
   const sections = [
@@ -60,7 +58,6 @@ export default function DashboardHome({
   const settingsSections = [
     ...(featureEnabled('ia_enabled_global') ? [{ key: 'settings-config', tab: 'config', label: 'Réglages du bot', desc: 'IA, comportement et connexion WhatsApp', emoji: '🤖', color: '#128c7e' }] : []),
     ...(featureEnabled('faq_enabled') ? [{ key: 'settings-faq', tab: 'faq', label: 'FAQ', desc: 'Questions et réponses automatiques', emoji: '❓', color: '#667eea' }] : []),
-    ...(quickRepliesEnabled ? [{ key: 'settings-templates', tab: 'templates', label: 'Réponses rapides', desc: 'Messages prêts à envoyer', emoji: '💬', color: '#34b7f1' }] : []),
     { key: 'settings-tags', tab: 'tags', label: 'Tags', desc: 'Organiser et segmenter vos contacts', emoji: '🏷️', color: '#f39c12' },
     { key: 'settings-keywordReplies', tab: 'keywordReplies', label: 'Réponses automatiques', desc: 'Répondre selon un mot-clé', emoji: '↪', color: '#0aa37f' },
     ...(featureEnabled('sensitive_keywords_enabled') ? [{ key: 'settings-journal', tab: 'journal', label: 'Alertes', desc: 'Journal des alertes et sentiments', emoji: '🔔', color: '#e74c3c' }] : []),
