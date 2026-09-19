@@ -34,7 +34,8 @@ router.get('/bot', async (req, res) => {
           system_prompt_override: null,
           sentiment_enabled: false,
           sentiment_alert: false,
-          media_auto_reply: false
+          media_auto_reply: false,
+          ia_group_enabled: false
         }
       });
     }
@@ -51,7 +52,7 @@ router.put('/bot', async (req, res) => {
       bot_name, bot_info, bot_behavior, ia_enabled, response_delay_seconds,
       business_hours_enabled, open_days, open_time, close_time, timezone,
       away_message, away_once_per_session,
-      personality, system_prompt_override, sentiment_enabled, sentiment_alert, media_auto_reply
+      personality, system_prompt_override, sentiment_enabled, sentiment_alert, media_auto_reply, ia_group_enabled
     } = req.body;
 
     const delaySeconds = response_delay_seconds !== undefined
@@ -77,7 +78,8 @@ router.put('/bot', async (req, res) => {
       ...(system_prompt_override !== undefined && { system_prompt_override: system_prompt_override || null }),
       ...(sentiment_enabled !== undefined && { sentiment_enabled }),
       ...(sentiment_alert !== undefined && { sentiment_alert }),
-      ...(media_auto_reply !== undefined && { media_auto_reply })
+      ...(media_auto_reply !== undefined && { media_auto_reply }),
+      ...(ia_group_enabled !== undefined && { ia_group_enabled: Boolean(ia_group_enabled) })
     };
 
     let config;
@@ -102,7 +104,8 @@ router.put('/bot', async (req, res) => {
           system_prompt_override: system_prompt_override || null,
           sentiment_enabled: sentiment_enabled ?? false,
           sentiment_alert: sentiment_alert ?? false,
-          media_auto_reply: media_auto_reply ?? false
+          media_auto_reply: media_auto_reply ?? false,
+          ia_group_enabled: ia_group_enabled ?? false
         },
         update: data
       });
@@ -114,6 +117,7 @@ router.put('/bot', async (req, res) => {
         delete safeData.system_prompt_override;
         delete safeData.sentiment_enabled;
         delete safeData.sentiment_alert;
+        delete safeData.ia_group_enabled;
         config = await prisma.botConfig.upsert({
           where: { profile_id: req.profileId },
           create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: false, response_delay_seconds: 5 },

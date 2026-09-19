@@ -1,7 +1,5 @@
 const axios = require('axios');
 const centralSync = require('./centralSync');
-const fs = require('fs');
-const path = require('path');
 const { resolveContactName } = require('../utils/contactDisplay');
 const PERSONALITY_PROMPTS = {
   professional: "Tu communiques de manière professionnelle, formelle et courtoise. Tu utilises un langage soutenu.",
@@ -181,24 +179,6 @@ class MessageHandler {
 
       const messageContent = mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || '');
 
-      // ── Download media if present ──
-      let mediaPath = null;
-      if (message.hasMedia) {
-        try {
-          const media = await message.downloadMedia();
-          if (media?.data) {
-            const mimeType = media.mimetype || 'application/octet-stream';
-            const extRaw = mimeType.split('/')[1]?.split(';')[0] || 'bin';
-            const safeExt = extRaw.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) || 'bin';
-            const filename = `${profileId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${safeExt}`;
-            const uploadsDir = path.join(__dirname, '../../uploads');
-            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-            fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(media.data, 'base64'));
-            mediaPath = filename;
-          }
-        } catch (_) {}
-      }
-
       // ── Save message with unread=true (sentiment is filled in later, only if the bot actually responds) ──
       await prisma.message.create({
         data: {
@@ -210,7 +190,11 @@ class MessageHandler {
             ? new Date(Number(message.timestamp) * 1000)
             : new Date(),
           unread: true,
-          media_path: mediaPath
+          // Le média WhatsApp est téléchargé uniquement sur demande via son wa_msg_id.
+          media_path: null,
+          wa_msg_id: message.id?._serialized || null,
+          media_filename: message._data?.filename || null,
+          media_mime: message._data?.mimetype || null
         }
       }).catch((err) => console.error('[WA] Enregistrement message entrant:', err.message));
 
@@ -222,8 +206,15 @@ class MessageHandler {
 
       waManager.addToCache(profileId, dbContact.id, 'received', messageContent);
 
-      // ── Groups: save message but skip AI and triggers ──
-      if (isGroup) return;
+      const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
+      // Les groupes sont traités comme les discussions : ils n’existent ici
+      // qu’après un message réel, mais l’IA reste désactivée par défaut.
+      if (isGroup && botConfig?.ia_group_enabled !== true) {
+        if (message.hasMedia && !botConfig?.media_auto_reply) {
+          await prisma.contact.update({ where: { id: dbContact.id }, data: { ia_paused: true } }).catch(() => {});
+        }
+        return;
+      }
 
       // ── Fetch account role + blocked status ──
       const profile = await prisma.whatsAppProfile.findUnique({
@@ -283,9 +274,13 @@ class MessageHandler {
         if (!await centralSync.getFeature('auto_replies_enabled', true)) return;
       }
 
-      const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
-
       if (message.hasMedia) {
+        // Botora ne stocke plus automatiquement les fichiers reçus. Un fichier
+        // fait passer la discussion en mode Humain, sauf si le réglage de réponse
+        // automatique aux médias est explicitement activé.
+        if (!botConfig?.media_auto_reply) {
+          await prisma.contact.update({ where: { id: dbContact.id }, data: { ia_paused: true } }).catch(() => {});
+        }
         // La réponse aux médias est désactivée par défaut. Elle ne doit être
         // envoyée que si l'utilisateur l'a explicitement activée.
         if (botConfig?.media_auto_reply === true) {

@@ -41,6 +41,8 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   const [mediaModal, setMediaModal] = useState(null);
+  const [mediaUrls, setMediaUrls] = useState({});
+  const [loadingMediaId, setLoadingMediaId] = useState(null);
   const [sendingMedia, setSendingMedia] = useState(false);
   const [recordPhase, setRecordPhase] = useState('idle');
   const [recordDuration, setRecordDuration] = useState(0);
@@ -402,9 +404,43 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
   const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+\.[^\s]+)/gi;
 
+  const loadMediaOnDemand = async (msg, download = false) => {
+    if (!msg?.id || loadingMediaId === msg.id) return;
+    setLoadingMediaId(msg.id);
+    try {
+      const response = await axios.get(`${API_URL}/messages/media/message/${msg.id}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      setMediaUrls(prev => ({ ...prev, [msg.id]: url }));
+      if (download) {
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = msg.media_filename || `whatsapp_${msg.type || 'file'}`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+    } catch (error) {
+      setSendError(error.response?.data?.error || 'Ce média n’est plus disponible dans WhatsApp.');
+    } finally {
+      setLoadingMediaId(null);
+    }
+  };
+
   const renderMedia = (msg) => {
-    const src = `${API_URL}/messages/media/${msg.media_path}`;
+    const src = msg.media_path
+      ? `${API_URL}/messages/media/${msg.media_path}`
+      : mediaUrls[msg.id];
     const type = msg.type;
+
+    if (!src) {
+      const isDocument = type === 'document' || type === 'file';
+      return (
+        <button className="media-badge-fallback file" onClick={() => loadMediaOnDemand(msg, isDocument)} disabled={loadingMediaId === msg.id}>
+          <span>{isDocument ? '📎' : type === 'image' ? '📷' : type === 'video' ? '🎥' : '🎵'}</span>
+          <span>{loadingMediaId === msg.id ? 'Récupération…' : isDocument ? 'Télécharger le fichier' : 'Charger le média'}</span>
+        </button>
+      );
+    }
 
     if (type === 'sticker') {
       return (
@@ -495,7 +531,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     }
 
     if (type === 'document') {
-      const ext = (msg.media_path || '').split('.').pop().toLowerCase();
+      const ext = (msg.media_filename || msg.media_path || '').split('.').pop().toLowerCase();
       const extLabel = ext ? ext.toUpperCase().slice(0, 4) : 'DOC';
       const extColors = {
         pdf: '#e53e3e', doc: '#2b6cb0', docx: '#2b6cb0',
@@ -777,7 +813,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
 
                   <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'}`}>
                     <span className="message-text">
-                      {msg.media_path ? (
+                      {msg.media_path || msg.wa_msg_id ? (
                         renderMedia(msg)
                       ) : /^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
                         <span className={`media-badge-fallback ${

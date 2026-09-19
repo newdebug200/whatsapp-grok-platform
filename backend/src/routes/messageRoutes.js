@@ -6,6 +6,7 @@ const pathModule = require('path');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
+const { ensureCapacity } = require('../services/mediaStorage');
 
 // ── Audio conversion helper (WebM → OGG Opus) ─────────────────────────────────
 async function convertWebmToOgg(base64Data) {
@@ -47,6 +48,36 @@ router.get('/media/:filename', (req, res) => {
 });
 
 router.use(authMiddleware);
+
+// Le contenu des médias entrants n’est récupéré de WhatsApp qu’à la demande.
+// Les messages conservent seulement leur identifiant WhatsApp et leurs métadonnées.
+router.get('/media/message/:id', profileMiddleware, async (req, res) => {
+  try {
+    const message = await prisma.message.findFirst({
+      where: { id: Number(req.params.id), wa_msg_id: { not: null }, contact: { profile_id: req.profileId } },
+      select: { wa_msg_id: true, media_filename: true, media_mime: true, type: true }
+    });
+    if (!message) return res.status(404).json({ error: 'Média introuvable' });
+    const client = whatsappManager.getClient(req.profileId);
+    if (!client || typeof client.getMessageById !== 'function') return res.status(503).json({ error: 'WhatsApp doit être connecté pour récupérer ce média' });
+    const waMessage = await client.getMessageById(message.wa_msg_id);
+    if (!waMessage?.hasMedia) return res.status(404).json({ error: 'Média WhatsApp indisponible' });
+    const media = await waMessage.downloadMedia();
+    if (!media?.data) return res.status(404).json({ error: 'Média vide ou expiré' });
+    const buffer = Buffer.from(media.data, 'base64');
+    await ensureCapacity(prisma, buffer.length);
+    const mime = media.mimetype || message.media_mime || 'application/octet-stream';
+    const filename = String(media.filename || message.media_filename || `whatsapp_${message.type || 'file'}`).replace(/[^\w. -]/g, '_');
+    const inline = /^(image|audio|video)\//i.test(mime);
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('media on-demand error:', error.message);
+    res.status(500).json({ error: 'Récupération du média impossible' });
+  }
+});
 
 router.get('/status', (req, res) => {
   const status = whatsappManager.getStatus(req.accountId);
@@ -385,6 +416,7 @@ router.post('/send-media', profileMiddleware, async (req, res) => {
     const ext = (filename || 'file').split('.').pop().replace(/[^a-z0-9]/gi, '') || 'bin';
     const saveName = `sent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
     const savePath = pathModule.join(__dirname, '../../uploads', saveName);
+    await ensureCapacity(prisma, Math.ceil(Buffer.byteLength(data, 'base64')));
     fs.writeFileSync(savePath, Buffer.from(data, 'base64'));
 
     const type = messageType || (

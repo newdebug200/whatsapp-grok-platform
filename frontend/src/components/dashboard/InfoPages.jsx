@@ -49,6 +49,7 @@ export function HowItWorksPage({ onBack }) {
         <p>Pour accélérer la connexion et préserver les ressources, Botora n’importe pas l’historique au démarrage. Les discussions déjà présentes sur votre téléphone apparaîtront dans Botora lorsqu’un nouveau message sera reçu ou envoyé pour ces contacts.</p>
       </article>
     </div>
+    <div className="info-tip"><strong>Fichiers et stockage</strong><span>Les fichiers reçus ne sont pas téléchargés automatiquement sur Botora. Ils sont récupérés uniquement lorsque vous demandez à les consulter ou à les télécharger. Les fichiers conservés temporairement sont supprimés du plus ancien au plus récent si l’espace serveur atteint son seuil de sécurité ; pensez donc à télécharger les fichiers importants sur votre ordinateur. Par défaut, la réception d’un fichier place aussi la discussion en mode Humain afin qu’un opérateur puisse la traiter.</span></div>
     <div className="info-tip"><strong>Pour commencer</strong><span>Connectez d’abord votre profil WhatsApp, puis activez uniquement les fonctions dont vous avez besoin. Vous pourrez modifier vos choix à tout moment.</span></div>
     <div className="info-highlight info-final-card"><span className="info-symbol">→</span><h2>Une utilisation progressive</h2><p>Vous n’avez pas besoin de tout configurer dès le début. Commencez par vos conversations et vos réponses essentielles, puis ajoutez les campagnes, les étiquettes et les outils de suivi au fur et à mesure.</p></div>
   </InfoLayout>;

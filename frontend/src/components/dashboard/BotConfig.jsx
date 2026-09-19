@@ -60,7 +60,8 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     personality: 'professional',
     sentiment_enabled: false,
     sentiment_alert: false,
-    media_auto_reply: false
+    media_auto_reply: false,
+    ia_group_enabled: false
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -395,6 +396,19 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             <span className="toggle-knob" />
           </button>
         </div>
+
+        <label className="toggle-row" style={{ marginTop: 12, cursor: 'pointer' }}>
+          <div>
+            <div className="toggle-label">👥 Autoriser l’IA dans les groupes</div>
+            <div className="toggle-desc">Par défaut, les messages de groupe sont enregistrés sans réponse automatique de l’IA</div>
+          </div>
+          <input
+            type="checkbox"
+            checked={config.ia_group_enabled === true}
+            onChange={e => setConfig(c => ({ ...c, ia_group_enabled: e.target.checked }))}
+            style={{ width: 18, height: 18, accentColor: 'var(--accent, #25d366)' }}
+          />
+        </label>
 
         <div className="field-group" style={{ marginTop: 16 }}>
           <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -75,6 +75,7 @@ model BotConfig {
   sentiment_enabled      Boolean @default(false)
   sentiment_alert        Boolean @default(false)
   media_auto_reply       Boolean @default(false)
+  ia_group_enabled       Boolean @default(false)
 
   profile WhatsAppProfile @relation(fields: [profile_id], references: [id])
 }
@@ -147,6 +148,9 @@ model Message {
   unread     Boolean  @default(true)
   sentiment  String?
   media_path String?
+  wa_msg_id  String?
+  media_filename String?
+  media_mime     String?
 
   contact Contact @relation(fields: [contact_id], references: [id])
 
