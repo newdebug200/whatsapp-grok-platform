@@ -17,7 +17,7 @@ const EMOJI_CATEGORIES = {
 
 const CATEGORY_LABELS = { '😀': 'Smileys', '👍': 'Gestes', '❤️': 'Cœurs', '🎉': 'Fête', '🍕': 'Nourriture', '🌸': 'Nature' };
 
-export default function ChatWindow({ contact, socket, waStatus, onBack }) {
+export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnabled = true, onBack }) {
   const { language, t } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -148,6 +148,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   };
 
   const loadQuickReplies = async () => {
+    if (!quickRepliesEnabled) return;
     if (quickReplies.length > 0) return;
     setLoadingTemplates(true);
     try {
@@ -248,6 +249,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   };
 
   const handleToggleTemplates = () => {
+    if (!quickRepliesEnabled) return;
     if (!showTemplates) {
       loadQuickReplies();
       setShowEmoji(false);
@@ -956,15 +958,17 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       />
 
       <div className="chat-input-bar">
-        <button
-          className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
-          onClick={handleToggleTemplates}
-          title={t('Quick replies')}
-          type="button"
-          style={{ fontSize: '1rem', fontWeight: 700 }}
-        >
-          ⚡
-        </button>
+        {quickRepliesEnabled && (
+          <button
+            className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
+            onClick={handleToggleTemplates}
+            title={t('Quick replies')}
+            type="button"
+            style={{ fontSize: '1rem', fontWeight: 700 }}
+          >
+            ⚡
+          </button>
+        )}
         <button
           className={`emoji-toggle-btn ${showEmoji ? 'active' : ''}`}
           onClick={() => { setShowEmoji(v => !v); setShowTemplates(false); }}

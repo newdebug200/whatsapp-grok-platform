@@ -842,6 +842,7 @@ export default function Dashboard() {
             contact={selectedContact}
             socket={socket}
             waStatus={waStatus}
+            quickRepliesEnabled={platformConfig.quick_replies_enabled !== false && platformConfig.quick_replies_enabled !== 'false'}
             onBack={handleBack}
           />
         ) : (

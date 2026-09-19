@@ -60,7 +60,7 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhats
   }, [initialTab]);
 
   const accountTabs = ACCOUNT_TABS;
-  const featureEnabled = (key) => account?.role === 'admin' || platformConfig[key] !== 'false';
+  const featureEnabled = (key) => platformConfig[key] !== false && platformConfig[key] !== 'false';
   const visibleBotTabs = BOT_TABS.filter(tab => ({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', keywordReplies: null, journal: 'sensitive_keywords_enabled' }[tab.key] ? featureEnabled(({ config: 'ia_enabled_global', faq: 'faq_enabled', templates: 'quick_replies_enabled', journal: 'sensitive_keywords_enabled' }[tab.key])) : true));
   useEffect(() => {
     if (tab !== 'account' && !visibleBotTabs.some(item => item.key === tab)) setTab('account');
