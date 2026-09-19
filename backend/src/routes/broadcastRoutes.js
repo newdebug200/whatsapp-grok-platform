@@ -299,7 +299,7 @@ router.post('/campaigns', async (req, res) => {
       return res.status(400).json({ error: 'Aucun contact valide sélectionné' });
 
     // Process messages: save any uploaded files to disk before the DB insert
-    const uploadsDir = pathModule.join(__dirname, '../../uploads');
+    const uploadsDir = pathModule.join(__dirname, '../../backend/uploads');
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
     const processedMessages = messages.map((m, i) => {

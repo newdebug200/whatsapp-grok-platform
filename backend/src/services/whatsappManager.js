@@ -1187,7 +1187,7 @@ class WhatsAppManager {
                   if (fs.existsSync(filePath)) {
                     const fileData = fs.readFileSync(filePath).toString('base64');
                     const ext = msg.media_path.split('.').pop().toLowerCase();
-                    const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+                    const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', m4v: 'video/mp4', '3gp': 'video/3gpp', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt: 'text/plain', csv: 'text/csv', zip: 'application/zip' };
                     media = new MessageMedia(mimeMap[ext] || 'application/octet-stream', fileData, msg.media_path);
                   }
                 } else if (msg.media_url) {
@@ -1200,11 +1200,11 @@ class WhatsAppManager {
                     await waClient.sendMessage(waId, media, content ? { caption: content } : {});
                   }
                 } else {
-                  // Media could not be loaded — fallback to text only
-                  await this._sendWithTyping(waClient, waId, content, handle);
+                  throw new Error('Média de campagne introuvable ou impossible à télécharger');
                 }
               } else {
-                await this._sendWithTyping(waClient, waId, content, handle);
+                if (!content.trim()) throw new Error('Message texte vide');
+                await this.sendMessage(profileId, waId, content);
               }
             } finally {
               setTimeout(() => this.campaignSendingWaIds.delete(waId), 3000);
