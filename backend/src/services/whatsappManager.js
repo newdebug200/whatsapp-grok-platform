@@ -44,6 +44,12 @@ class WhatsAppManager {
   setIO(io) { this.io = io; }
   setPrisma(prisma) { this.prisma = prisma; }
 
+  _isSyncActive(profileId, client, token) {
+    if (token?.cancelled) return false;
+    const found = this._getEntryByProfileId(profileId);
+    return Boolean(found && found.entry.client === client && found.entry.status === 'connected');
+  }
+
   // ─── Dedup tracker for Botora-sent messages ───────────────────────────────
   // Call this right after every client.sendMessage() done by the bot API so
   // the message_create listener can recognize and skip those IDs.
@@ -186,10 +192,11 @@ class WhatsAppManager {
     return this._isUsableContactName(chatName, phoneNumber, waId) ? chatName.trim() : null;
   }
 
-  async _importContacts(client, profileId) {
+  async _importContacts(client, profileId, token) {
     if (!WWEB_AVAILABLE) return;
     try {
       const allContacts = await client.getContacts();
+      if (!this._isSyncActive(profileId, client, token)) return;
       const myContacts = allContacts.filter(c =>
         c.isMyContact && !c.isGroup && c.id?.server === 'c.us'
       );
@@ -197,6 +204,7 @@ class WhatsAppManager {
       let imported = 0;
       let skippedInvalid = 0;
       for (const wContact of myContacts) {
+        if (!this._isSyncActive(profileId, client, token)) return;
         try {
           // Use wContact.number if available (real E.164 phone), else fall back to id.user
           const rawUser = (wContact.number && String(wContact.number).length >= 7)
@@ -229,12 +237,13 @@ class WhatsAppManager {
 
   // ─── Sync full chat history on reconnect ─────────────────────────────────
 
-  async _syncChatHistory(client, profileId, accountId) {
+  async _syncChatHistory(client, profileId, accountId, token) {
     if (!WWEB_AVAILABLE) return;
     try {
       this.io?.to(`account_${accountId}`).emit('sync-start', { profileId, message: 'Session WhatsApp conservée. Synchronisation en cours…' });
       console.log(`[WA] Synchronisation historique — profil ${profileId}`);
       const chats = await client.getChats();
+      if (!this._isSyncActive(profileId, client, token)) return;
       let syncedMessages = 0;
       let syncedChats = 0;
       const syncEntry = this._getEntryByProfileId(profileId);
@@ -242,7 +251,10 @@ class WhatsAppManager {
       const ignoreIncomingUntil = syncEntry?.entry?.ignoreIncomingUntil || 0;
 
       for (const chat of chats) {
+        if (!this._isSyncActive(profileId, client, token)) return;
         try {
+          // Les statuts WhatsApp (@broadcast) ne sont pas des conversations utiles à la plateforme.
+          if (chat?.id?.server === 'broadcast' || chat?.id?._serialized?.includes('@broadcast')) continue;
           const isGroup = chat.isGroup;
           const waId = chat.id._serialized;
 
@@ -277,6 +289,7 @@ class WhatsAppManager {
           syncedChats++;
 
           for (const msg of messages) {
+            if (!this._isSyncActive(profileId, client, token)) return;
             if (!msg.body && !msg.hasMedia) continue;
             if (['e2e_notification', 'notification_template', 'call_log', 'gp2'].includes(msg.type)) continue;
 
@@ -452,7 +465,8 @@ class WhatsAppManager {
 
     this.clients.set(clientKey, {
       client, status: 'initializing', accountId,
-      profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null, ignoreIncomingUntil: null
+      profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null, ignoreIncomingUntil: null,
+      syncToken: { cancelled: false }
     });
 
     // ── QR ──
@@ -543,6 +557,7 @@ class WhatsAppManager {
       // after connection. This protects the app from WhatsApp replay events.
       const readyEntry = this.clients.get(profile.id);
       if (readyEntry) {
+        readyEntry.syncToken = { cancelled: false };
         readyEntry.readyAt = Date.now();
         readyEntry.ignoreIncomingUntil = readyEntry.readyAt + 10 * 1000;
       }
@@ -551,10 +566,10 @@ class WhatsAppManager {
       centralSync.getKeywordAutoReplies(profile.id).catch(error => console.warn(`[WA] Réponses automatiques non synchronisées: ${error.message}`));
 
       // Import phone book contacts in background
-      this._importContacts(client, profile.id).catch(() => {});
+      this._importContacts(client, profile.id, readyEntry?.syncToken).catch(() => {});
 
       // Sync full chat history: missed messages + groups
-      this._syncChatHistory(client, profile.id, accountId).catch(() => {});
+      this._syncChatHistory(client, profile.id, accountId, readyEntry?.syncToken).catch(() => {});
     });
 
     // ── Incoming message ──
@@ -692,6 +707,7 @@ class WhatsAppManager {
             where: { id: resolvedProfileId }, data: { is_connected: false }
           });
         } catch (_) {}
+        if (found?.entry?.syncToken) found.entry.syncToken.cancelled = true;
         this.clearCache(resolvedProfileId);
       }
       if (found) { found.entry.status = 'disconnected'; found.entry.qrCode = null; this.clients.delete(found.key); }
@@ -896,6 +912,7 @@ class WhatsAppManager {
   async logout(profileId) {
     const found = this._getEntryByProfileId(profileId);
     if (found) {
+      if (found.entry.syncToken) found.entry.syncToken.cancelled = true;
       try { await found.entry.client.logout(); } catch (_) {}
       try { await found.entry.client.destroy(); } catch (_) {}
       this.clients.delete(found.key);

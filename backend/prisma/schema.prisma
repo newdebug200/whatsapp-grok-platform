@@ -149,6 +149,9 @@ model Message {
   media_path String?
 
   contact Contact @relation(fields: [contact_id], references: [id])
+
+  @@index([contact_id, created_at])
+  @@index([contact_id, direction, created_at])
 }
 
 model FAQ {
