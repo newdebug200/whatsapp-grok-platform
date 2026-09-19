@@ -1128,8 +1128,9 @@ class WhatsAppManager {
             console.log(`[Campaign ${campaignId}] wa_id connu → ${waId}`);
           } else {
             // wa_id absent ou @lid : résolution via getNumberId()
+            const rawPhone = String(contact.phone_number || '').replace(/\D/g, '');
             try {
-              const rawPhone = contact.phone_number.replace('+', '');
+              if (!rawPhone) throw new Error('Numéro de destinataire invalide');
               const numId = await waClient.getNumberId(rawPhone);
               if (!numId) {
                 console.log(`[Campaign ${campaignId}] Numéro non WhatsApp — ${contact.phone_number}`);
@@ -1157,9 +1158,10 @@ class WhatsAppManager {
               } else {
                 waId = numId._serialized;
               }
-            } catch (_) {
-              // Dernier recours
-              waId = contact.phone_number.replace('+', '') + '@c.us';
+            } catch (resolveError) {
+              if (!rawPhone) throw resolveError;
+              // Dernier recours : le numéro normalisé reste compatible avec whatsapp-web.js
+              waId = rawPhone + '@c.us';
             }
           }
 
@@ -1183,8 +1185,12 @@ class WhatsAppManager {
                 // ── Send media (with text as caption if present) ──
                 let media = null;
                 if (msg.media_path) {
-                  const filePath = path.join(__dirname, '../../uploads', msg.media_path);
-                  if (fs.existsSync(filePath)) {
+                  const fileCandidates = [
+                    path.join(__dirname, '../../uploads', msg.media_path),
+                    path.join(__dirname, '../../backend/uploads', msg.media_path)
+                  ];
+                  const filePath = fileCandidates.find(candidate => fs.existsSync(candidate));
+                  if (filePath) {
                     const fileData = fs.readFileSync(filePath).toString('base64');
                     const ext = msg.media_path.split('.').pop().toLowerCase();
                     const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', m4v: 'video/mp4', '3gp': 'video/3gpp', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt: 'text/plain', csv: 'text/csv', zip: 'application/zip' };
