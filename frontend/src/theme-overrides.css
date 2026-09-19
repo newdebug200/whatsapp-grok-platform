@@ -217,6 +217,28 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 [data-theme="dark"] .app-navigation-link:focus-visible .app-navigation-icon,
 [data-theme="dark"] .app-navigation-sub-link:focus-visible .app-navigation-sub-icon { color: var(--brand-mint, #6ee7a0); }
 
+/* Automatic replies: keep the primary save action readable in both themes. */
+.keyword-replies-primary-action {
+  background: #082f49;
+  color: #ffffff;
+  border-color: #082f49;
+}
+.keyword-replies-primary-action:hover:not(:disabled) {
+  background: #08745f;
+  border-color: #08745f;
+  color: #ffffff;
+}
+[data-theme="dark"] .keyword-replies-primary-action {
+  background: #0aa37f;
+  border-color: #0aa37f;
+  color: #06261f;
+}
+[data-theme="dark"] .keyword-replies-primary-action:hover:not(:disabled) {
+  background: #5ae5c5;
+  border-color: #5ae5c5;
+  color: #06261f;
+}
+
 /* The dashboard destination is also rendered as a back button on feature pages. */
 .sh-page-back:hover,
 .sh-page-back:focus-visible {
