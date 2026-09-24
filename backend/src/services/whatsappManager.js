@@ -1210,7 +1210,12 @@ class WhatsAppManager {
                 }
               } else {
                 if (!content.trim()) throw new Error('Message texte vide');
-                await this.sendMessage(profileId, waId, content);
+                // Les campagnes utilisent le transport direct du client WhatsApp.
+                // Le chemin générique sendMessage() privilégie chat.sendMessage(),
+                // qui peut échouer sur un chat déjà chargé sans permettre le
+                // fallback. Le runner de campagne possède déjà un retry contrôlé
+                // et évite ainsi de marquer tous les destinataires en échec.
+                await this._sendWithTyping(waClient, waId, content, handle);
               }
             } finally {
               setTimeout(() => this.campaignSendingWaIds.delete(waId), 3000);
