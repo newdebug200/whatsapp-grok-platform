@@ -871,6 +871,46 @@ class WhatsAppManager {
     return found.entry.client;
   }
 
+  // Refresh names for stored conversations without loading the full address book.
+  // The dashboard calls this method while hydrating the initial contact list.
+  async enrichConversationContacts(profileId, contacts) {
+    const client = this.getClient(profileId);
+    if (!client || !Array.isArray(contacts)) return contacts;
+    const enriched = [];
+    for (const contact of contacts) {
+      const storedWaId = String(contact?.wa_id || '').trim();
+      const phoneDigits = String(contact?.phone_number || '').replace(/\D/g, '');
+      const storedDigits = storedWaId.replace(/\D/g, '');
+      const waId = storedWaId.includes('@')
+        ? storedWaId
+        : (storedDigits.length >= 7 && storedDigits.length <= 15 ? `${storedDigits}@c.us` : '')
+          || (phoneDigits.length >= 7 && phoneDigits.length <= 15 ? `${phoneDigits}@c.us` : '');
+      if (!waId || waId.includes('@g.us')) {
+        enriched.push(contact);
+        continue;
+      }
+      let waContact = null;
+      try { waContact = await client.getContactById(waId); } catch (_) {}
+      let name = await this._resolvePrivateContactName(waContact, contact.phone_number, waId);
+      if (!name) {
+        try {
+          const chat = await client.getChatById(waId);
+          name = await this._resolveChatContactName(client, chat, contact.phone_number, waId);
+        } catch (_) {}
+      }
+      if (name || !storedWaId) {
+        try {
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: { ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) }
+          });
+        } catch (_) {}
+      }
+      enriched.push({ ...contact, ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) });
+    }
+    return enriched;
+  }
+
   // ─── Send message ─────────────────────────────────────────────────────────
 
   async sendMessage(profileId, to, content) {
@@ -1114,20 +1154,22 @@ class WhatsAppManager {
           const target = targets[i];
           const contact = target.contact;
 
-          // Resolve the real WhatsApp ID
-          // Optimisation : si le contact a déjà un wa_id valide (synchronisé depuis WhatsApp),
-          // on l'utilise directement — pas besoin d'appeler getNumberId() et risquer le rate-limit.
+          // Resolve the real WhatsApp ID.
+          // WhatsApp peut identifier un contact par @c.us ou par @lid. Un LID
+          // n'est pas un numéro téléphonique : il ne faut donc jamais extraire
+          // ses chiffres pour appeler getNumberId(), sinon il est déclaré à tort
+          // « non WhatsApp ».
           let waId;
           const storedWaId = contact.wa_id;
           const hasValidWaId = storedWaId &&
-            storedWaId.includes('@c.us') &&
-            !storedWaId.includes('@lid');
+            (storedWaId.includes('@c.us') || storedWaId.includes('@lid')) &&
+            !storedWaId.includes('@g.us');
 
           if (hasValidWaId) {
             waId = storedWaId;
-            console.log(`[Campaign ${campaignId}] wa_id connu → ${waId}`);
+            console.log(`[Campaign ${campaignId}] identifiant WhatsApp connu → ${waId}`);
           } else {
-            // wa_id absent ou @lid : résolution via getNumberId()
+            // wa_id absent : résolution via getNumberId()
             const rawPhone = String(contact.phone_number || '').replace(/\D/g, '');
             try {
               if (!rawPhone) throw new Error('Numéro de destinataire invalide');
@@ -1274,8 +1316,17 @@ class WhatsAppManager {
           this.io?.to(`account_${accountId}`).emit('campaign-progress', {
             campaignId, done: finalDone, total: totalTargets, completed: true
           });
-          console.log(`[Campaign ${campaignId}] Terminée — ${finalDone}/${totalTargets} envoyés`);
-          centralSync.reportActivity(accountId, 'campaign.completed', { campaign_id: campaignId, profile_id: profileId, done: finalDone, total: totalTargets }).catch(() => {});
+          const finalSent = await this.prisma.campaignTarget.count({
+            where: { campaign_id: campaignId, status: 'sent' }
+          });
+          const finalFailed = await this.prisma.campaignTarget.count({
+            where: { campaign_id: campaignId, status: 'failed' }
+          });
+          console.log(`[Campaign ${campaignId}] Terminée — ${finalSent}/${totalTargets} envoyés, ${finalFailed} échec(s)`);
+          centralSync.reportActivity(accountId, 'campaign.completed', {
+            campaign_id: campaignId, profile_id: profileId, done: finalDone,
+            sent: finalSent, failed: finalFailed, total: totalTargets
+          }).catch(() => {});
         }
 
         this.runningCampaigns.delete(campaignId);
