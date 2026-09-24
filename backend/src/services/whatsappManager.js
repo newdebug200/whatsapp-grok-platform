@@ -1243,9 +1243,24 @@ class WhatsAppManager {
                 }
 
                 if (media) {
-                  try { const chat = await waClient.getChatById(waId); await chat.sendStateTyping(); await this._sleep(Math.min(this._typingDuration(content), 2000), handle); await chat.clearState(); } catch (_) {}
+                  // whatsapp-web.js accepte parfois un LID pour le texte, mais
+                  // son transport média exige un chat résolu avec un vrai id.
+                  // Résoudre le numéro uniquement pour le média préserve le
+                  // transport texte déjà fonctionnel.
+                  let mediaWaId = waId;
+                  if (String(mediaWaId).includes('@lid')) {
+                    try {
+                      const realContact = await waClient.getContactById(mediaWaId);
+                      const realNumber = String(realContact?.number || '').replace(/\D/g, '');
+                      if (realNumber.length >= 7 && realNumber.length <= 15) {
+                        mediaWaId = `${realNumber}@c.us`;
+                        console.log(`[Campaign ${campaignId}] LID média résolu → ${mediaWaId}`);
+                      }
+                    } catch (_) {}
+                  }
+                  try { const chat = await waClient.getChatById(mediaWaId); await chat.sendStateTyping(); await this._sleep(Math.min(this._typingDuration(content), 2000), handle); await chat.clearState(); } catch (_) {}
                   if (!handle.cancelled) {
-                    await waClient.sendMessage(waId, media, content ? { caption: content } : {});
+                    await waClient.sendMessage(mediaWaId, media, content ? { caption: content } : {});
                   }
                 } else {
                   throw new Error('Média de campagne introuvable ou impossible à télécharger');
