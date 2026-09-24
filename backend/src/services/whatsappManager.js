@@ -1243,24 +1243,23 @@ class WhatsAppManager {
                 }
 
                 if (media) {
-                  // whatsapp-web.js accepte parfois un LID pour le texte, mais
-                  // son transport média exige un chat résolu avec un vrai id.
-                  // Résoudre le numéro uniquement pour le média préserve le
-                  // transport texte déjà fonctionnel.
-                  let mediaWaId = waId;
-                  if (String(mediaWaId).includes('@lid')) {
+                  // Un LID n'est pas un numéro et ne doit jamais être converti
+                  // en @c.us : WhatsApp répond alors « No LID for user ».
+                  // On conserve donc le modèle Chat résolu par WhatsApp Web.
+                  let mediaChat = null;
+                  try { mediaChat = await waClient.getChatById(waId); } catch (_) {}
+                  if (!mediaChat && String(waId).includes('@lid')) {
                     try {
-                      const realContact = await waClient.getContactById(mediaWaId);
-                      const realNumber = String(realContact?.number || '').replace(/\D/g, '');
-                      if (realNumber.length >= 7 && realNumber.length <= 15) {
-                        mediaWaId = `${realNumber}@c.us`;
-                        console.log(`[Campaign ${campaignId}] LID média résolu → ${mediaWaId}`);
-                      }
+                      const waContact = await waClient.getContactById(waId);
+                      mediaChat = await waContact?.getChat();
                     } catch (_) {}
                   }
-                  try { const chat = await waClient.getChatById(mediaWaId); await chat.sendStateTyping(); await this._sleep(Math.min(this._typingDuration(content), 2000), handle); await chat.clearState(); } catch (_) {}
+                  if (!mediaChat || typeof mediaChat.sendMessage !== 'function') {
+                    throw new Error(`Discussion WhatsApp introuvable pour ${waId}`);
+                  }
+                  try { await mediaChat.sendStateTyping(); await this._sleep(Math.min(this._typingDuration(content), 2000), handle); await mediaChat.clearState(); } catch (_) {}
                   if (!handle.cancelled) {
-                    await waClient.sendMessage(mediaWaId, media, content ? { caption: content } : {});
+                    await mediaChat.sendMessage(media, content ? { caption: content } : {});
                   }
                 } else {
                   throw new Error('Média de campagne introuvable ou impossible à télécharger');
