@@ -1254,6 +1254,21 @@ class WhatsAppManager {
                       mediaChat = await waContact?.getChat();
                     } catch (_) {}
                   }
+                  // Certains LID ne sont pas résolus par getChatById(), mais
+                  // existent déjà dans la collection des discussions chargées.
+                  if (!mediaChat && String(waId).includes('@lid')) {
+                    try {
+                      const chats = await waClient.getChats();
+                      mediaChat = chats.find(chat => chat?.id?._serialized === waId) || null;
+                    } catch (_) {}
+                  }
+                  if (!mediaChat && String(waId).includes('@lid')) {
+                    try {
+                      const contacts = await waClient.getContacts();
+                      const waContact = contacts.find(contact => contact?.id?._serialized === waId);
+                      mediaChat = await waContact?.getChat();
+                    } catch (_) {}
+                  }
                   if (!mediaChat || typeof mediaChat.sendMessage !== 'function') {
                     throw new Error(`Discussion WhatsApp introuvable pour ${waId}`);
                   }
