@@ -1293,12 +1293,20 @@ class WhatsAppManager {
                   try {
                     await this._sendCampaignMedia(waClient, mediaWaId, media, msg.media_type, content, msg.media_path, handle);
                   } catch (wppError) {
-                    // whatsapp-web.js remains the primary fallback when WPP is
-                    // not injected in the current WhatsApp Web build.
-                    let mediaChat = null;
-                    try { mediaChat = await waClient.getChatById(mediaWaId); } catch (_) {}
-                    if (!mediaChat || typeof mediaChat.sendMessage !== 'function') throw wppError;
-                    await mediaChat.sendMessage(media, content ? { caption: content } : {});
+                    // WPP is optional. Once a LID has been mapped to its real
+                    // phone id, the direct whatsapp-web.js transport is the
+                    // reliable fallback used by the historical working code.
+                    if (String(wppError.message || '').includes('indisponible')) {
+                      const directResult = await waClient.sendMessage(
+                        mediaWaId, media, content ? { caption: content } : {}
+                      );
+                      if (!directResult) throw new Error(`Envoi média direct échoué pour ${mediaWaId}`);
+                    } else {
+                      let mediaChat = null;
+                      try { mediaChat = await waClient.getChatById(mediaWaId); } catch (_) {}
+                      if (!mediaChat || typeof mediaChat.sendMessage !== 'function') throw wppError;
+                      await mediaChat.sendMessage(media, content ? { caption: content } : {});
+                    }
                   }
                 } else {
                   throw new Error('Média de campagne introuvable ou impossible à télécharger');
