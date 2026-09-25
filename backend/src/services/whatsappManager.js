@@ -1101,6 +1101,18 @@ class WhatsAppManager {
     return true;
   }
 
+  async _resolveCampaignMediaId(waClient, waId) {
+    if (!String(waId).includes('@lid')) return waId;
+    if (typeof waClient.getContactLidAndPhone !== 'function') return waId;
+    const mappings = await waClient.getContactLidAndPhone([waId]);
+    const phoneId = mappings?.[0]?.pn;
+    if (phoneId) {
+      console.log(`[Campaign] LID média résolu par WhatsApp → ${phoneId}`);
+      return phoneId;
+    }
+    return waId;
+  }
+
   async startCampaign(campaignId, profileId) {
     if (this.runningCampaigns.has(campaignId)) return;
 
@@ -1277,13 +1289,14 @@ class WhatsAppManager {
                 }
 
                 if (media) {
+                  const mediaWaId = await this._resolveCampaignMediaId(waClient, waId).catch(() => waId);
                   try {
-                    await this._sendCampaignMedia(waClient, waId, media, msg.media_type, content, msg.media_path, handle);
+                    await this._sendCampaignMedia(waClient, mediaWaId, media, msg.media_type, content, msg.media_path, handle);
                   } catch (wppError) {
-                    // Keep a wrapper fallback for installations where WPP is
-                    // not exposed, but never convert a LID into a fake @c.us.
+                    // whatsapp-web.js remains the primary fallback when WPP is
+                    // not injected in the current WhatsApp Web build.
                     let mediaChat = null;
-                    try { mediaChat = await waClient.getChatById(waId); } catch (_) {}
+                    try { mediaChat = await waClient.getChatById(mediaWaId); } catch (_) {}
                     if (!mediaChat || typeof mediaChat.sendMessage !== 'function') throw wppError;
                     await mediaChat.sendMessage(media, content ? { caption: content } : {});
                   }
