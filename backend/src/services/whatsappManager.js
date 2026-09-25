@@ -1075,6 +1075,32 @@ class WhatsAppManager {
     }
   }
 
+  // WPP.js handles media addressed by a WhatsApp LID more reliably than the
+  // whatsapp-web.js media wrapper. The browser API expects a Data URI.
+  async _sendCampaignMedia(waClient, waId, media, mediaType, content, filename, handle) {
+    const dataUri = `data:${media.mimetype || 'application/octet-stream'};base64,${media.data}`;
+    const options = {
+      type: mediaType || 'document',
+      ...(content ? { caption: content } : {}),
+      ...(filename ? { filename } : {}),
+      ...(media.mimetype ? { mimetype: media.mimetype } : {})
+    };
+    const result = await waClient.pupPage.evaluate(async (chatId, encodedFile, sendOptions) => {
+      try {
+        if (!window.WPP?.chat?.sendFileMessage) {
+          return { ok: false, error: 'WPP.chat.sendFileMessage indisponible' };
+        }
+        await window.WPP.chat.sendFileMessage(chatId, encodedFile, sendOptions);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: String(error?.message || error) };
+      }
+    }, waId, dataUri, options);
+    if (!result?.ok) throw new Error(result?.error || 'Échec de l’envoi média WPP');
+    if (handle.cancelled) return false;
+    return true;
+  }
+
   async startCampaign(campaignId, profileId) {
     if (this.runningCampaigns.has(campaignId)) return;
 
@@ -1208,9 +1234,17 @@ class WhatsAppManager {
           }
 
           try {
-            // Pick one random variant — each contact gets exactly one message
-            const variantIdx = Math.floor(Math.random() * campaign.messages.length);
-            const msg = campaign.messages[variantIdx];
+            // A contact receives every configured message in order. The old
+            // runner selected one random variant, so a document and a text
+            // could never both be delivered to the same contact.
+            for (let messageIndex = 0; messageIndex < campaign.messages.length; messageIndex++) {
+              if (handle.cancelled) break;
+              const msg = campaign.messages[messageIndex];
+              if (messageIndex > 0 && msg.delay_after_seconds > 0) {
+                console.log(`[Campaign ${campaignId}] Attente ${msg.delay_after_seconds}s — message ${messageIndex + 1}/${campaign.messages.length}`);
+                await this._sleep(msg.delay_after_seconds * 1000, handle, waClient);
+                if (handle.cancelled) break;
+              }
             const contactFirstName = contact.name ? contact.name.split(/\s+/)[0] : '';
             const content = msg.content
               .replace(/\{\{prenom\}\}/gi, contactFirstName || contact.name || 'cher(e) client(e)')
@@ -1219,7 +1253,7 @@ class WhatsAppManager {
               .replace(/\{\{telephone\}\}/gi, contact.phone_number || '')
               .replace(/\{\{tel\}\}/gi, contact.phone_number || '');
 
-            console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
+            console.log(`[Campaign ${campaignId}] Message ${messageIndex + 1}/${campaign.messages.length} → ${contact.phone_number}`);
             this.campaignSendingWaIds.add(waId);
             try {
               const hasMedia = (msg.media_path || msg.media_url) && MessageMedia;
@@ -1243,37 +1277,14 @@ class WhatsAppManager {
                 }
 
                 if (media) {
-                  // Un LID n'est pas un numéro et ne doit jamais être converti
-                  // en @c.us : WhatsApp répond alors « No LID for user ».
-                  // On conserve donc le modèle Chat résolu par WhatsApp Web.
-                  let mediaChat = null;
-                  try { mediaChat = await waClient.getChatById(waId); } catch (_) {}
-                  if (!mediaChat && String(waId).includes('@lid')) {
-                    try {
-                      const waContact = await waClient.getContactById(waId);
-                      mediaChat = await waContact?.getChat();
-                    } catch (_) {}
-                  }
-                  // Certains LID ne sont pas résolus par getChatById(), mais
-                  // existent déjà dans la collection des discussions chargées.
-                  if (!mediaChat && String(waId).includes('@lid')) {
-                    try {
-                      const chats = await waClient.getChats();
-                      mediaChat = chats.find(chat => chat?.id?._serialized === waId) || null;
-                    } catch (_) {}
-                  }
-                  if (!mediaChat && String(waId).includes('@lid')) {
-                    try {
-                      const contacts = await waClient.getContacts();
-                      const waContact = contacts.find(contact => contact?.id?._serialized === waId);
-                      mediaChat = await waContact?.getChat();
-                    } catch (_) {}
-                  }
-                  if (!mediaChat || typeof mediaChat.sendMessage !== 'function') {
-                    throw new Error(`Discussion WhatsApp introuvable pour ${waId}`);
-                  }
-                  try { await mediaChat.sendStateTyping(); await this._sleep(Math.min(this._typingDuration(content), 2000), handle); await mediaChat.clearState(); } catch (_) {}
-                  if (!handle.cancelled) {
+                  try {
+                    await this._sendCampaignMedia(waClient, waId, media, msg.media_type, content, msg.media_path, handle);
+                  } catch (wppError) {
+                    // Keep a wrapper fallback for installations where WPP is
+                    // not exposed, but never convert a LID into a fake @c.us.
+                    let mediaChat = null;
+                    try { mediaChat = await waClient.getChatById(waId); } catch (_) {}
+                    if (!mediaChat || typeof mediaChat.sendMessage !== 'function') throw wppError;
                     await mediaChat.sendMessage(media, content ? { caption: content } : {});
                   }
                 } else {
@@ -1298,9 +1309,12 @@ class WhatsAppManager {
               this.prisma.message.create({
                 data: { contact_id: contact.id, content: savedContent, direction: 'sent', type: msgType, created_at: new Date() }
               }).catch(() => {});
+            }
+            }
+            if (!handle.cancelled) {
               await this.prisma.campaignTarget.update({
                 where: { id: target.id },
-                data: { status: 'sent', sent_at: new Date() }
+                data: { status: 'sent', sent_at: new Date(), error: null }
               });
             }
           } catch (err) {
