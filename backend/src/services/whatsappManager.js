@@ -1290,6 +1290,10 @@ class WhatsAppManager {
 
                 if (media) {
                   const mediaWaId = await this._resolveCampaignMediaId(waClient, waId).catch(() => waId);
+                  const mediaOptions = {
+                    ...(content ? { caption: content } : {}),
+                    ...(msg.media_type === 'document' ? { sendMediaAsDocument: true } : {})
+                  };
                   try {
                     await this._sendCampaignMedia(waClient, mediaWaId, media, msg.media_type, content, msg.media_path, handle);
                   } catch (wppError) {
@@ -1297,15 +1301,21 @@ class WhatsAppManager {
                     // phone id, the direct whatsapp-web.js transport is the
                     // reliable fallback used by the historical working code.
                     if (String(wppError.message || '').includes('indisponible')) {
-                      const directResult = await waClient.sendMessage(
-                        mediaWaId, media, content ? { caption: content } : {}
-                      );
-                      if (!directResult) throw new Error(`Envoi média direct échoué pour ${mediaWaId}`);
+                      let mediaChat = null;
+                      try { mediaChat = await waClient.getChatById(mediaWaId); } catch (chatError) {
+                        console.warn(`[Campaign ${campaignId}] Résolution chat média échouée pour ${mediaWaId}: ${chatError.message}`);
+                      }
+                      if (mediaChat && typeof mediaChat.sendMessage === 'function') {
+                        await mediaChat.sendMessage(media, mediaOptions);
+                      } else {
+                        const directResult = await waClient.sendMessage(mediaWaId, media, mediaOptions);
+                        if (!directResult) throw new Error(`Envoi média direct échoué pour ${mediaWaId}`);
+                      }
                     } else {
                       let mediaChat = null;
                       try { mediaChat = await waClient.getChatById(mediaWaId); } catch (_) {}
                       if (!mediaChat || typeof mediaChat.sendMessage !== 'function') throw wppError;
-                      await mediaChat.sendMessage(media, content ? { caption: content } : {});
+                      await mediaChat.sendMessage(media, mediaOptions);
                     }
                   }
                 } else {
