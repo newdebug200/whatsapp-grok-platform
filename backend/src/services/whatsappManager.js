@@ -871,6 +871,48 @@ class WhatsAppManager {
     return found.entry.client;
   }
 
+  async resolveRecipientId(client, value, fallbackPhone = null) {
+    let recipient = String(value || '').trim();
+    if (!recipient && fallbackPhone) recipient = String(fallbackPhone).trim();
+    if (!recipient) throw new Error('Destinataire WhatsApp manquant');
+
+    if (recipient.includes('@lid')) {
+      try {
+        const mappings = await client.getContactLidAndPhone([recipient]);
+        const phoneId = mappings?.[0]?.pn;
+        if (phoneId) return phoneId;
+      } catch (_) {}
+      try {
+        const contact = await client.getContactById(recipient);
+        if (contact?.number) return `${String(contact.number).replace(/\D/g, '')}@c.us`;
+      } catch (_) {}
+      // WhatsApp peut ne pas exposer le mapping immédiatement après une
+      // reconnexion. Le numéro persistant du contact reste alors le dernier
+      // identifiant sûr à essayer, sans jamais utiliser les chiffres du LID.
+      if (fallbackPhone) recipient = String(fallbackPhone).trim();
+    }
+
+    if (!recipient.includes('@')) {
+      const digits = recipient.replace(/\D/g, '');
+      if (digits.length >= 6) {
+        try {
+          const numberId = await client.getNumberId(digits);
+          if (numberId?._serialized) {
+            if (numberId._serialized.includes('@lid')) {
+              try {
+                const mappings = await client.getContactLidAndPhone([numberId._serialized]);
+                if (mappings?.[0]?.pn) return mappings[0].pn;
+              } catch (_) {}
+            }
+            return numberId._serialized;
+          }
+        } catch (_) {}
+        return `${digits}@c.us`;
+      }
+    }
+    return recipient;
+  }
+
   // Refresh names for stored conversations without loading the full address book.
   // The dashboard calls this method while hydrating the initial contact list.
   async enrichConversationContacts(profileId, contacts) {
@@ -913,12 +955,13 @@ class WhatsAppManager {
 
   // ─── Send message ─────────────────────────────────────────────────────────
 
-  async sendMessage(profileId, to, content) {
+  async sendMessage(profileId, to, content, options = {}) {
     if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
     const client = found.entry.client;
-    const reportSent = () => centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to, content_length: String(content || '').length }).catch(() => {});
+    const recipient = await this.resolveRecipientId(client, to, options.fallbackPhone);
+    const reportSent = () => centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to: recipient, content_length: String(content || '').length }).catch(() => {});
 
     // ── Méthode 1 : getChatById → chat.sendMessage() ──────────────────────────
     // Pour les contacts avec chat existant (LID ou @c.us), c'est la méthode la plus
@@ -926,14 +969,14 @@ class WhatsAppManager {
     // qui garantit que le message part vraiment via le réseau (sync vers le téléphone).
     let chat = null;
     try {
-      chat = await client.getChatById(to);
+      chat = await client.getChatById(recipient);
     } catch (_) {
       // Pas de chat existant ou ID invalide : on utilise WPP.js une seule fois.
     }
     if (chat) {
       // Ne pas basculer vers un autre transport si sendMessage() remonte une
       // erreur après avoir accepté le message : cela provoquerait un doublon.
-      await chat.sendMessage(content);
+      await chat.sendMessage(content, options.sendOptions || {});
       reportSent();
       return;
     }
@@ -950,7 +993,7 @@ class WhatsAppManager {
         } catch (e) {
           return { ok: false, error: String(e && e.message ? e.message : e) };
         }
-      }, to, content);
+      }, recipient, content);
 
       if (wppResult && wppResult.ok) { reportSent(); return; }
       if (wppResult && wppResult.error && wppResult.error !== 'WPP non disponible') {
@@ -961,9 +1004,29 @@ class WhatsAppManager {
     }
 
     // ── Méthode 3 : fallback wrapper whatsapp-web.js ──────────────────────────
-    const result = await client.sendMessage(to, content);
+    const result = await client.sendMessage(recipient, content, options.sendOptions || {});
     if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
     reportSent();
+  }
+
+  async sendMedia(profileId, to, media, sendOptions = {}, fallbackPhone = null) {
+    if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
+    const found = this._getEntryByProfileId(profileId);
+    if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
+    const client = found.entry.client;
+    const recipient = await this.resolveRecipientId(client, to, fallbackPhone);
+    let chat = null;
+    try { chat = await client.getChatById(recipient); } catch (_) {}
+    let sent;
+    if (chat && typeof chat.sendMessage === 'function') {
+      sent = await chat.sendMessage(media, sendOptions);
+    } else {
+      sent = await client.sendMessage(recipient, media, sendOptions);
+    }
+    if (!sent) throw new Error(`Envoi média échoué — contact non joignable (${recipient})`);
+    this.trackBotSentId(sent.id?._serialized);
+    centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to: recipient, has_media: true }).catch(() => {});
+    return { sent, recipient };
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
@@ -1050,6 +1113,7 @@ class WhatsAppManager {
 
   // Send one message with "typing…" indicator; retry once on failure
   async _sendWithTyping(waClient, waId, content, handle) {
+    waId = await this.resolveRecipientId(waClient, waId);
     const isNoLidError = (msg) => typeof msg === 'string' && msg.includes('No LID');
     const attempt = async () => {
       try {
@@ -1245,6 +1309,14 @@ class WhatsAppManager {
             }
           }
 
+          // Tous les messages de la campagne utilisent le PN résolu, y compris
+          // les textes. Cela évite qu'un contact conservé en @lid fonctionne
+          // pour un média mais échoue pour un texte.
+          waId = await this.resolveRecipientId(waClient, waId, contact.phone_number);
+          if (contact.wa_id !== waId) {
+            await this.prisma.contact.update({ where: { id: contact.id }, data: { wa_id: waId } }).catch(() => {});
+          }
+
           try {
             // A contact receives every configured message in order. The old
             // runner selected one random variant, so a document and a text
@@ -1301,16 +1373,7 @@ class WhatsAppManager {
                     // phone id, the direct whatsapp-web.js transport is the
                     // reliable fallback used by the historical working code.
                     if (String(wppError.message || '').includes('indisponible')) {
-                      let mediaChat = null;
-                      try { mediaChat = await waClient.getChatById(mediaWaId); } catch (chatError) {
-                        console.warn(`[Campaign ${campaignId}] Résolution chat média échouée pour ${mediaWaId}: ${chatError.message}`);
-                      }
-                      if (mediaChat && typeof mediaChat.sendMessage === 'function') {
-                        await mediaChat.sendMessage(media, mediaOptions);
-                      } else {
-                        const directResult = await waClient.sendMessage(mediaWaId, media, mediaOptions);
-                        if (!directResult) throw new Error(`Envoi média direct échoué pour ${mediaWaId}`);
-                      }
+                      await this.sendMedia(profileId, mediaWaId, media, mediaOptions, contact.phone_number);
                     } else {
                       let mediaChat = null;
                       try { mediaChat = await waClient.getChatById(mediaWaId); } catch (_) {}

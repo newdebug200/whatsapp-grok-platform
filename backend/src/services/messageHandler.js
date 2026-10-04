@@ -33,7 +33,7 @@ class MessageHandler {
     const matched = rules.find(rule => this._normalizeKeyword(rule.keyword_normalized || rule.keyword) === incoming);
     console.log(`[AutoReply] Vérification — profil=${profileId}, reçu=${JSON.stringify(incoming)}, règles_actives=${rules.length}, trouvé=${Boolean(matched)}`);
     if (!matched || !matched.response_text) return false;
-    const sent = await client.sendMessage(waId, matched.response_text);
+    const sent = await waManager.sendMessage(profileId, waId, matched.response_text, { fallbackPhone: dbContact.phone_number });
     waManager.trackBotSentId(sent?.id?._serialized);
     waManager.addToCache(profileId, dbContact.id, 'sent', matched.response_text);
     await prisma.message.create({ data: { contact_id: dbContact.id, content: matched.response_text, direction: 'sent', type: 'text', created_at: new Date(), unread: false } }).catch(() => {});
@@ -268,7 +268,7 @@ class MessageHandler {
         if (botConfig?.media_auto_reply === true) {
           const label = mediaTypeLabel?.toLowerCase() || 'fichier';
           const response = `Nous recevons votre ${label} mais nous ne traitons que les messages texte. Merci de reformuler votre demande par écrit.`;
-          const sentMediaReply = await client.sendMessage(waId, response);
+          const sentMediaReply = await waManager.sendMessage(profileId, waId, response, { fallbackPhone: phoneNumber });
           waManager.trackBotSentId(sentMediaReply?.id?._serialized);
           waManager.addToCache(profileId, dbContact.id, 'sent', response);
           prisma.message.create({
@@ -375,7 +375,7 @@ class MessageHandler {
       } else {
         console.log(`[Verification] Réponse Dressur obtenue avec ${resolvedIdentifier}`);
       }
-      const sentVerif = await client.sendMessage(waId, replyText);
+      const sentVerif = await waManager.sendMessage(profileId, waId, replyText, { fallbackPhone: phoneNumber });
       waManager.trackBotSentId(sentVerif?.id?._serialized);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
       prisma.message.create({
@@ -565,7 +565,7 @@ class MessageHandler {
         }
       }
 
-      const sentAI = await client.sendMessage(from, aiResponse);
+      const sentAI = await waManager.sendMessage(profileId, from, aiResponse, { fallbackPhone: contact.phone_number });
       waManager.trackBotSentId(sentAI?.id?._serialized);
       waManager.addToCache(profileId, contact.id, 'sent', aiResponse);
       prisma.message.create({

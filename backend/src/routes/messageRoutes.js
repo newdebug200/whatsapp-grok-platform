@@ -303,8 +303,7 @@ router.post('/send', profileMiddleware, async (req, res) => {
     const client = whatsappManager.getClient(req.profileId);
     if (!client) return res.status(503).json({ error: 'WhatsApp non connecté' });
 
-    const sentMsg = await client.sendMessage(contact.wa_id, text);
-    whatsappManager.trackBotSentId(sentMsg?.id?._serialized);
+    const sentMsg = await whatsappManager.sendMessage(req.profileId, contact.wa_id, text, { fallbackPhone: contact.phone_number });
     const saved = await prisma.message.create({
       data: { contact_id: contact.id, content: text, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
     });
@@ -409,9 +408,10 @@ router.post('/send-media', profileMiddleware, async (req, res) => {
     const media = new MessageMedia(sendMime, sendData, sendFilename);
     const sendOptions = {};
     if (messageType === 'ptt') sendOptions.sendAudioAsVoice = true;
+    if (messageType === 'document') sendOptions.sendMediaAsDocument = true;
 
-    const sentMsg = await client.sendMessage(contact.wa_id, media, sendOptions);
-    whatsappManager.trackBotSentId(sentMsg?.id?._serialized);
+    const mediaResult = await whatsappManager.sendMedia(req.profileId, contact.wa_id, media, sendOptions, contact.phone_number);
+    const sentMsg = mediaResult.sent;
 
     const ext = (filename || 'file').split('.').pop().replace(/[^a-z0-9]/gi, '') || 'bin';
     const saveName = `sent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;

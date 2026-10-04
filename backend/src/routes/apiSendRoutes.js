@@ -62,24 +62,30 @@ async function sendOne(accountId, payload) {
   let sent;
   let messageType = 'text';
   let savedContent = normalizedText;
+  let resolvedRecipient = recipient;
   if (media) {
     const messageMedia = new MessageMedia(media.mimeType, media.data, media.filename);
-    const options = media.voice ? { sendAudioAsVoice: true } : {};
-    sent = await client.sendMessage(recipient, messageMedia, normalizedText ? { ...options, caption: normalizedText } : options);
+    const options = {
+      ...(media.voice ? { sendAudioAsVoice: true } : {}),
+      ...(media.mimeType.startsWith('application/') || media.mimeType.startsWith('text/') ? { sendMediaAsDocument: true } : {})
+    };
+    const mediaResult = await whatsappManager.sendMedia(profile.id, recipient, messageMedia, normalizedText ? { ...options, caption: normalizedText } : options);
+    sent = mediaResult.sent;
+    resolvedRecipient = mediaResult.recipient;
     messageType = media.mimeType.startsWith('image/') ? 'image' : media.mimeType.startsWith('video/') ? 'video' : media.mimeType.startsWith('audio/') ? (media.voice ? 'ptt' : 'audio') : 'document';
     savedContent = normalizedText || `[${messageType}]`;
   } else {
-    sent = await client.sendMessage(recipient, normalizedText);
+    await whatsappManager.sendMessage(profile.id, recipient, normalizedText);
   }
   whatsappManager.trackBotSentId(sent?.id?._serialized);
 
-  const phone = recipient.replace(/@(c|g)\.us$/i, '');
-  let contact = await prisma.contact.findFirst({ where: { profile_id: profile.id, OR: [{ wa_id: recipient }, { phone_number: phone }] } });
-  if (!contact) contact = await prisma.contact.create({ data: { profile_id: profile.id, phone_number: phone, wa_id: recipient, name: phone } });
-  if (contact.wa_id !== recipient) contact = await prisma.contact.update({ where: { id: contact.id }, data: { wa_id: recipient } });
+  const phone = resolvedRecipient.replace(/@(c|g|lid)\.us$/i, '').replace(/@lid$/i, '');
+  let contact = await prisma.contact.findFirst({ where: { profile_id: profile.id, OR: [{ wa_id: resolvedRecipient }, { phone_number: phone }] } });
+  if (!contact) contact = await prisma.contact.create({ data: { profile_id: profile.id, phone_number: phone, wa_id: resolvedRecipient, name: phone } });
+  if (contact.wa_id !== resolvedRecipient) contact = await prisma.contact.update({ where: { id: contact.id }, data: { wa_id: resolvedRecipient } });
   const saved = await prisma.message.create({ data: { contact_id: contact.id, content: savedContent, direction: 'sent', type: messageType, unread: false, created_at: new Date() } });
   whatsappManager.addToCache(profile.id, contact.id, 'sent', savedContent);
-  return { status: 'sent', message_id: sent?.id?._serialized || String(saved.id), recipient, profile_id: profile.id, type: messageType, local_message_id: saved.id };
+  return { status: 'sent', message_id: sent?.id?._serialized || String(saved.id), recipient: resolvedRecipient, profile_id: profile.id, type: messageType, local_message_id: saved.id };
 }
 
 router.use(sendLimiter);
