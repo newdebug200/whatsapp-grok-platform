@@ -178,7 +178,8 @@ export default function Dashboard() {
 
     s.on('connect', () => {
       console.log('Socket connecté');
-      s.emit('get-status');
+      if (activeProfileRef.current?.id) s.emit('get-status', { profileId: activeProfileRef.current.id });
+      else s.emit('get-status');
       if (activeProfileRef.current?.id) {
         loadContactsForProfile(activeProfileRef.current.id, s);
       } else {
@@ -204,7 +205,11 @@ export default function Dashboard() {
       setTimeout(() => logout(), 2000);
     });
 
-    s.on('status', (status) => setWaStatus(status));
+    s.on('status', (status) => {
+      const activeProfileId = activeProfileRef.current?.id;
+      if (status.profileId && activeProfileId && Number(status.profileId) !== Number(activeProfileId)) return;
+      setWaStatus(status);
+    });
     s.on('qr', (qr) => setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false, message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.' })));
     s.on('ready', () => setWaStatus({ isConnected: true, qrCode: null, status: 'connected', message: 'Session WhatsApp conservée.' }));
     s.on('sync-start', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'syncing', message: data.message || 'Session WhatsApp conservée. Synchronisation en cours…' })));
@@ -237,7 +242,8 @@ export default function Dashboard() {
 
     s.on('reconnect', () => {
       console.log('Socket reconnecté — resync statut WA');
-      s.emit('get-status');
+      if (activeProfileRef.current?.id) s.emit('get-status', { profileId: activeProfileRef.current.id });
+      else s.emit('get-status');
       if (activeProfileRef.current?.id) {
         loadContactsForProfile(activeProfileRef.current.id, s);
       }
@@ -246,6 +252,16 @@ export default function Dashboard() {
     setSocket(s);
     return () => { s.disconnect(); socketRef.current = null; };
   }, [token, handleNewMessage, loadContactsForProfile, selectProfile, loadProfiles]);
+
+  useEffect(() => {
+    if (!activeProfile?.id) {
+      setWaStatus({ isConnected: false, qrCode: null, status: 'not_initialized' });
+      return;
+    }
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('get-status', { profileId: activeProfile.id });
+    }
+  }, [activeProfile?.id]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {

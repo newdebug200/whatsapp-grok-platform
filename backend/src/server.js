@@ -130,9 +130,20 @@ io.on('connection', (socket) => {
     } catch (_) {}
   }, 60000);
 
-  socket.on('get-status', () => {
-    const status = whatsappManager.getStatus(accountId);
-    socket.emit('status', status);
+  socket.on('get-status', (data = {}) => {
+    const profileId = data?.profileId ? Number(data.profileId) : null;
+    if (!profileId) {
+      socket.emit('status', whatsappManager.getStatus(accountId));
+      return;
+    }
+    prisma.whatsAppProfile.findFirst({
+      where: { id: profileId, account_id: accountId },
+      select: { id: true }
+    }).then(profile => {
+      if (profile) socket.emit('status', whatsappManager.getProfileStatus(profileId));
+    }).catch(error => {
+      console.error('Erreur chargement statut WhatsApp:', error.message);
+    });
   });
 
   socket.on('resync-whatsapp', async (data = {}) => {

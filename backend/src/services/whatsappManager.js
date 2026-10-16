@@ -37,6 +37,7 @@ class WhatsAppManager {
     this.runningCampaigns = new Map(); // campaignId → { cancelled: boolean }
     this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
     this._botSentIds = new Set(); // WA message IDs sent by Botora API — used to skip duplicates in message_create
+    this._pendingBotMessages = new Map();
     this._incomingHandledIds = new Set(); // Prevent message + message_create double processing
     this.reconnectAttempts = new Map();
     this.reconnectTimers = new Map();
@@ -61,6 +62,34 @@ class WhatsAppManager {
     if (!msgId) return;
     this._botSentIds.add(msgId);
     setTimeout(() => this._botSentIds.delete(msgId), 30000);
+  }
+
+  _trackPendingBotMessage(recipient, content) {
+    const key = `${recipient}\u0000${content}`;
+    const token = { key };
+    const pending = this._pendingBotMessages.get(key) || [];
+    token.timer = setTimeout(() => this._removePendingBotMessage(token), 10000);
+    pending.push(token);
+    this._pendingBotMessages.set(key, pending);
+    return token;
+  }
+
+  _removePendingBotMessage(token) {
+    if (!token) return;
+    clearTimeout(token.timer);
+    const pending = this._pendingBotMessages.get(token.key);
+    if (!pending) return;
+    const remaining = pending.filter(item => item !== token);
+    if (remaining.length) this._pendingBotMessages.set(token.key, remaining);
+    else this._pendingBotMessages.delete(token.key);
+  }
+
+  _consumePendingBotMessage(recipient, content) {
+    const key = `${recipient}\u0000${content}`;
+    const pending = this._pendingBotMessages.get(key);
+    if (!pending?.length) return false;
+    this._removePendingBotMessage(pending[0]);
+    return true;
   }
 
   // ─── Context cache ────────────────────────────────────────────────────────
@@ -688,6 +717,11 @@ class WhatsAppManager {
         // If Botora's API sent this message, it's already saved — skip to avoid duplicate
         const msgId = msg.id?._serialized;
         if (msgId && this._botSentIds.has(msgId)) return;
+        if (this.campaignSendingWaIds.has(msg.to)) return;
+        const sentSignature = msg.hasMedia
+          ? `media:${msg.type}:${msg.body || ''}`
+          : (msg.body || '');
+        if (this._consumePendingBotMessage(msg.to, sentSignature)) return;
 
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
           || this._findEntryByClient(client);
@@ -836,9 +870,9 @@ class WhatsAppManager {
 
   getProfileStatus(profileId) {
     const found = this._getEntryByProfileId(profileId);
-    if (!found) return { isConnected: false, qrCode: null, status: 'not_initialized' };
+    if (!found) return { isConnected: false, qrCode: null, status: 'not_initialized', profileId };
     const { entry } = found;
-    return { isConnected: entry.status === 'connected', qrCode: entry.qrCode, status: entry.status };
+    return { isConnected: entry.status === 'connected', qrCode: entry.qrCode, status: entry.status, profileId: entry.profileId };
   }
 
   // Statut d'une éventuelle tentative d'ajout de nouveau numéro déjà en cours
@@ -961,7 +995,15 @@ class WhatsAppManager {
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
     const client = found.entry.client;
     const recipient = await this.resolveRecipientId(client, to, options.fallbackPhone);
+    const pendingMessage = this._trackPendingBotMessage(recipient, content);
     const reportSent = () => centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to: recipient, content_length: String(content || '').length }).catch(() => {});
+    const trackSent = (sent) => {
+      const msgId = sent?.id?._serialized || sent?.id;
+      if (typeof msgId === 'string') {
+        this.trackBotSentId(msgId);
+        this._removePendingBotMessage(pendingMessage);
+      }
+    };
 
     // ── Méthode 1 : getChatById → chat.sendMessage() ──────────────────────────
     // Pour les contacts avec chat existant (LID ou @c.us), c'est la méthode la plus
@@ -976,7 +1018,8 @@ class WhatsAppManager {
     if (chat) {
       // Ne pas basculer vers un autre transport si sendMessage() remonte une
       // erreur après avoir accepté le message : cela provoquerait un doublon.
-      await chat.sendMessage(content, options.sendOptions || {});
+      const sent = await chat.sendMessage(content, options.sendOptions || {});
+      trackSent(sent);
       reportSent();
       return;
     }
@@ -988,14 +1031,19 @@ class WhatsAppManager {
       const wppResult = await client.pupPage.evaluate(async (chatId, text) => {
         try {
           if (!window.WPP || !window.WPP.chat) return { ok: false, error: 'WPP non disponible' };
-          await window.WPP.chat.sendTextMessage(chatId, text, {});
-          return { ok: true };
+          const sent = await window.WPP.chat.sendTextMessage(chatId, text, {});
+          const id = sent?.id?._serialized || sent?.id || sent?._data?.id?._serialized;
+          return { ok: true, messageId: typeof id === 'string' ? id : null };
         } catch (e) {
           return { ok: false, error: String(e && e.message ? e.message : e) };
         }
       }, recipient, content);
 
-      if (wppResult && wppResult.ok) { reportSent(); return; }
+      if (wppResult && wppResult.ok) {
+        if (wppResult.messageId) trackSent({ id: wppResult.messageId });
+        reportSent();
+        return;
+      }
       if (wppResult && wppResult.error && wppResult.error !== 'WPP non disponible') {
         throw new Error(wppResult.error);
       }
@@ -1006,6 +1054,7 @@ class WhatsAppManager {
     // ── Méthode 3 : fallback wrapper whatsapp-web.js ──────────────────────────
     const result = await client.sendMessage(recipient, content, options.sendOptions || {});
     if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
+    trackSent(result);
     reportSent();
   }
 
@@ -1015,6 +1064,16 @@ class WhatsAppManager {
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
     const client = found.entry.client;
     const recipient = await this.resolveRecipientId(client, to, fallbackPhone);
+    const mediaMimeType = (media.mimetype || '').split(';')[0];
+    const mediaType = sendOptions.sendAudioAsVoice
+      ? 'ptt'
+      : sendOptions.sendMediaAsDocument || !/^(image|video|audio)\//.test(mediaMimeType)
+        ? 'document'
+        : mediaMimeType.split('/')[0];
+    const pendingMessage = this._trackPendingBotMessage(
+      recipient,
+      `media:${mediaType}:${sendOptions.caption || ''}`
+    );
     let chat = null;
     try { chat = await client.getChatById(recipient); } catch (_) {}
     let sent;
@@ -1024,7 +1083,11 @@ class WhatsAppManager {
       sent = await client.sendMessage(recipient, media, sendOptions);
     }
     if (!sent) throw new Error(`Envoi média échoué — contact non joignable (${recipient})`);
-    this.trackBotSentId(sent.id?._serialized);
+    const msgId = sent.id?._serialized || sent.id;
+    if (typeof msgId === 'string') {
+      this.trackBotSentId(msgId);
+      this._removePendingBotMessage(pendingMessage);
+    }
     centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to: recipient, has_media: true }).catch(() => {});
     return { sent, recipient };
   }
@@ -1369,17 +1432,8 @@ class WhatsAppManager {
                   try {
                     await this._sendCampaignMedia(waClient, mediaWaId, media, msg.media_type, content, msg.media_path, handle);
                   } catch (wppError) {
-                    // WPP is optional. Once a LID has been mapped to its real
-                    // phone id, the direct whatsapp-web.js transport is the
-                    // reliable fallback used by the historical working code.
-                    if (String(wppError.message || '').includes('indisponible')) {
-                      await this.sendMedia(profileId, mediaWaId, media, mediaOptions, contact.phone_number);
-                    } else {
-                      let mediaChat = null;
-                      try { mediaChat = await waClient.getChatById(mediaWaId); } catch (_) {}
-                      if (!mediaChat || typeof mediaChat.sendMessage !== 'function') throw wppError;
-                      await mediaChat.sendMessage(media, mediaOptions);
-                    }
+                    console.warn(`[Campaign ${campaignId}] Envoi média WPP échoué, tentative via WhatsApp Web: ${wppError.message}`);
+                    await this.sendMedia(profileId, mediaWaId, media, mediaOptions, contact.phone_number);
                   }
                 } else {
                   throw new Error('Média de campagne introuvable ou impossible à télécharger');
