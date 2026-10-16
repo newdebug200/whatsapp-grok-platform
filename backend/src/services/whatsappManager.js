@@ -26,6 +26,7 @@ try {
 }
 
 const REINIT_COOLDOWN_MS = 10000;
+const QR_INITIALIZATION_TIMEOUT_MS = 60000;
 const RECONNECT_DELAYS_MS = [5000, 15000, 30000, 60000];
 const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
 const CONTEXT_MAX = 20;
@@ -544,16 +545,37 @@ class WhatsAppManager {
       puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 600000 }
     });
 
-    this.clients.set(clientKey, {
+    const entry = {
       client, status: 'initializing', accountId,
       profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null, ignoreIncomingUntil: null,
       syncToken: { cancelled: false }
-    });
+    };
+    this.clients.set(clientKey, entry);
+    entry.initializationTimer = setTimeout(() => {
+      if (this.clients.get(clientKey) !== entry || entry.status !== 'initializing') return;
+      entry.status = 'error';
+      entry.lastErrorAt = Date.now();
+      const message = 'WhatsApp n’a pas fourni de QR code après 60 secondes. Vérifiez Chrome, la connexion Internet et les journaux du backend, puis réessayez.';
+      console.error(`[WA] Délai dépassé — compte ${accountId}, clé ${clientKey}`);
+      this.io?.to(`account_${accountId}`).emit('status', {
+        isConnected: false, qrCode: null, status: 'error', profileId, message
+      });
+      Promise.resolve()
+        .then(() => client.destroy())
+        .catch(err => console.warn(`[WA] Nettoyage après délai dépassé: ${err.message}`))
+        .finally(() => {
+          if (this.clients.get(clientKey) === entry) this.clients.delete(clientKey);
+          this._cleanChromeLocks(clientKey);
+        });
+    }, QR_INITIALIZATION_TIMEOUT_MS);
+    entry.initializationTimer.unref?.();
 
     // ── QR ──
     client.on('qr', (qr) => {
-      const entry = this.clients.get(clientKey);
-      if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
+      if (this.clients.get(clientKey) !== entry || !['initializing', 'qr'].includes(entry.status)) return;
+      clearTimeout(entry.initializationTimer);
+      entry.qrCode = qr;
+      entry.status = 'qr';
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: qr, status: 'qr', profileId,
         message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.'
@@ -562,6 +584,8 @@ class WhatsAppManager {
 
     // ── Ready ──
     client.on('ready', async () => {
+      if (this.clients.get(clientKey) !== entry) return;
+      clearTimeout(entry.initializationTimer);
       if (profileId !== null) {
         this.reconnectAttempts.delete(profileId);
         const timer = this.reconnectTimers.get(profileId);
@@ -782,6 +806,7 @@ class WhatsAppManager {
 
     // ── Disconnected ──
     client.on('disconnected', async (reason) => {
+      clearTimeout(entry.initializationTimer);
       console.log(`[WA] Déconnecté — ${reason}`);
       const found = this._findEntryByClient(client);
       const resolvedProfileId = found?.entry?.profileId;
@@ -818,6 +843,7 @@ class WhatsAppManager {
 
     // ── Auth failure ──
     client.on('auth_failure', (msg) => {
+      clearTimeout(entry.initializationTimer);
       console.error(`[WA] Auth failure:`, msg);
       centralSync.reportActivity(accountId, 'whatsapp.auth_failure', { profile_id: profileId, message: String(msg || '') }).catch(() => {});
       const found = this._findEntryByClient(client);
@@ -831,12 +857,15 @@ class WhatsAppManager {
     });
 
     // ── Init error ──
-    client.initialize().catch(async (err) => {
+    const handleInitializationError = async (err) => {
+      clearTimeout(entry.initializationTimer);
       console.error(`[WA] Erreur init:`, err.message);
       try { await client.destroy(); } catch (_) {}
       this._cleanChromeLocks(clientKey);
       const found = this._findEntryByClient(client);
-      if (found) { found.entry.status = 'error'; found.entry.lastErrorAt = Date.now(); }
+      if (!found || found.entry !== entry || entry.status !== 'initializing') return;
+      entry.status = 'error';
+      entry.lastErrorAt = Date.now();
       const isBrowserLocked = err.message?.includes('already running') || err.message?.includes('userDataDir');
       const isContextDestroyed = err.message?.includes('context was destroyed') || err.message?.includes('Navigating frame');
       let userMessage;
@@ -847,9 +876,15 @@ class WhatsAppManager {
         isConnected: false, qrCode: null, status: 'error', profileId, message: userMessage
       });
       setTimeout(() => {
-        if (found) { const e = this.clients.get(found.key); if (e?.status === 'error') this.clients.delete(found.key); }
+        if (this.clients.get(clientKey) === entry && entry.status === 'error') this.clients.delete(clientKey);
       }, REINIT_COOLDOWN_MS);
-    });
+    };
+    try {
+      Promise.resolve(client.initialize()).catch(handleInitializationError);
+    } catch (err) {
+      await handleInitializationError(err);
+      throw err;
+    }
   }
 
   // ─── Status ───────────────────────────────────────────────────────────────
