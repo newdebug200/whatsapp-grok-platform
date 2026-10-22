@@ -26,6 +26,7 @@ try {
 }
 
 const REINIT_COOLDOWN_MS = 10000;
+const QR_INITIALIZATION_TIMEOUT_MS = 60000;
 const RECONNECT_DELAYS_MS = [5000, 15000, 30000, 60000];
 const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
 const CONTEXT_MAX = 20;
@@ -37,6 +38,7 @@ class WhatsAppManager {
     this.runningCampaigns = new Map(); // campaignId → { cancelled: boolean }
     this.campaignSendingWaIds = new Set(); // waIds currently being sent to by a campaign
     this._botSentIds = new Set(); // WA message IDs sent by Botora API — used to skip duplicates in message_create
+    this._pendingBotMessages = new Map();
     this._incomingHandledIds = new Set(); // Prevent message + message_create double processing
     this.reconnectAttempts = new Map();
     this.reconnectTimers = new Map();
@@ -61,6 +63,34 @@ class WhatsAppManager {
     if (!msgId) return;
     this._botSentIds.add(msgId);
     setTimeout(() => this._botSentIds.delete(msgId), 30000);
+  }
+
+  _trackPendingBotMessage(recipient, content) {
+    const key = `${recipient}\u0000${content}`;
+    const token = { key };
+    const pending = this._pendingBotMessages.get(key) || [];
+    token.timer = setTimeout(() => this._removePendingBotMessage(token), 10000);
+    pending.push(token);
+    this._pendingBotMessages.set(key, pending);
+    return token;
+  }
+
+  _removePendingBotMessage(token) {
+    if (!token) return;
+    clearTimeout(token.timer);
+    const pending = this._pendingBotMessages.get(token.key);
+    if (!pending) return;
+    const remaining = pending.filter(item => item !== token);
+    if (remaining.length) this._pendingBotMessages.set(token.key, remaining);
+    else this._pendingBotMessages.delete(token.key);
+  }
+
+  _consumePendingBotMessage(recipient, content) {
+    const key = `${recipient}\u0000${content}`;
+    const pending = this._pendingBotMessages.get(key);
+    if (!pending?.length) return false;
+    this._removePendingBotMessage(pending[0]);
+    return true;
   }
 
   // ─── Context cache ────────────────────────────────────────────────────────
@@ -515,16 +545,37 @@ class WhatsAppManager {
       puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 600000 }
     });
 
-    this.clients.set(clientKey, {
+    const entry = {
       client, status: 'initializing', accountId,
       profileId, phoneNumber: null, qrCode: null, lastErrorAt: null, readyAt: null, ignoreIncomingUntil: null,
       syncToken: { cancelled: false }
-    });
+    };
+    this.clients.set(clientKey, entry);
+    entry.initializationTimer = setTimeout(() => {
+      if (this.clients.get(clientKey) !== entry || entry.status !== 'initializing') return;
+      entry.status = 'error';
+      entry.lastErrorAt = Date.now();
+      const message = 'WhatsApp n’a pas fourni de QR code après 60 secondes. Vérifiez Chrome, la connexion Internet et les journaux du backend, puis réessayez.';
+      console.error(`[WA] Délai dépassé — compte ${accountId}, clé ${clientKey}`);
+      this.io?.to(`account_${accountId}`).emit('status', {
+        isConnected: false, qrCode: null, status: 'error', profileId, message
+      });
+      Promise.resolve()
+        .then(() => client.destroy())
+        .catch(err => console.warn(`[WA] Nettoyage après délai dépassé: ${err.message}`))
+        .finally(() => {
+          if (this.clients.get(clientKey) === entry) this.clients.delete(clientKey);
+          this._cleanChromeLocks(clientKey);
+        });
+    }, QR_INITIALIZATION_TIMEOUT_MS);
+    entry.initializationTimer.unref?.();
 
     // ── QR ──
     client.on('qr', (qr) => {
-      const entry = this.clients.get(clientKey);
-      if (entry) { entry.qrCode = qr; entry.status = 'qr'; }
+      if (this.clients.get(clientKey) !== entry || !['initializing', 'qr'].includes(entry.status)) return;
+      clearTimeout(entry.initializationTimer);
+      entry.qrCode = qr;
+      entry.status = 'qr';
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: qr, status: 'qr', profileId,
         message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.'
@@ -533,6 +584,8 @@ class WhatsAppManager {
 
     // ── Ready ──
     client.on('ready', async () => {
+      if (this.clients.get(clientKey) !== entry) return;
+      clearTimeout(entry.initializationTimer);
       if (profileId !== null) {
         this.reconnectAttempts.delete(profileId);
         const timer = this.reconnectTimers.get(profileId);
@@ -688,6 +741,11 @@ class WhatsAppManager {
         // If Botora's API sent this message, it's already saved — skip to avoid duplicate
         const msgId = msg.id?._serialized;
         if (msgId && this._botSentIds.has(msgId)) return;
+        if (this.campaignSendingWaIds.has(msg.to)) return;
+        const sentSignature = msg.hasMedia
+          ? `media:${msg.type}:${msg.body || ''}`
+          : (msg.body || '');
+        if (this._consumePendingBotMessage(msg.to, sentSignature)) return;
 
         const entry = this._getEntryByProfileId(profileId !== null ? profileId : null)
           || this._findEntryByClient(client);
@@ -748,6 +806,7 @@ class WhatsAppManager {
 
     // ── Disconnected ──
     client.on('disconnected', async (reason) => {
+      clearTimeout(entry.initializationTimer);
       console.log(`[WA] Déconnecté — ${reason}`);
       const found = this._findEntryByClient(client);
       const resolvedProfileId = found?.entry?.profileId;
@@ -784,6 +843,7 @@ class WhatsAppManager {
 
     // ── Auth failure ──
     client.on('auth_failure', (msg) => {
+      clearTimeout(entry.initializationTimer);
       console.error(`[WA] Auth failure:`, msg);
       centralSync.reportActivity(accountId, 'whatsapp.auth_failure', { profile_id: profileId, message: String(msg || '') }).catch(() => {});
       const found = this._findEntryByClient(client);
@@ -797,12 +857,15 @@ class WhatsAppManager {
     });
 
     // ── Init error ──
-    client.initialize().catch(async (err) => {
+    const handleInitializationError = async (err) => {
+      clearTimeout(entry.initializationTimer);
       console.error(`[WA] Erreur init:`, err.message);
       try { await client.destroy(); } catch (_) {}
       this._cleanChromeLocks(clientKey);
       const found = this._findEntryByClient(client);
-      if (found) { found.entry.status = 'error'; found.entry.lastErrorAt = Date.now(); }
+      if (!found || found.entry !== entry || entry.status !== 'initializing') return;
+      entry.status = 'error';
+      entry.lastErrorAt = Date.now();
       const isBrowserLocked = err.message?.includes('already running') || err.message?.includes('userDataDir');
       const isContextDestroyed = err.message?.includes('context was destroyed') || err.message?.includes('Navigating frame');
       let userMessage;
@@ -813,9 +876,15 @@ class WhatsAppManager {
         isConnected: false, qrCode: null, status: 'error', profileId, message: userMessage
       });
       setTimeout(() => {
-        if (found) { const e = this.clients.get(found.key); if (e?.status === 'error') this.clients.delete(found.key); }
+        if (this.clients.get(clientKey) === entry && entry.status === 'error') this.clients.delete(clientKey);
       }, REINIT_COOLDOWN_MS);
-    });
+    };
+    try {
+      Promise.resolve(client.initialize()).catch(handleInitializationError);
+    } catch (err) {
+      await handleInitializationError(err);
+      throw err;
+    }
   }
 
   // ─── Status ───────────────────────────────────────────────────────────────
@@ -836,9 +905,9 @@ class WhatsAppManager {
 
   getProfileStatus(profileId) {
     const found = this._getEntryByProfileId(profileId);
-    if (!found) return { isConnected: false, qrCode: null, status: 'not_initialized' };
+    if (!found) return { isConnected: false, qrCode: null, status: 'not_initialized', profileId };
     const { entry } = found;
-    return { isConnected: entry.status === 'connected', qrCode: entry.qrCode, status: entry.status };
+    return { isConnected: entry.status === 'connected', qrCode: entry.qrCode, status: entry.status, profileId: entry.profileId };
   }
 
   // Statut d'une éventuelle tentative d'ajout de nouveau numéro déjà en cours
@@ -871,14 +940,105 @@ class WhatsAppManager {
     return found.entry.client;
   }
 
+  async resolveRecipientId(client, value, fallbackPhone = null) {
+    let recipient = String(value || '').trim();
+    if (!recipient && fallbackPhone) recipient = String(fallbackPhone).trim();
+    if (!recipient) throw new Error('Destinataire WhatsApp manquant');
+
+    if (recipient.includes('@lid')) {
+      try {
+        const mappings = await client.getContactLidAndPhone([recipient]);
+        const phoneId = mappings?.[0]?.pn;
+        if (phoneId) return phoneId;
+      } catch (_) {}
+      try {
+        const contact = await client.getContactById(recipient);
+        if (contact?.number) return `${String(contact.number).replace(/\D/g, '')}@c.us`;
+      } catch (_) {}
+      // WhatsApp peut ne pas exposer le mapping immédiatement après une
+      // reconnexion. Le numéro persistant du contact reste alors le dernier
+      // identifiant sûr à essayer, sans jamais utiliser les chiffres du LID.
+      if (fallbackPhone) recipient = String(fallbackPhone).trim();
+    }
+
+    if (!recipient.includes('@')) {
+      const digits = recipient.replace(/\D/g, '');
+      if (digits.length >= 6) {
+        try {
+          const numberId = await client.getNumberId(digits);
+          if (numberId?._serialized) {
+            if (numberId._serialized.includes('@lid')) {
+              try {
+                const mappings = await client.getContactLidAndPhone([numberId._serialized]);
+                if (mappings?.[0]?.pn) return mappings[0].pn;
+              } catch (_) {}
+            }
+            return numberId._serialized;
+          }
+        } catch (_) {}
+        return `${digits}@c.us`;
+      }
+    }
+    return recipient;
+  }
+
+  // Refresh names for stored conversations without loading the full address book.
+  // The dashboard calls this method while hydrating the initial contact list.
+  async enrichConversationContacts(profileId, contacts) {
+    const client = this.getClient(profileId);
+    if (!client || !Array.isArray(contacts)) return contacts;
+    const enriched = [];
+    for (const contact of contacts) {
+      const storedWaId = String(contact?.wa_id || '').trim();
+      const phoneDigits = String(contact?.phone_number || '').replace(/\D/g, '');
+      const storedDigits = storedWaId.replace(/\D/g, '');
+      const waId = storedWaId.includes('@')
+        ? storedWaId
+        : (storedDigits.length >= 7 && storedDigits.length <= 15 ? `${storedDigits}@c.us` : '')
+          || (phoneDigits.length >= 7 && phoneDigits.length <= 15 ? `${phoneDigits}@c.us` : '');
+      if (!waId || waId.includes('@g.us')) {
+        enriched.push(contact);
+        continue;
+      }
+      let waContact = null;
+      try { waContact = await client.getContactById(waId); } catch (_) {}
+      let name = await this._resolvePrivateContactName(waContact, contact.phone_number, waId);
+      if (!name) {
+        try {
+          const chat = await client.getChatById(waId);
+          name = await this._resolveChatContactName(client, chat, contact.phone_number, waId);
+        } catch (_) {}
+      }
+      if (name || !storedWaId) {
+        try {
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: { ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) }
+          });
+        } catch (_) {}
+      }
+      enriched.push({ ...contact, ...(name ? { name } : {}), ...(storedWaId ? {} : { wa_id: waId }) });
+    }
+    return enriched;
+  }
+
   // ─── Send message ─────────────────────────────────────────────────────────
 
-  async sendMessage(profileId, to, content) {
+  async sendMessage(profileId, to, content, options = {}) {
     if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
     const found = this._getEntryByProfileId(profileId);
     if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
     const client = found.entry.client;
-    const reportSent = () => centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to, content_length: String(content || '').length }).catch(() => {});
+    const recipient = await this.resolveRecipientId(client, to, options.fallbackPhone);
+    const pendingMessage = this._trackPendingBotMessage(recipient, content);
+    const reportSent = () => centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to: recipient, content_length: String(content || '').length }).catch(() => {});
+    const trackSent = (sent) => {
+      const msgId = sent?.id?._serialized || sent?.id;
+      if (typeof msgId === 'string') {
+        this.trackBotSentId(msgId);
+        this._removePendingBotMessage(pendingMessage);
+      }
+    };
 
     // ── Méthode 1 : getChatById → chat.sendMessage() ──────────────────────────
     // Pour les contacts avec chat existant (LID ou @c.us), c'est la méthode la plus
@@ -886,14 +1046,15 @@ class WhatsAppManager {
     // qui garantit que le message part vraiment via le réseau (sync vers le téléphone).
     let chat = null;
     try {
-      chat = await client.getChatById(to);
+      chat = await client.getChatById(recipient);
     } catch (_) {
       // Pas de chat existant ou ID invalide : on utilise WPP.js une seule fois.
     }
     if (chat) {
       // Ne pas basculer vers un autre transport si sendMessage() remonte une
       // erreur après avoir accepté le message : cela provoquerait un doublon.
-      await chat.sendMessage(content);
+      const sent = await chat.sendMessage(content, options.sendOptions || {});
+      trackSent(sent);
       reportSent();
       return;
     }
@@ -905,14 +1066,19 @@ class WhatsAppManager {
       const wppResult = await client.pupPage.evaluate(async (chatId, text) => {
         try {
           if (!window.WPP || !window.WPP.chat) return { ok: false, error: 'WPP non disponible' };
-          await window.WPP.chat.sendTextMessage(chatId, text, {});
-          return { ok: true };
+          const sent = await window.WPP.chat.sendTextMessage(chatId, text, {});
+          const id = sent?.id?._serialized || sent?.id || sent?._data?.id?._serialized;
+          return { ok: true, messageId: typeof id === 'string' ? id : null };
         } catch (e) {
           return { ok: false, error: String(e && e.message ? e.message : e) };
         }
-      }, to, content);
+      }, recipient, content);
 
-      if (wppResult && wppResult.ok) { reportSent(); return; }
+      if (wppResult && wppResult.ok) {
+        if (wppResult.messageId) trackSent({ id: wppResult.messageId });
+        reportSent();
+        return;
+      }
       if (wppResult && wppResult.error && wppResult.error !== 'WPP non disponible') {
         throw new Error(wppResult.error);
       }
@@ -921,9 +1087,44 @@ class WhatsAppManager {
     }
 
     // ── Méthode 3 : fallback wrapper whatsapp-web.js ──────────────────────────
-    const result = await client.sendMessage(to, content);
+    const result = await client.sendMessage(recipient, content, options.sendOptions || {});
     if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
+    trackSent(result);
     reportSent();
+  }
+
+  async sendMedia(profileId, to, media, sendOptions = {}, fallbackPhone = null) {
+    if (!WWEB_AVAILABLE) throw new Error('Module WhatsApp non installé');
+    const found = this._getEntryByProfileId(profileId);
+    if (!found || found.entry.status !== 'connected') throw new Error('WhatsApp non connecté');
+    const client = found.entry.client;
+    const recipient = await this.resolveRecipientId(client, to, fallbackPhone);
+    const mediaMimeType = (media.mimetype || '').split(';')[0];
+    const mediaType = sendOptions.sendAudioAsVoice
+      ? 'ptt'
+      : sendOptions.sendMediaAsDocument || !/^(image|video|audio)\//.test(mediaMimeType)
+        ? 'document'
+        : mediaMimeType.split('/')[0];
+    const pendingMessage = this._trackPendingBotMessage(
+      recipient,
+      `media:${mediaType}:${sendOptions.caption || ''}`
+    );
+    let chat = null;
+    try { chat = await client.getChatById(recipient); } catch (_) {}
+    let sent;
+    if (chat && typeof chat.sendMessage === 'function') {
+      sent = await chat.sendMessage(media, sendOptions);
+    } else {
+      sent = await client.sendMessage(recipient, media, sendOptions);
+    }
+    if (!sent) throw new Error(`Envoi média échoué — contact non joignable (${recipient})`);
+    const msgId = sent.id?._serialized || sent.id;
+    if (typeof msgId === 'string') {
+      this.trackBotSentId(msgId);
+      this._removePendingBotMessage(pendingMessage);
+    }
+    centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to: recipient, has_media: true }).catch(() => {});
+    return { sent, recipient };
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
@@ -1010,6 +1211,7 @@ class WhatsAppManager {
 
   // Send one message with "typing…" indicator; retry once on failure
   async _sendWithTyping(waClient, waId, content, handle) {
+    waId = await this.resolveRecipientId(waClient, waId);
     const isNoLidError = (msg) => typeof msg === 'string' && msg.includes('No LID');
     const attempt = async () => {
       try {
@@ -1033,6 +1235,44 @@ class WhatsAppManager {
       if (handle.cancelled) return;
       await attempt();
     }
+  }
+
+  // WPP.js handles media addressed by a WhatsApp LID more reliably than the
+  // whatsapp-web.js media wrapper. The browser API expects a Data URI.
+  async _sendCampaignMedia(waClient, waId, media, mediaType, content, filename, handle) {
+    const dataUri = `data:${media.mimetype || 'application/octet-stream'};base64,${media.data}`;
+    const options = {
+      type: mediaType || 'document',
+      ...(content ? { caption: content } : {}),
+      ...(filename ? { filename } : {}),
+      ...(media.mimetype ? { mimetype: media.mimetype } : {})
+    };
+    const result = await waClient.pupPage.evaluate(async (chatId, encodedFile, sendOptions) => {
+      try {
+        if (!window.WPP?.chat?.sendFileMessage) {
+          return { ok: false, error: 'WPP.chat.sendFileMessage indisponible' };
+        }
+        await window.WPP.chat.sendFileMessage(chatId, encodedFile, sendOptions);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: String(error?.message || error) };
+      }
+    }, waId, dataUri, options);
+    if (!result?.ok) throw new Error(result?.error || 'Échec de l’envoi média WPP');
+    if (handle.cancelled) return false;
+    return true;
+  }
+
+  async _resolveCampaignMediaId(waClient, waId) {
+    if (!String(waId).includes('@lid')) return waId;
+    if (typeof waClient.getContactLidAndPhone !== 'function') return waId;
+    const mappings = await waClient.getContactLidAndPhone([waId]);
+    const phoneId = mappings?.[0]?.pn;
+    if (phoneId) {
+      console.log(`[Campaign] LID média résolu par WhatsApp → ${phoneId}`);
+      return phoneId;
+    }
+    return waId;
   }
 
   async startCampaign(campaignId, profileId) {
@@ -1114,22 +1354,25 @@ class WhatsAppManager {
           const target = targets[i];
           const contact = target.contact;
 
-          // Resolve the real WhatsApp ID
-          // Optimisation : si le contact a déjà un wa_id valide (synchronisé depuis WhatsApp),
-          // on l'utilise directement — pas besoin d'appeler getNumberId() et risquer le rate-limit.
+          // Resolve the real WhatsApp ID.
+          // WhatsApp peut identifier un contact par @c.us ou par @lid. Un LID
+          // n'est pas un numéro téléphonique : il ne faut donc jamais extraire
+          // ses chiffres pour appeler getNumberId(), sinon il est déclaré à tort
+          // « non WhatsApp ».
           let waId;
           const storedWaId = contact.wa_id;
           const hasValidWaId = storedWaId &&
-            storedWaId.includes('@c.us') &&
-            !storedWaId.includes('@lid');
+            (storedWaId.includes('@c.us') || storedWaId.includes('@lid')) &&
+            !storedWaId.includes('@g.us');
 
           if (hasValidWaId) {
             waId = storedWaId;
-            console.log(`[Campaign ${campaignId}] wa_id connu → ${waId}`);
+            console.log(`[Campaign ${campaignId}] identifiant WhatsApp connu → ${waId}`);
           } else {
-            // wa_id absent ou @lid : résolution via getNumberId()
+            // wa_id absent : résolution via getNumberId()
+            const rawPhone = String(contact.phone_number || '').replace(/\D/g, '');
             try {
-              const rawPhone = contact.phone_number.replace('+', '');
+              if (!rawPhone) throw new Error('Numéro de destinataire invalide');
               const numId = await waClient.getNumberId(rawPhone);
               if (!numId) {
                 console.log(`[Campaign ${campaignId}] Numéro non WhatsApp — ${contact.phone_number}`);
@@ -1157,16 +1400,33 @@ class WhatsAppManager {
               } else {
                 waId = numId._serialized;
               }
-            } catch (_) {
-              // Dernier recours
-              waId = contact.phone_number.replace('+', '') + '@c.us';
+            } catch (resolveError) {
+              if (!rawPhone) throw resolveError;
+              // Dernier recours : le numéro normalisé reste compatible avec whatsapp-web.js
+              waId = rawPhone + '@c.us';
             }
           }
 
+          // Tous les messages de la campagne utilisent le PN résolu, y compris
+          // les textes. Cela évite qu'un contact conservé en @lid fonctionne
+          // pour un média mais échoue pour un texte.
+          waId = await this.resolveRecipientId(waClient, waId, contact.phone_number);
+          if (contact.wa_id !== waId) {
+            await this.prisma.contact.update({ where: { id: contact.id }, data: { wa_id: waId } }).catch(() => {});
+          }
+
           try {
-            // Pick one random variant — each contact gets exactly one message
-            const variantIdx = Math.floor(Math.random() * campaign.messages.length);
-            const msg = campaign.messages[variantIdx];
+            // A contact receives every configured message in order. The old
+            // runner selected one random variant, so a document and a text
+            // could never both be delivered to the same contact.
+            for (let messageIndex = 0; messageIndex < campaign.messages.length; messageIndex++) {
+              if (handle.cancelled) break;
+              const msg = campaign.messages[messageIndex];
+              if (messageIndex > 0 && msg.delay_after_seconds > 0) {
+                console.log(`[Campaign ${campaignId}] Attente ${msg.delay_after_seconds}s — message ${messageIndex + 1}/${campaign.messages.length}`);
+                await this._sleep(msg.delay_after_seconds * 1000, handle, waClient);
+                if (handle.cancelled) break;
+              }
             const contactFirstName = contact.name ? contact.name.split(/\s+/)[0] : '';
             const content = msg.content
               .replace(/\{\{prenom\}\}/gi, contactFirstName || contact.name || 'cher(e) client(e)')
@@ -1175,7 +1435,7 @@ class WhatsAppManager {
               .replace(/\{\{telephone\}\}/gi, contact.phone_number || '')
               .replace(/\{\{tel\}\}/gi, contact.phone_number || '');
 
-            console.log(`[Campaign ${campaignId}] Variante ${variantIdx + 1}/${campaign.messages.length} → ${contact.phone_number}`);
+            console.log(`[Campaign ${campaignId}] Message ${messageIndex + 1}/${campaign.messages.length} → ${contact.phone_number}`);
             this.campaignSendingWaIds.add(waId);
             try {
               const hasMedia = (msg.media_path || msg.media_url) && MessageMedia;
@@ -1183,11 +1443,15 @@ class WhatsAppManager {
                 // ── Send media (with text as caption if present) ──
                 let media = null;
                 if (msg.media_path) {
-                  const filePath = path.join(__dirname, '../../uploads', msg.media_path);
-                  if (fs.existsSync(filePath)) {
+                  const fileCandidates = [
+                    path.join(__dirname, '../../uploads', msg.media_path),
+                    path.join(__dirname, '../../backend/uploads', msg.media_path)
+                  ];
+                  const filePath = fileCandidates.find(candidate => fs.existsSync(candidate));
+                  if (filePath) {
                     const fileData = fs.readFileSync(filePath).toString('base64');
                     const ext = msg.media_path.split('.').pop().toLowerCase();
-                    const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+                    const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', m4v: 'video/mp4', '3gp': 'video/3gpp', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt: 'text/plain', csv: 'text/csv', zip: 'application/zip' };
                     media = new MessageMedia(mimeMap[ext] || 'application/octet-stream', fileData, msg.media_path);
                   }
                 } else if (msg.media_url) {
@@ -1195,15 +1459,27 @@ class WhatsAppManager {
                 }
 
                 if (media) {
-                  try { const chat = await waClient.getChatById(waId); await chat.sendStateTyping(); await this._sleep(Math.min(this._typingDuration(content), 2000), handle); await chat.clearState(); } catch (_) {}
-                  if (!handle.cancelled) {
-                    await waClient.sendMessage(waId, media, content ? { caption: content } : {});
+                  const mediaWaId = await this._resolveCampaignMediaId(waClient, waId).catch(() => waId);
+                  const mediaOptions = {
+                    ...(content ? { caption: content } : {}),
+                    ...(msg.media_type === 'document' ? { sendMediaAsDocument: true } : {})
+                  };
+                  try {
+                    await this._sendCampaignMedia(waClient, mediaWaId, media, msg.media_type, content, msg.media_path, handle);
+                  } catch (wppError) {
+                    console.warn(`[Campaign ${campaignId}] Envoi média WPP échoué, tentative via WhatsApp Web: ${wppError.message}`);
+                    await this.sendMedia(profileId, mediaWaId, media, mediaOptions, contact.phone_number);
                   }
                 } else {
-                  // Media could not be loaded — fallback to text only
-                  await this._sendWithTyping(waClient, waId, content, handle);
+                  throw new Error('Média de campagne introuvable ou impossible à télécharger');
                 }
               } else {
+                if (!content.trim()) throw new Error('Message texte vide');
+                // Les campagnes utilisent le transport direct du client WhatsApp.
+                // Le chemin générique sendMessage() privilégie chat.sendMessage(),
+                // qui peut échouer sur un chat déjà chargé sans permettre le
+                // fallback. Le runner de campagne possède déjà un retry contrôlé
+                // et évite ainsi de marquer tous les destinataires en échec.
                 await this._sendWithTyping(waClient, waId, content, handle);
               }
             } finally {
@@ -1216,9 +1492,12 @@ class WhatsAppManager {
               this.prisma.message.create({
                 data: { contact_id: contact.id, content: savedContent, direction: 'sent', type: msgType, created_at: new Date() }
               }).catch(() => {});
+            }
+            }
+            if (!handle.cancelled) {
               await this.prisma.campaignTarget.update({
                 where: { id: target.id },
-                data: { status: 'sent', sent_at: new Date() }
+                data: { status: 'sent', sent_at: new Date(), error: null }
               });
             }
           } catch (err) {
@@ -1263,8 +1542,17 @@ class WhatsAppManager {
           this.io?.to(`account_${accountId}`).emit('campaign-progress', {
             campaignId, done: finalDone, total: totalTargets, completed: true
           });
-          console.log(`[Campaign ${campaignId}] Terminée — ${finalDone}/${totalTargets} envoyés`);
-          centralSync.reportActivity(accountId, 'campaign.completed', { campaign_id: campaignId, profile_id: profileId, done: finalDone, total: totalTargets }).catch(() => {});
+          const finalSent = await this.prisma.campaignTarget.count({
+            where: { campaign_id: campaignId, status: 'sent' }
+          });
+          const finalFailed = await this.prisma.campaignTarget.count({
+            where: { campaign_id: campaignId, status: 'failed' }
+          });
+          console.log(`[Campaign ${campaignId}] Terminée — ${finalSent}/${totalTargets} envoyés, ${finalFailed} échec(s)`);
+          centralSync.reportActivity(accountId, 'campaign.completed', {
+            campaign_id: campaignId, profile_id: profileId, done: finalDone,
+            sent: finalSent, failed: finalFailed, total: totalTargets
+          }).catch(() => {});
         }
 
         this.runningCampaigns.delete(campaignId);

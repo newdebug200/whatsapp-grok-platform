@@ -230,7 +230,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             <div className="qr-waiting-spinner" />
             <div>
               <div className="qr-waiting-title">Connexion en cours…</div>
-              <div className="qr-waiting-desc">Le QR code va apparaître dans quelques secondes (jusqu'à 30s). Ne cliquez pas à nouveau.</div>
+              <div className="qr-waiting-desc">Le QR code peut prendre jusqu'à 60 secondes. Ne cliquez pas à nouveau pendant l'initialisation.</div>
             </div>
           </div>
         )}

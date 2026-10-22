@@ -18,6 +18,7 @@ import Sentiments from './Sentiments';
 import ApiAccess from './ApiAccess';
 import { useLanguage } from '../../context/LanguageContext';
 import { confirmAction } from '../../utils/confirmAction';
+import { isFeatureEnabled } from '../../utils/featureFlags';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -177,7 +178,8 @@ export default function Dashboard() {
 
     s.on('connect', () => {
       console.log('Socket connecté');
-      s.emit('get-status');
+      if (activeProfileRef.current?.id) s.emit('get-status', { profileId: activeProfileRef.current.id });
+      else s.emit('get-status');
       if (activeProfileRef.current?.id) {
         loadContactsForProfile(activeProfileRef.current.id, s);
       } else {
@@ -203,7 +205,11 @@ export default function Dashboard() {
       setTimeout(() => logout(), 2000);
     });
 
-    s.on('status', (status) => setWaStatus(status));
+    s.on('status', (status) => {
+      const activeProfileId = activeProfileRef.current?.id;
+      if (status.profileId && activeProfileId && Number(status.profileId) !== Number(activeProfileId)) return;
+      setWaStatus(status);
+    });
     s.on('qr', (qr) => setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false, message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.' })));
     s.on('ready', () => setWaStatus({ isConnected: true, qrCode: null, status: 'connected', message: 'Session WhatsApp conservée.' }));
     s.on('sync-start', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'syncing', message: data.message || 'Session WhatsApp conservée. Synchronisation en cours…' })));
@@ -236,7 +242,8 @@ export default function Dashboard() {
 
     s.on('reconnect', () => {
       console.log('Socket reconnecté — resync statut WA');
-      s.emit('get-status');
+      if (activeProfileRef.current?.id) s.emit('get-status', { profileId: activeProfileRef.current.id });
+      else s.emit('get-status');
       if (activeProfileRef.current?.id) {
         loadContactsForProfile(activeProfileRef.current.id, s);
       }
@@ -245,6 +252,16 @@ export default function Dashboard() {
     setSocket(s);
     return () => { s.disconnect(); socketRef.current = null; };
   }, [token, handleNewMessage, loadContactsForProfile, selectProfile, loadProfiles]);
+
+  useEffect(() => {
+    if (!activeProfile?.id) {
+      setWaStatus({ isConnected: false, qrCode: null, status: 'not_initialized' });
+      return;
+    }
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('get-status', { profileId: activeProfile.id });
+    }
+  }, [activeProfile?.id]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -384,7 +401,7 @@ export default function Dashboard() {
 
   const isAdmin = account?.control_center_access === true || (account?.control_center_access == null && ['admin', 'superadmin'].includes(account?.role));
   const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
-  const discussionsEnabled = featureEnabled('whatsapp_discussions_enabled');
+  const discussionsEnabled = platformConfig.whatsapp_discussions_enabled !== false && platformConfig.whatsapp_discussions_enabled !== 'false';
   const campaignsEnabled = featureEnabled('campaigns_enabled');
   const creditsEnabled = featureEnabled('credits_enabled');
   const iaGlobalEnabled = featureEnabled('ia_enabled_global');
@@ -543,7 +560,6 @@ export default function Dashboard() {
             {[
               ['config', t('Settings bot'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65-2-3.46-2.49 1a7.3 7.3 0 0 0-1.69-.98L15 3h-4l-.36 2.93c-.6.25-1.17.58-1.69.98l-2.49-1-2 3.46 2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65 2 3.46 2.49-1c.52.4 1.09.73 1.69.98L11 21h4l.36-2.93a7.3 7.3 0 0 0 1.69-.98l2.49 1 2-3.46-2.11-1.65zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z"/></svg>],
               ['faq', 'FAQ', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-2h2zm2.07-6.25-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41a2 2 0 1 0-4 0H8a4 4 0 1 1 8 0c0 .88-.36 1.68-.93 2.25z"/></svg>],
-              ['templates', t('Quick replies'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 12H7v-2h10zm0-4H7V8h10zm0-4H7V4h10z"/></svg>],
               ['keywordReplies', 'Réponses automatiques', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20 3H4a2 2 0 0 0-2 2v14l4-4h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-3 8H7V9h10v2zm-3 4H7v-2h7v2z"/></svg>],
               ['tags', 'Tags', <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.78-.78.78-2.04 0-2.83zM5.5 7A1.5 1.5 0 1 1 5.5 4a1.5 1.5 0 0 1 0 3z"/></svg>],
               ['journal', t('Alerts'), <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.93 6 11v5l-2 2v1h16v-1z"/></svg>],
@@ -842,6 +858,7 @@ export default function Dashboard() {
             contact={selectedContact}
             socket={socket}
             waStatus={waStatus}
+            quickRepliesEnabled={isFeatureEnabled(platformConfig.quick_replies_enabled)}
             onBack={handleBack}
           />
         ) : (

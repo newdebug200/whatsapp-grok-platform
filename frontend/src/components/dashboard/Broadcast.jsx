@@ -217,7 +217,9 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
 
   const handleCreateCampaign = async () => {
     if (!form.name.trim()) return setError('Donnez un nom à la campagne');
-    if (form.messages.some(m => !m.content.trim())) return setError('Chaque variante doit avoir un contenu');
+    if (form.messages.some(m => !m.content.trim() && !(m.media_type && ((m.media_source === 'file' && m.media_data) || m.media_url?.trim())))) {
+      return setError('Chaque variante doit contenir un texte ou un fichier');
+    }
     if (targetMode === 'tag' && !form.tagId) return setError('Sélectionnez un tag cible');
     if (targetMode === 'manual' && form.contactIds.length === 0) return setError('Sélectionnez au moins un contact');
     if (form.delayMin < 5) return setError('Le délai minimum ne peut pas être inférieur à 5 secondes');

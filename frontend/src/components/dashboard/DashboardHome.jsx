@@ -37,11 +37,12 @@ export default function DashboardHome({
 
   const needsAttention = data && (data.pausedContacts > 0 || data.sentimentAlerts > 0);
   const maxDaily = data ? Math.max(1, ...data.dailyMessages.map(d => d.sent + d.received)) : 1;
-  const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== 'false');
+  const featureEnabled = (key, fallback = true) => isAdmin || (platformConfig[key] === undefined ? fallback : platformConfig[key] !== false && platformConfig[key] !== 'false');
+  const discussionsEnabled = platformConfig.whatsapp_discussions_enabled !== false && platformConfig.whatsapp_discussions_enabled !== 'false';
   const maintenanceEnabled = !isAdmin && platformConfig.maintenance_enabled === 'true';
 
   const sections = [
-    ...(featureEnabled('whatsapp_discussions_enabled') ? [{ key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null }] : []),
+    ...(discussionsEnabled ? [{ key: 'chat', label: 'Discussions', desc: 'Vos conversations WhatsApp', emoji: '💬', color: '#25d366', badge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : null }] : []),
     { key: 'subscriptions', label: 'Abonnements', desc: 'Voir les offres Botora', emoji: '◈', color: '#0aa37f' },
     { key: 'credits', label: 'Recharger les crédits', desc: 'Payer avec FedaPay', emoji: '₣', color: '#0aa37f' },
     { key: 'credit-usage', label: 'Utilisation des crédits', desc: 'Consulter votre consommation', emoji: '▤', color: '#087f72' },
@@ -57,7 +58,6 @@ export default function DashboardHome({
   const settingsSections = [
     ...(featureEnabled('ia_enabled_global') ? [{ key: 'settings-config', tab: 'config', label: 'Réglages du bot', desc: 'IA, comportement et connexion WhatsApp', emoji: '🤖', color: '#128c7e' }] : []),
     ...(featureEnabled('faq_enabled') ? [{ key: 'settings-faq', tab: 'faq', label: 'FAQ', desc: 'Questions et réponses automatiques', emoji: '❓', color: '#667eea' }] : []),
-    ...(featureEnabled('quick_replies_enabled') ? [{ key: 'settings-templates', tab: 'templates', label: 'Réponses rapides', desc: 'Messages prêts à envoyer', emoji: '💬', color: '#34b7f1' }] : []),
     { key: 'settings-tags', tab: 'tags', label: 'Tags', desc: 'Organiser et segmenter vos contacts', emoji: '🏷️', color: '#f39c12' },
     { key: 'settings-keywordReplies', tab: 'keywordReplies', label: 'Réponses automatiques', desc: 'Répondre selon un mot-clé', emoji: '↪', color: '#0aa37f' },
     ...(featureEnabled('sensitive_keywords_enabled') ? [{ key: 'settings-journal', tab: 'journal', label: 'Alertes', desc: 'Journal des alertes et sentiments', emoji: '🔔', color: '#e74c3c' }] : []),
@@ -114,7 +114,7 @@ export default function DashboardHome({
             : "Impossible de charger l'aperçu pour le moment."}
         </div>
       ) : (
-        <div className="dh-overview-soft">
+        discussionsEnabled && <div className="dh-overview-soft">
           <div className="dh-status-card">
             <div>
               <span className="dh-status-eyebrow">Vue d’ensemble</span>

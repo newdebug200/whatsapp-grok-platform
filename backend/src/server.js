@@ -130,9 +130,20 @@ io.on('connection', (socket) => {
     } catch (_) {}
   }, 60000);
 
-  socket.on('get-status', () => {
-    const status = whatsappManager.getStatus(accountId);
-    socket.emit('status', status);
+  socket.on('get-status', (data = {}) => {
+    const profileId = data?.profileId ? Number(data.profileId) : null;
+    if (!profileId) {
+      socket.emit('status', whatsappManager.getStatus(accountId));
+      return;
+    }
+    prisma.whatsAppProfile.findFirst({
+      where: { id: profileId, account_id: accountId },
+      select: { id: true }
+    }).then(profile => {
+      if (profile) socket.emit('status', whatsappManager.getProfileStatus(profileId));
+    }).catch(error => {
+      console.error('Erreur chargement statut WhatsApp:', error.message);
+    });
   });
 
   socket.on('resync-whatsapp', async (data = {}) => {
@@ -150,9 +161,30 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('connect-whatsapp', (data = {}) => {
+  socket.on('connect-whatsapp', async (data = {}) => {
     const profileId = data?.profileId ? Number(data.profileId) : null;
     if (profileId) {
+      let profile;
+      try {
+        profile = await prisma.whatsAppProfile.findFirst({
+          where: { id: profileId, account_id: accountId },
+          select: { id: true }
+        });
+      } catch (err) {
+        console.error('Erreur vérification profil WhatsApp:', err.message);
+        socket.emit('status', {
+          isConnected: false, qrCode: null, status: 'error', profileId,
+          message: 'Impossible de vérifier ce profil WhatsApp. Réessayez.'
+        });
+        return;
+      }
+      if (!profile) {
+        socket.emit('status', {
+          isConnected: false, qrCode: null, status: 'error', profileId,
+          message: 'Profil WhatsApp introuvable pour ce compte.'
+        });
+        return;
+      }
       // Reconnexion d'un numéro existant : ne bloquer que si CE profil est déjà actif.
       const current = whatsappManager.getProfileStatus(profileId);
       if (['connected', 'initializing', 'qr'].includes(current.status)) {
@@ -169,7 +201,16 @@ io.on('connection', (socket) => {
       }
     }
     console.log(`Demande connexion WhatsApp — compte ${accountId}${profileId ? `, profil ${profileId}` : ' (nouveau)'}`);
-    whatsappManager.initializeClient(accountId, profileId);
+    socket.emit('status', { isConnected: false, qrCode: null, status: 'initializing', profileId });
+    try {
+      await whatsappManager.initializeClient(accountId, profileId);
+    } catch (err) {
+      console.error('Erreur démarrage connexion WhatsApp:', err.message);
+      socket.emit('status', {
+        isConnected: false, qrCode: null, status: 'error', profileId,
+        message: `Impossible de démarrer WhatsApp : ${err.message}`
+      });
+    }
   });
 
   socket.on('get-initial-data', async (data = {}) => {

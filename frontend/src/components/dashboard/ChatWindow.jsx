@@ -17,7 +17,23 @@ const EMOJI_CATEGORIES = {
 
 const CATEGORY_LABELS = { '😀': 'Smileys', '👍': 'Gestes', '❤️': 'Cœurs', '🎉': 'Fête', '🍕': 'Nourriture', '🌸': 'Nature' };
 
-export default function ChatWindow({ contact, socket, waStatus, onBack }) {
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Lecture du fichier impossible'));
+        return;
+      }
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Lecture du fichier impossible'));
+    reader.readAsDataURL(file);
+  });
+}
+
+export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnabled = true, onBack }) {
   const { language, t } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -148,6 +164,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   };
 
   const loadQuickReplies = async () => {
+    if (!quickRepliesEnabled) return;
     if (quickReplies.length > 0) return;
     setLoadingTemplates(true);
     try {
@@ -248,6 +265,7 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   };
 
   const handleToggleTemplates = () => {
+    if (!quickRepliesEnabled) return;
     if (!showTemplates) {
       loadQuickReplies();
       setShowEmoji(false);
@@ -262,26 +280,17 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
     setSendingMedia(true);
     setSendError('');
     try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const base64 = ev.target.result.split(',')[1];
-        await axios.post(`${API_URL}/messages/send-media`, {
-          contactId: contact.id,
-          filename: file.name,
-          mimeType: file.type,
-          data: base64
-        });
-        setIaPaused(true);
-        await loadMessages(contact.id);
-      };
-      reader.onerror = () => {
-        setSendError("Erreur lors de la lecture du fichier.");
-        setTimeout(() => setSendError(''), 4000);
-        setSendingMedia(false);
-      };
-      reader.readAsDataURL(file);
+      const base64 = await readFileAsBase64(file);
+      await axios.post(`${API_URL}/messages/send-media`, {
+        contactId: contact.id,
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        data: base64
+      });
+      setIaPaused(true);
+      await loadMessages(contact.id);
     } catch (err) {
-      setSendError("Échec de l'envoi du fichier.");
+      setSendError(err.response?.data?.error || err.message || "Échec de l'envoi du fichier.");
       setTimeout(() => setSendError(''), 4000);
     } finally {
       setSendingMedia(false);
@@ -349,38 +358,29 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
   };
 
   const handleSendAudio = async () => {
-    if (!recordedBlob) return;
+    if (!recordedBlob || sendingMedia) return;
     setSendingMedia(true);
+    setSendError('');
     try {
       const blobToSend = recordedBlob;
-      const urlToRevoke = recordedBlobUrl;
+      const base64 = await readFileAsBase64(blobToSend);
+      const ext = blobToSend.type.includes('ogg') ? 'ogg' : 'webm';
+      await axios.post(`${API_URL}/messages/send-media`, {
+        contactId: contact.id,
+        filename: `audio_${Date.now()}.${ext}`,
+        mimeType: blobToSend.type || 'audio/webm',
+        data: base64,
+        messageType: 'ptt'
+      });
+      setIaPaused(true);
+      await loadMessages(contact.id);
+      if (recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
       setRecordedBlob(null);
       setRecordedBlobUrl(null);
       setRecordPhase('idle');
       setRecordDuration(0);
-      await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-          try {
-            const base64 = ev.target.result.split(',')[1];
-            const ext = blobToSend.type.includes('ogg') ? 'ogg' : 'webm';
-            await axios.post(`${API_URL}/messages/send-media`, {
-              contactId: contact.id,
-              filename: `audio_${Date.now()}.${ext}`,
-              mimeType: blobToSend.type,
-              data: base64,
-              messageType: 'ptt'
-            });
-            setIaPaused(true);
-            await loadMessages(contact.id);
-            resolve();
-          } catch (e) { reject(e); }
-          finally { if (urlToRevoke) URL.revokeObjectURL(urlToRevoke); }
-        };
-        reader.readAsDataURL(blobToSend);
-      });
-    } catch {
-      setSendError("Échec de l'envoi audio.");
+    } catch (err) {
+      setSendError(`${err.response?.data?.error || "Échec de l'envoi audio."} Votre enregistrement est conservé pour réessayer.`);
       setTimeout(() => setSendError(''), 4000);
     } finally {
       setSendingMedia(false);
@@ -956,15 +956,17 @@ export default function ChatWindow({ contact, socket, waStatus, onBack }) {
       />
 
       <div className="chat-input-bar">
-        <button
-          className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
-          onClick={handleToggleTemplates}
-          title={t('Quick replies')}
-          type="button"
-          style={{ fontSize: '1rem', fontWeight: 700 }}
-        >
-          ⚡
-        </button>
+        {quickRepliesEnabled && (
+          <button
+            className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
+            onClick={handleToggleTemplates}
+            title={t('Quick replies')}
+            type="button"
+            style={{ fontSize: '1rem', fontWeight: 700 }}
+          >
+            ⚡
+          </button>
+        )}
         <button
           className={`emoji-toggle-btn ${showEmoji ? 'active' : ''}`}
           onClick={() => { setShowEmoji(v => !v); setShowTemplates(false); }}
