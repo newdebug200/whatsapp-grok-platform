@@ -5,6 +5,7 @@ const pathModule = require('path');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
+const { resetCompletedCampaign } = require('../services/campaignLifecycle');
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
@@ -451,15 +452,24 @@ router.post('/campaigns/:id/start', async (req, res) => {
     });
     if (!campaign) return res.status(404).json({ error: 'Campagne introuvable' });
     if (campaign.status === 'running') return res.status(400).json({ error: 'Campagne déjà en cours' });
-    if (campaign.status === 'completed') return res.status(400).json({ error: 'Campagne déjà terminée' });
-    if (campaign.status === 'paused') {
-      await prisma.campaignTarget.updateMany({
+    const restarted = campaign.status === 'completed';
+    let resetTargets = 0;
+    if (restarted) {
+      resetTargets = await resetCompletedCampaign(prisma, campaign.id);
+    } else if (campaign.status === 'paused') {
+      const result = await prisma.campaignTarget.updateMany({
         where: { campaign_id: campaign.id, status: 'failed' },
         data: { status: 'pending', error: null }
       });
+      resetTargets = result.count;
     }
     whatsappManager.startCampaign(campaign.id, req.profileId);
-    res.json({ success: true, message: 'Campagne démarrée' });
+    res.json({
+      success: true,
+      message: restarted ? 'Campagne relancée' : 'Campagne démarrée',
+      restarted,
+      resetTargets
+    });
   } catch (error) {
     console.error('Erreur start campaign:', error);
     res.status(500).json({ error: 'Erreur lors du démarrage de la campagne' });

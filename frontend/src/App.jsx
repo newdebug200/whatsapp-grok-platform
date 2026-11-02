@@ -23,10 +23,31 @@ function AppContent() {
 
   useEffect(() => {
     let cancelled = false;
-    axios.get(`${API_URL}/central-health`, { timeout: 10000 })
-      .then(response => { if (!cancelled && response.data?.ok) setCentralStatus({ state: 'online', message: t('Central API connected.') }); else if (!cancelled) setCentralStatus({ state: 'offline', message: t('The central server is unavailable. Please try again later.') }); })
-      .catch(error => { if (!cancelled) setCentralStatus({ state: 'offline', message: error.response?.data?.error || t('The central server is unavailable. Please try again later.') }); });
-    return () => { cancelled = true; };
+    const checkCentralHealth = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/central-health`, { timeout: 10000 });
+        if (cancelled) return;
+        if (response.data?.ok) {
+          setCentralStatus({ state: 'online', message: t('Central API connected.') });
+        } else {
+          setCentralStatus({ state: 'offline', message: t('The central server is unavailable. Please try again later.') });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCentralStatus({
+            state: 'offline',
+            message: error.response?.data?.error || t('The central server is unavailable. Please try again later.')
+          });
+        }
+      }
+    };
+
+    checkCentralHealth();
+    const healthCheck = setInterval(checkCentralHealth, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(healthCheck);
+    };
   }, [t]);
 
   useEffect(() => {

@@ -297,9 +297,51 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
     if (e) e.stopPropagation();
     setError('');
     try {
-      await axios.post(`${API_URL}/broadcast/campaigns/${id}/start`);
-      setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status: 'running' } : c));
-      if (detail?.id === id) setDetail(d => ({ ...d, status: 'running' }));
+      const campaign = campaigns.find(item => item.id === id);
+      const currentStatus = campaign?.status || (detail?.id === id ? detail.status : null);
+      const response = await axios.post(`${API_URL}/broadcast/campaigns/${id}/start`);
+      const restarted = response.data?.restarted ?? currentStatus === 'completed';
+      const resetTargets = response.data?.resetTargets ?? 0;
+      const total = campaign?.progress?.total ?? (detail?.id === id ? detail.targets?.length : 0) ?? 0;
+      setProgress(prev => {
+        const next = { ...prev };
+        if (restarted) delete next[id];
+        else if (resetTargets > 0) {
+          const current = next[id] || {
+            done: (campaign?.progress?.sent || 0) + (campaign?.progress?.failed || 0),
+            total
+          };
+          next[id] = { ...current, done: Math.max(0, current.done - resetTargets) };
+        }
+        return next;
+      });
+      setCampaigns(prev => prev.map(item => {
+        if (item.id !== id) return item;
+        const campaignTotal = item.progress?.total ?? total;
+        const progress = item.progress || { total: campaignTotal, pending: 0, sent: 0, failed: 0 };
+        return {
+          ...item,
+          status: 'running',
+          progress: restarted
+            ? { ...progress, total: campaignTotal, pending: campaignTotal, sent: 0, failed: 0 }
+            : {
+                ...progress,
+                pending: progress.pending + resetTargets,
+                failed: Math.max(0, progress.failed - resetTargets)
+              }
+        };
+      }));
+      if (detail?.id === id) {
+        setDetail(current => ({
+          ...current,
+          status: 'running',
+          targets: current.targets.map(target => (
+            restarted || (currentStatus === 'paused' && target.status === 'failed')
+              ? { ...target, status: 'pending', sent_at: null, error: null }
+              : target
+          ))
+        }));
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur au démarrage');
     }
@@ -380,8 +422,11 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
   const getProgressInfo = (campaign) => {
     const live = progress[campaign.id];
     const p = campaign.progress || {};
-    const total = live?.total ?? p.total ?? 0;
-    const done = live?.done ?? (p.sent ?? 0) + (p.failed ?? 0);
+    const targets = campaign.targets || [];
+    const sent = p.sent ?? targets.filter(target => target.status === 'sent').length;
+    const failed = p.failed ?? targets.filter(target => target.status === 'failed').length;
+    const total = live?.total ?? p.total ?? targets.length;
+    const done = live?.done ?? sent + failed;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     return { total, done, pct };
   };
@@ -793,10 +838,10 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
           )}
 
           <div className="bc-detail-actions">
-            {(currentStatus === 'draft' || currentStatus === 'paused' || currentStatus === 'scheduled') && (
+            {(currentStatus === 'draft' || currentStatus === 'paused' || currentStatus === 'scheduled' || currentStatus === 'completed') && (
               <button className="bc-btn-primary" onClick={(e) => handleStartCampaign(detail.id, e)}>
                 <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
-                {currentStatus === 'paused' ? 'Reprendre' : currentStatus === 'scheduled' ? 'Lancer maintenant' : 'Démarrer'}
+                {currentStatus === 'completed' ? 'Relancer' : currentStatus === 'paused' ? 'Reprendre' : currentStatus === 'scheduled' ? 'Lancer maintenant' : 'Démarrer'}
               </button>
             )}
             {currentStatus === 'running' && (
@@ -834,7 +879,11 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
                 </div>
                 <div className="bc-target-status">
                   {t.status === 'sent' && <span className="bc-status-sent">Envoyé</span>}
-                  {t.status === 'failed' && <span className="bc-status-failed" title={t.error || ''}>Echec</span>}
+                  {t.status === 'failed' && (
+                    <span className="bc-status-failed" title={t.error || ''}>
+                      Échec{t.error && <small style={{ display: 'block', maxWidth: 280, whiteSpace: 'normal', textAlign: 'right' }}>{t.error}</small>}
+                    </span>
+                  )}
                   {t.status === 'pending' && <span className="bc-status-pending">En attente</span>}
                 </div>
               </div>
@@ -905,6 +954,12 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
                     <button className="bc-btn-sm bc-btn-start" onClick={(e) => handleStartCampaign(c.id, e)}>
                       <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M8 5v14l11-7z"/></svg>
                       Lancer maintenant
+                    </button>
+                  )}
+                  {c.status === 'completed' && (
+                    <button className="bc-btn-sm bc-btn-start" onClick={(e) => handleStartCampaign(c.id, e)}>
+                      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M8 5v14l11-7z"/></svg>
+                      Relancer
                     </button>
                   )}
                   {c.status === 'running' && (
