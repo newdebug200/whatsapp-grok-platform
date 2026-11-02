@@ -13,7 +13,7 @@ test('preserves a stored WhatsApp ID when a text campaign already resolves that 
   assert.equal(resolvedId, '15551234567@c.us');
 });
 
-test('campaign media sends through the direct WhatsApp client transport', async (t) => {
+test('campaign documents keep their caption on the direct WhatsApp client transport', async (t) => {
   const originalLookup = whatsappManager._getEntryByProfileId;
   const originalResolve = whatsappManager.resolveRecipientId;
   const originalTrack = whatsappManager._trackPendingBotMessage;
@@ -49,8 +49,8 @@ test('campaign media sends through the direct WhatsApp client transport', async 
   whatsappManager.trackBotSentId = () => {};
   centralSync.reportActivity = async () => true;
 
-  const media = { mimetype: 'image/jpeg', data: 'aW1hZ2U=' };
-  const options = { caption: 'Campaign caption' };
+  const media = { mimetype: 'application/pdf', data: 'cGRm', filename: 'campaign.pdf' };
+  const options = { caption: 'Campaign document caption', sendMediaAsDocument: true };
   const result = await whatsappManager.sendMedia(
     7,
     '123456789@c.us',

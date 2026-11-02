@@ -2,13 +2,17 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const pathModule = require('path');
+const crypto = require('crypto');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
 const { resetCompletedCampaign } = require('../services/campaignLifecycle');
+const { handleCampaignUpload } = require('../services/campaignMediaUpload');
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
+
+const uploadsDir = pathModule.join(__dirname, '../../uploads');
 
 // ─── CSV / VCF helpers ────────────────────────────────────────────────────────
 
@@ -242,12 +246,39 @@ router.get('/campaigns', async (req, res) => {
 });
 
 // POST /api/broadcast/campaigns
-router.post('/campaigns', async (req, res) => {
+router.post('/campaigns', handleCampaignUpload, async (req, res) => {
+  const uploadedFiles = req.files || [];
+  const persistedMediaPaths = [];
   try {
-    const { name, messages, contact_ids, tag_id, select_all, delay_min_seconds, delay_max_seconds, scheduled_at } = req.body;
+    let requestBody = req.body;
+    if (req.is('multipart/form-data')) {
+      try {
+        requestBody = JSON.parse(req.body?.campaign || '');
+      } catch {
+        return res.status(400).json({ error: 'Données de campagne invalides' });
+      }
+    }
+
+    const { name, messages, contact_ids, tag_id, select_all, delay_min_seconds, delay_max_seconds, scheduled_at } = requestBody;
     if (!name?.trim()) return res.status(400).json({ error: 'Nom de campagne requis' });
     if (!Array.isArray(messages) || messages.length === 0)
       return res.status(400).json({ error: 'Au moins un message requis' });
+
+    const filesByMessage = new Map();
+    for (const file of uploadedFiles) {
+      const match = /^media_(\d+)$/.exec(file.fieldname);
+      const messageIndex = match ? Number(match[1]) : -1;
+      if (messageIndex < 0 || !messages[messageIndex] || filesByMessage.has(messageIndex) || !messages[messageIndex].media_type) {
+        return res.status(400).json({ error: 'Fichier associé à une variante invalide' });
+      }
+      filesByMessage.set(messageIndex, file);
+    }
+    for (let index = 0; index < messages.length; index++) {
+      const fileIndex = messages[index].media_file_index;
+      if (fileIndex !== undefined && (Number(fileIndex) !== index || !filesByMessage.has(index))) {
+        return res.status(400).json({ error: 'Fichier de campagne manquant ou associé à une variante invalide' });
+      }
+    }
 
     const delayMin = Math.max(5, parseInt(delay_min_seconds) || 20);
     const delayMax = Math.max(delayMin, parseInt(delay_max_seconds) || 60);
@@ -300,7 +331,6 @@ router.post('/campaigns', async (req, res) => {
       return res.status(400).json({ error: 'Aucun contact valide sélectionné' });
 
     // Process messages: save any uploaded files to disk before the DB insert
-    const uploadsDir = pathModule.join(__dirname, '../../uploads');
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
     const processedMessages = messages.map((m, i) => {
@@ -310,7 +340,16 @@ router.post('/campaigns', async (req, res) => {
         delay_after_seconds: m.delay_after_seconds || 0
       };
       if (m.media_type) {
-        if (m.media_data) {
+        const uploadedFile = filesByMessage.get(i);
+        if (uploadedFile) {
+          const ext = pathModule.extname(uploadedFile.filename);
+          const filename = `campaign_${Date.now()}_${i}_${crypto.randomUUID().slice(0, 8)}${ext}`;
+          const filePath = pathModule.join(uploadsDir, filename);
+          fs.renameSync(uploadedFile.path, filePath);
+          persistedMediaPaths.push(filePath);
+          msgData.media_path = filename;
+          msgData.media_type = m.media_type;
+        } else if (m.media_data) {
           // File uploaded from browser — save to disk
           const origName = m.media_filename || 'file';
           const ext = origName.split('.').pop().replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'bin';
@@ -345,8 +384,27 @@ router.post('/campaigns', async (req, res) => {
     });
     res.json(campaign);
   } catch (error) {
+    for (const filePath of persistedMediaPaths) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') {
+          console.error('Erreur nettoyage média de campagne:', cleanupError);
+        }
+      }
+    }
     console.error('Erreur POST campaign:', error);
     res.status(500).json({ error: 'Erreur lors de la création de la campagne' });
+  } finally {
+    for (const file of uploadedFiles) {
+      try {
+        fs.unlinkSync(file.path);
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') {
+          console.error('Erreur nettoyage média temporaire:', cleanupError);
+        }
+      }
+    }
   }
 });
 

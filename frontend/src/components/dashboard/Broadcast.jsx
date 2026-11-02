@@ -64,7 +64,7 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
 
   const [form, setForm] = useState({
     name: '',
-    messages: [{ content: '', media_url: '', media_type: '', media_source: 'url', media_data: '', media_filename: '' }],
+    messages: [{ content: '', media_url: '', media_type: '', media_source: 'url', media_file: null, media_filename: '' }],
     contactIds: [],
     tagId: null,
     delayMin: 30,
@@ -81,7 +81,7 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
   const fileInputRef = useRef(null);
   const mediaFileRef = useRef(null);
 
-  const EMPTY_MSG = { content: '', media_url: '', media_type: '', media_source: 'url', media_data: '', media_filename: '' };
+  const EMPTY_MSG = { content: '', media_url: '', media_type: '', media_source: 'url', media_file: null, media_filename: '' };
 
   const resetForm = () => {
     setForm({ name: '', messages: [{ ...EMPTY_MSG }], contactIds: [], tagId: null, delayMin: 30, delayMax: 90, scheduled: false, scheduledAt: '' });
@@ -194,10 +194,10 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
     setForm(prev => ({ ...prev, messages: msgs }));
   };
 
-  const handleMediaFileSelect = (idx, base64, filename) => {
+  const handleMediaFileSelect = (idx, file) => {
     setForm(prev => {
       const msgs = [...prev.messages];
-      msgs[idx] = { ...msgs[idx], media_data: base64, media_filename: filename, media_url: '' };
+      msgs[idx] = { ...msgs[idx], media_file: file, media_filename: file.name, media_url: '' };
       return { ...prev, messages: msgs };
     });
   };
@@ -207,17 +207,12 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
     if (!file) return;
     const idx = parseInt(e.target.dataset.msgIdx ?? '0');
     e.target.value = '';
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target.result.split(',')[1];
-      handleMediaFileSelect(idx, base64, file.name);
-    };
-    reader.readAsDataURL(file);
+    handleMediaFileSelect(idx, file);
   };
 
   const handleCreateCampaign = async () => {
     if (!form.name.trim()) return setError('Donnez un nom à la campagne');
-    if (form.messages.some(m => !m.content.trim() && !(m.media_type && ((m.media_source === 'file' && m.media_data) || m.media_url?.trim())))) {
+    if (form.messages.some(m => !m.content.trim() && !(m.media_type && ((m.media_source === 'file' && m.media_file) || m.media_url?.trim())))) {
       return setError('Chaque variante doit contenir un texte ou un fichier');
     }
     if (targetMode === 'tag' && !form.tagId) return setError('Sélectionnez un tag cible');
@@ -235,8 +230,8 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
         messages: form.messages.map((m, i) => {
           const base = { content: m.content, order_index: i, delay_after_seconds: 0 };
           if (m.media_type) {
-            if (m.media_source === 'file' && m.media_data) {
-              return { ...base, media_data: m.media_data, media_filename: m.media_filename, media_type: m.media_type };
+            if (m.media_source === 'file' && m.media_file) {
+              return { ...base, media_file_index: i, media_type: m.media_type };
             } else if (m.media_url?.trim()) {
               return { ...base, media_url: m.media_url.trim(), media_type: m.media_type };
             }
@@ -256,7 +251,18 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
         payload.contact_ids = form.contactIds;
       }
 
-      const res = await axios.post(`${API_URL}/broadcast/campaigns`, payload);
+      const fileMessages = form.messages
+        .map((message, index) => ({ message, index }))
+        .filter(({ message }) => message.media_type && message.media_source === 'file' && message.media_file);
+      let requestBody = payload;
+      if (fileMessages.length > 0) {
+        requestBody = new FormData();
+        requestBody.append('campaign', JSON.stringify(payload));
+        for (const { message, index } of fileMessages) {
+          requestBody.append(`media_${index}`, message.media_file, message.media_filename);
+        }
+      }
+      const res = await axios.post(`${API_URL}/broadcast/campaigns`, requestBody);
       const total = targetMode === 'tag'
         ? (tags.find(t => t.id === form.tagId)?._count?.contacts ?? 0)
         : form.contactIds.length;
@@ -514,6 +520,11 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
                     </button>
                   )}
                 </div>
+                {msg.media_type && msg.content.trim() && (
+                  <p className="bc-hint" style={{ margin: '0 0 0 28px' }}>
+                    Le texte sera envoyé avec le fichier en légende, sans message séparé.
+                  </p>
+                )}
                 <div style={{ display: 'flex', gap: 6, marginLeft: 28, alignItems: 'center', flexWrap: 'wrap' }}>
                   <select
                     value={msg.media_type || ''}
@@ -522,7 +533,7 @@ export default function Broadcast({ socket, activeProfile, onBack }) {
                       if (!e.target.value) {
                         setForm(prev => {
                           const msgs = [...prev.messages];
-                          msgs[i] = { ...msgs[i], media_type: '', media_url: '', media_data: '', media_filename: '' };
+                          msgs[i] = { ...msgs[i], media_type: '', media_url: '', media_file: null, media_filename: '' };
                           return { ...prev, messages: msgs };
                         });
                       }
