@@ -1867,7 +1867,7 @@
 .faq-delete-btn:hover { background: #fef3f3; }
 
 /* ===== RESPONSIVE MOBILE ===== */
-@media (max-width: 768px) {
+@media (max-width: 760px) {
   .sidebar {
     width: 100%;
     min-width: 100%;
@@ -2521,4 +2521,215 @@
   width: 100%;
   max-width: none;
   margin: 0;
+}
+
+/* Keep the application navigation reachable beside mobile and tablet views. */
+@media (max-width: 900px) {
+  .app-navigation {
+    position: relative;
+    z-index: 30;
+    flex: 0 0 64px;
+    width: 64px;
+    min-width: 64px;
+    align-items: center;
+    padding: 12px 5px;
+  }
+
+  .app-navigation-brand {
+    justify-content: center;
+    padding: 0 0 14px;
+  }
+
+  .app-navigation-brand span,
+  .app-navigation-collapse span,
+  .app-navigation-profile span:last-child,
+  .app-navigation-link > span:not(.app-navigation-icon),
+  .app-navigation-heading,
+  .app-navigation-sub-link > span:last-child,
+  .app-navigation-footer button:not(.app-navigation-logout),
+  .app-navigation-footer .app-navigation-logout span {
+    display: none;
+  }
+
+  .app-navigation-profile {
+    justify-content: center;
+    width: auto;
+    margin: 0 0 12px;
+    padding: 9px;
+  }
+
+  .app-navigation-links,
+  .app-navigation-group,
+  .app-navigation-footer {
+    width: 100%;
+  }
+
+  .app-navigation-link,
+  .app-navigation-sub-link {
+    justify-content: center;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 10px 8px;
+  }
+
+  .app-navigation-footer {
+    align-items: center;
+  }
+
+  .app-navigation-footer .app-navigation-logout {
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+  }
+
+  .chat-input-bar {
+    min-width: 0;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+
+  .chat-input {
+    width: 0;
+    min-width: 0;
+    font-size: 13px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    left: 64px;
+    width: calc(100% - 64px);
+    min-width: 0;
+  }
+
+  .main-area {
+    left: 64px;
+    width: calc(100% - 64px);
+    min-width: 0;
+  }
+
+  .chat-input-bar {
+    min-width: 0;
+  }
+
+  .chat-input {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-navigation {
+    flex-basis: 64px;
+    width: 64px;
+    min-width: 64px;
+    align-items: center;
+    padding: 12px 5px;
+  }
+
+  .app-navigation-brand {
+    justify-content: center;
+    padding: 0 0 14px;
+  }
+
+  .app-navigation-brand span,
+  .app-navigation-collapse span,
+  .app-navigation-profile span:last-child,
+  .app-navigation-link > span:not(.app-navigation-icon),
+  .app-navigation-heading,
+  .app-navigation-sub-link > span:last-child,
+  .app-navigation-footer button:not(.app-navigation-logout),
+  .app-navigation-footer .app-navigation-logout span {
+    display: none;
+  }
+
+  .app-navigation-profile {
+    justify-content: center;
+    width: auto;
+    margin: 0 0 12px;
+    padding: 9px;
+  }
+
+  .app-navigation-links,
+  .app-navigation-group,
+  .app-navigation-footer {
+    width: 100%;
+  }
+
+  .app-navigation-link,
+  .app-navigation-sub-link {
+    justify-content: center;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 10px 8px;
+  }
+
+  .app-navigation-footer {
+    align-items: center;
+  }
+
+  .app-navigation-footer .app-navigation-logout {
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+  }
+
+  .sidebar,
+  .main-area {
+    left: 64px;
+    width: calc(100% - 64px);
+  }
+
+  .chat-header {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .ia-mode-btn {
+    padding: 5px 8px;
+  }
+
+  .ia-mode-label {
+    display: none;
+  }
+
+  .chat-input-bar {
+    gap: 4px;
+    padding: 6px 8px;
+  }
+
+  .chat-input-bar > button {
+    flex: 0 0 auto;
+  }
+
+  .chat-input {
+    width: 0;
+    font-size: 13px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .chat-input-bar {
+    gap: 3px;
+    padding: 6px;
+  }
+
+  .chat-input-bar .quick-replies-toggle {
+    display: none;
+  }
+
+  .chat-input-bar .emoji-toggle-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .chat-input-bar .send-btn {
+    width: 36px;
+    height: 36px;
+  }
 }

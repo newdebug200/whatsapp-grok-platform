@@ -963,7 +963,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
       <div className="chat-input-bar">
         {quickRepliesEnabled && (
           <button
-            className={`emoji-toggle-btn ${showTemplates ? 'active' : ''}`}
+            className={`emoji-toggle-btn quick-replies-toggle ${showTemplates ? 'active' : ''}`}
             onClick={handleToggleTemplates}
             title={t('Quick replies')}
             type="button"

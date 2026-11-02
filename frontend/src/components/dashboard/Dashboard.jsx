@@ -546,7 +546,7 @@ export default function Dashboard() {
                 <div className="app-navigation-heading">{group.label}</div>
                 <div className="app-navigation-links">
                   {group.items.map(item => (
-                    <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => handleNavClick(item.key)}>
+                    <button key={item.key} className={`app-navigation-link ${activePanel === item.key ? 'active' : ''}`} onClick={() => handleNavClick(item.key)} title={item.label} aria-label={item.label}>
                       <span className="app-navigation-icon">{item.icon}</span><span>{item.label}</span>
                       {item.key === 'chat' && unreadCount > 0 && <b>{unreadCount > 99 ? '99+' : unreadCount}</b>}
                     </button>
@@ -852,7 +852,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <main className={`main-area feature-main-area ${mobileView === 'list' ? 'main-hidden-mobile' : ''}`}>
+      <main className={`main-area feature-main-area ${activePanel === 'chat' && mobileView === 'list' ? 'main-hidden-mobile' : ''}`}>
         {activePanel === 'chat' ? (
           <ChatWindow
             contact={selectedContact}
