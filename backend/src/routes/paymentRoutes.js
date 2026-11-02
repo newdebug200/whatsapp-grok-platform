@@ -5,8 +5,9 @@ const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware } = require('../middleware/auth');
 const centralSync = require('../services/centralSync');
+const { resolveBotoraAdminApiUrl } = require('../config/botoraAdminApi');
 
-const BOTORA_ADMIN_API_URL = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
+const BOTORA_ADMIN_API_URL = resolveBotoraAdminApiUrl();
 const MIN_CREDITS = 5;
 const XOF_PER_CREDIT = 120;
 const TOKENS_PER_CREDIT = 100000;

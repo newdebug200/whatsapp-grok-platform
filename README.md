@@ -79,6 +79,17 @@ Le démarrage synchronise le schéma sans `--accept-data-loss` ; si Prisma déte
 une modification qui pourrait supprimer des données, il arrête le lancement
 pour demander une intervention explicite.
 
+Le backend choisit aussi l’API centrale Botora Admin selon son environnement :
+`http://localhost:8000` en local, et `https://botora.bluelifetech.site` en
+production. Cette détection utilise `NODE_ENV=production` ou un `APP_URL`
+public. Pour forcer le choix, définissez `BOTORA_ADMIN_API_MODE=local` ou
+`BOTORA_ADMIN_API_MODE=online`. Une valeur `BOTORA_ADMIN_API_URL` explicite
+remplace la détection automatique.
+La clé de développement locale est partagée automatiquement. En production,
+configurez la même clé forte `BOTORA_ADMIN_SERVICE_KEY` sur ce backend et
+`BOTORA_SERVICE_KEY` sur Botora Admin. Les appels protégés de consommation de
+crédits et de récupération de compte nécessitent cette clé.
+
 ## Structure du projet
 
 ```

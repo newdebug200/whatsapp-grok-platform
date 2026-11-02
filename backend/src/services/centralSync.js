@@ -1,8 +1,11 @@
 const axios = require('axios');
 const prisma = require('../prisma');
-const ADMIN_API = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
-// Valeur pratique pour le développement local ; remplacer en production.
-const SERVICE_KEY = process.env.BOTORA_ADMIN_SERVICE_KEY || 'abcd';
+const {
+  resolveBotoraAdminApiUrl,
+  resolveBotoraAdminServiceKey
+} = require('../config/botoraAdminApi');
+const ADMIN_API = resolveBotoraAdminApiUrl();
+const SERVICE_KEY = resolveBotoraAdminServiceKey(process.env, ADMIN_API);
 const SERVICE_HEADERS = { 'X-Botora-Service-Key': SERVICE_KEY };
 let featureCache = { at: 0, values: {} };
 

@@ -28,6 +28,9 @@ PRÉREQUIS
       JWT_SECRET=une_clé_secrète_aléatoire_longue
 
       → Obtenir votre clé Groq : https://console.groq.com/keys
+      → API Botora Admin : localhost:8000 en local, automatiquement ;
+        en production, configurez NODE_ENV=production.
+        BOTORA_ADMIN_API_MODE=local|online permet de forcer le choix.
 
   2c. Installer les dépendances backend :
       npm install

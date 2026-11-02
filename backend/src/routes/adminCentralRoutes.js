@@ -3,8 +3,9 @@ const axios = require('axios');
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { resolveBotoraAdminApiUrl } = require('../config/botoraAdminApi');
 
-const ADMIN_API = (process.env.BOTORA_ADMIN_API_URL || 'https://botora.bluelifetech.site').replace(/\/$/, '');
+const ADMIN_API = resolveBotoraAdminApiUrl();
 // Authentification interservices désactivée temporairement en développement.
 
 async function adminRequest(method, path, data, params) {
