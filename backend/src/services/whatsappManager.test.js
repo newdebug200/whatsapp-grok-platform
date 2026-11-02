@@ -63,8 +63,8 @@ test('campaign documents keep their caption on the direct WhatsApp client transp
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0], [
     '123456789@c.us',
-    media,
-    { ...options, waitUntilMsgSent: true }
+    options.caption,
+    { ...options, media, waitUntilMsgSent: true }
   ]);
   assert.equal(result.recipient, '123456789@c.us');
   assert.equal(result.sent.id._serialized, 'message-id');
@@ -159,8 +159,8 @@ test('campaign media removes the invalid WhatsApp model id before sending', asyn
 
   assert.deepEqual(calls[0], [
     '123456789@c.us',
-    media,
-    { ...options, waitUntilMsgSent: true }
+    options.caption,
+    { ...options, media, waitUntilMsgSent: true }
   ]);
   assert.deepEqual(patchResult, {
     installed: true,

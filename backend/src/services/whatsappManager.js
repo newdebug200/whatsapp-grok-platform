@@ -1128,7 +1128,8 @@ class WhatsAppManager {
       recipient,
       `media:${mediaType}:${sendOptions.caption || ''}`
     );
-    const sendOptionsWithAck = { ...sendOptions, waitUntilMsgSent: true };
+    const sendOptionsWithAck = { ...sendOptions, media, waitUntilMsgSent: true };
+    const messageContent = sendOptions.caption || '';
     const sendStartedAt = Math.floor(Date.now() / 1000) - 2;
     const expectedMessageType = mediaType === 'ptt' ? 'audio' : mediaType;
     let sent;
@@ -1164,14 +1165,14 @@ class WhatsAppManager {
       }
 
       if (direct) {
-        sent = await client.sendMessage(recipient, media, sendOptionsWithAck);
+        sent = await client.sendMessage(recipient, messageContent, sendOptionsWithAck);
       } else {
         let chat = null;
         try { chat = await client.getChatById(recipient); } catch (_) {}
         if (chat && typeof chat.sendMessage === 'function') {
-          sent = await chat.sendMessage(media, sendOptionsWithAck);
+          sent = await chat.sendMessage(messageContent, sendOptionsWithAck);
         } else {
-          sent = await client.sendMessage(recipient, media, sendOptionsWithAck);
+          sent = await client.sendMessage(recipient, messageContent, sendOptionsWithAck);
         }
       }
 
