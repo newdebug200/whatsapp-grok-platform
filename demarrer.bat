@@ -11,10 +11,17 @@ REM ═════════════════════════�
 REM ── Auto-logging (redirige tout dans botora-debug.log + écran) ────────────
 if "%BOTORA_LOG%"=="" (
     set "BOTORA_LOG=1"
-    call "%~f0" %* 2>&1 | powershell -NoProfile -Command "$input | Tee-Object -FilePath '%~dp0botora-debug.log'"
-    exit /b
+    set "BOTORA_LOG_FILE=%~dp0botora-debug.log"
+    call "%~f0" %* 2>&1 | powershell -NoProfile -Command "$exitCode = 0; $input | ForEach-Object { if ($_ -match '^__BOTORA_EXIT_CODE=(\d+)$') { $exitCode = [int]$matches[1] } else { $_ | Tee-Object -FilePath $env:BOTORA_LOG_FILE -Append } }; exit $exitCode"
+    exit /b !errorlevel!
 )
 
+call :main %*
+set "BOTORA_EXIT_CODE=!errorlevel!"
+echo __BOTORA_EXIT_CODE=!BOTORA_EXIT_CODE!
+exit /b !BOTORA_EXIT_CODE!
+
+:main
 REM ── Répertoire racine ─────────────────────────────────────────────────────
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
@@ -50,20 +57,10 @@ if %errorlevel% neq 0 (
 echo  [OK] Node.js et npm sont disponibles.
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  ÉTAPE 1 — Mise à jour du code (git pull)
+REM  ÉTAPE 1 — Préserver la branche et les modifications locales
 REM ══════════════════════════════════════════════════════════════════════════
-echo  [1/8] Mise a jour du code...
-where git >nul 2>&1
-if %errorlevel% equ 0 (
-    git pull origin work --no-edit >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo  [OK] Code mis a jour depuis GitHub ^(branche work^).
-    ) else (
-        echo  [INFO] Pas de connexion ou pas de changement — on continue.
-    )
-) else (
-    echo  [INFO] git non detecte — pas de mise a jour automatique.
-)
+echo  [1/8] Mise a jour Git automatique desactivee.
+echo  [INFO] Mettez le code a jour manuellement apres avoir verifie votre branche.
 echo.
 
 REM ══════════════════════════════════════════════════════════════════════════
@@ -75,7 +72,7 @@ if %errorlevel% neq 0 (
     echo.
     echo  [ERREUR] Node.js introuvable !
     echo.
-    echo  Telechargez et installez Node.js 18+ depuis :
+    echo  Telechargez et installez Node.js 22.5+ depuis :
     echo    https://nodejs.org
     echo.
     echo  Apres installation, relancez ce fichier.
@@ -86,29 +83,29 @@ for /f "tokens=*" %%v in ('node -v 2^>nul') do set NODE_VER=%%v
 echo  [OK] Node.js %NODE_VER% detecte.
 
 REM ── Vérification version minimale : 22.5 ──────────────────────────────────
-for /f "tokens=1 delims=." %%m in ("%NODE_VER:v=%") do set NODE_MAJOR=%%m
-if %NODE_MAJOR% LSS 22 (
+node -e "const [major,minor]=process.versions.node.split('.').map(Number); process.exit(major > 22 || (major === 22 && minor >= 5) ? 0 : 1)"
+if errorlevel 1 (
     echo.
-    echo  [ERREUR] Node.js 22 ou superieur est requis ^(detecte : %NODE_VER%^)
+    echo  [ERREUR] Node.js 22.5 ou superieur est requis ^(detecte : %NODE_VER%^)
     echo.
     echo  setup-db.js utilise le module "node:sqlite" disponible depuis Node 22.5.
     echo  Telechargez Node.js 22 LTS sur : https://nodejs.org/en/download
     echo.
-    pause ^& exit /b 1
+    pause & exit /b 1
 )
 echo.
 
 REM ══════════════════════════════════════════════════════════════════════════
-REM  ÉTAPE 3 — Libérer les ports (tuer Node existants)
+REM  ÉTAPE 3 — Vérifier les ports sans arrêter de processus tiers
 REM ══════════════════════════════════════════════════════════════════════════
-echo  [3/8] Liberation des ports (arret processus Node existants)...
-taskkill /F /IM node.exe /T >nul 2>&1
-if %errorlevel% equ 0 (
-    echo  [OK] Processus Node arretes — attente 3s...
-    timeout /t 3 /nobreak >nul
-) else (
-    echo  [OK] Aucun processus Node actif.
+echo  [3/8] Verification des ports 3001 et 5173...
+powershell -NoProfile -Command "$ports = @(3001,5173); $listeners = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ports -contains $_.LocalPort }; if ($listeners) { $listeners | ForEach-Object { Write-Output ('Port ' + $_.LocalPort + ' deja utilise par le PID ' + $_.OwningProcess) }; exit 1 }"
+if errorlevel 1 (
+    echo  [ERREUR] Un port requis est deja utilise. Aucun processus n'a ete arrete.
+    echo  Fermez uniquement la fenetre Botora correspondante, puis relancez.
+    pause & exit /b 1
 )
+echo  [OK] Les ports requis sont disponibles.
 echo.
 
 REM ══════════════════════════════════════════════════════════════════════════
@@ -221,6 +218,11 @@ if %errorlevel% neq 0 (
     echo  [ATTENTION] prisma generate a echoue — tentative sans --no-hints...
     call npx prisma generate >nul 2>&1
 )
+if %errorlevel% neq 0 (
+    echo  [ERREUR] La generation du client Prisma a echoue. Consultez les erreurs ci-dessus.
+    cd /d "%ROOT%"
+    pause & exit /b 1
+)
 echo  [OK] Client Prisma pret.
 cd /d "%ROOT%"
 echo.
@@ -233,27 +235,23 @@ cd /d "%ROOT%\backend"
 
 REM ── Étape 6a : prisma db push (crée/met à jour les tables depuis schema.prisma) ─
 echo  [6a] Creation des tables via Prisma...
-call npx prisma db push --skip-generate >nul 2>&1
-if %errorlevel% equ 0 (
-    echo  [OK] Tables creees/mises a jour par Prisma.
-) else (
-    echo  [ATTENTION] prisma db push a echoue, tentative avec --accept-data-loss...
-    call npx prisma db push --skip-generate --accept-data-loss >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo  [OK] Tables synchronisees.
-    ) else (
-        echo  [ATTENTION] Prisma db push indisponible — passage a setup-db.js...
-    )
+call npx prisma db push --skip-generate
+if errorlevel 1 (
+    echo  [ERREUR] Synchronisation Prisma refusee. Aucune option de perte de donnees ne sera appliquee.
+    cd /d "%ROOT%"
+    pause & exit /b 1
 )
+echo  [OK] Tables creees/mises a jour par Prisma.
 
 REM ── Étape 6b : setup-db.js (colonnes manquantes sur DB existante, idempotent) ─
 echo  [6b] Application des migrations complementaires...
-node setup-db.js >nul 2>&1
-if %errorlevel% equ 0 (
-    echo  [OK] Migrations complementaires appliquees.
-) else (
-    echo  [INFO] setup-db.js indisponible ^(Node ^< 22.5^) — Prisma seul est utilise.
+node setup-db.js
+if errorlevel 1 (
+    echo  [ERREUR] La synchronisation complementaire de la base a echoue.
+    cd /d "%ROOT%"
+    pause & exit /b 1
 )
+echo  [OK] Migrations complementaires appliquees sur la meme base SQLite.
 cd /d "%ROOT%"
 
 REM ── Créer le dossier uploads (médias WhatsApp) ────────────────────────────
@@ -292,14 +290,38 @@ echo.
 REM ── Backend ───────────────────────────────────────────────────────────────
 start "BOTORA Backend — port 3001" cmd /k "chcp 65001 >nul && title BOTORA Backend && cd /d "%ROOT%\backend" && set PUPPETEER_SKIP_DOWNLOAD=true && set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true && echo. && echo  Backend demarre sur http://localhost:3001 && echo  Fermez cette fenetre pour arreter le backend. && echo. && npm run dev"
 
-echo  Backend en cours de demarrage...
-timeout /t 4 /nobreak >nul
+echo  Attente de la disponibilite de l'API...
+set "BACKEND_READY=0"
+for /L %%i in (1,1,30) do (
+    if "!BACKEND_READY!"=="0" (
+        curl.exe --fail --silent http://127.0.0.1:3001/api/healthz >nul 2>&1
+        if !errorlevel! equ 0 set "BACKEND_READY=1"
+        if "!BACKEND_READY!"=="0" timeout /t 1 /nobreak >nul
+    )
+)
+if "!BACKEND_READY!"=="0" (
+    echo  [ERREUR] L'API ne repond pas. Consultez la fenetre Backend.
+    pause & exit /b 1
+)
+echo  [OK] API disponible.
 
 REM ── Frontend ──────────────────────────────────────────────────────────────
 start "BOTORA Frontend — port 5173" cmd /k "chcp 65001 >nul && title BOTORA Frontend && cd /d "%ROOT%\frontend" && echo. && echo  Frontend demarre sur http://localhost:5173 && echo  Fermez cette fenetre pour arreter le frontend. && echo. && npm run dev"
 
-echo  Frontend en cours de demarrage...
-timeout /t 5 /nobreak >nul
+echo  Attente de la disponibilite de l'interface...
+set "FRONTEND_READY=0"
+for /L %%i in (1,1,30) do (
+    if "!FRONTEND_READY!"=="0" (
+        curl.exe --fail --silent http://127.0.0.1:5173/ >nul 2>&1
+        if !errorlevel! equ 0 set "FRONTEND_READY=1"
+        if "!FRONTEND_READY!"=="0" timeout /t 1 /nobreak >nul
+    )
+)
+if "!FRONTEND_READY!"=="0" (
+    echo  [ERREUR] Le frontend ne repond pas. Consultez la fenetre Frontend.
+    pause & exit /b 1
+)
+echo  [OK] Interface disponible.
 
 REM ── Ouvrir le navigateur ──────────────────────────────────────────────────
 echo  Ouverture du navigateur...
@@ -319,3 +341,4 @@ echo.
 echo  Vous pouvez fermer CETTE fenetre. Les serveurs continuent.
 echo.
 pause
+exit /b 0

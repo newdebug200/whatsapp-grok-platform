@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const prisma = require('../prisma');
+const { resolveSqliteDatabasePath } = require('../utils/sqliteDatabasePath');
 
 const router = express.Router();
 const execFileAsync = promisify(execFile);
@@ -22,9 +23,7 @@ function constantTimeEqual(left, right) {
 }
 
 function sqlitePath() {
-  const configured = String(process.env.DATABASE_URL || 'file:./dev.db').replace(/^file:/, '').split('?')[0];
-  if (!configured || configured === ':memory:') return null;
-  return path.isAbsolute(configured) ? configured : path.resolve(path.dirname(purgeSchemaPath), configured);
+  return resolveSqliteDatabasePath(process.env.DATABASE_URL || 'file:./dev.db', purgeSchemaPath);
 }
 
 function prismaCliPath() {

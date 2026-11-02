@@ -25,28 +25,36 @@ SanRobot est une plateforme web qui permet à chaque utilisateur de connecter so
 
 ## Installation rapide
 
+Prérequis : Node.js 22.5 ou plus récent (requis par `node:sqlite` dans le
+script de synchronisation de la base).
+
 ```bash
-# 1. Cloner et aller sur la branche work
+# 1. Cloner le projet
 git clone https://github.com/newdebug200/whatsapp-grok-platform.git
 cd whatsapp-grok-platform
-git checkout work
 
 # 2. Backend
 cd backend
-cp .env.example .env          # puis éditer .env avec vos clés
+copy .env.example .env        # Windows ; puis éditer .env avec vos clés
 npm install
 npx prisma generate
-npx prisma migrate dev --name init
+npx prisma db push
+node setup-db.js
 npm run dev                   # port 3001
 
 # 3. Frontend (nouveau terminal)
 cd ../frontend
-cp .env.example .env
+copy .env.example .env        # Windows
 npm install
 npm run dev                   # port 5173
 ```
 
 Consultez **INSTALL.txt** pour le guide complet incluant la PWA.
+Sous Windows, le démarrage quotidien recommandé est `demarrer.bat` à la racine.
+Le script ne fait pas de `git pull` automatique et ne termine aucun processus
+Node.js. Si les ports 3001 ou 5173 sont déjà occupés, il s'arrête sans toucher
+aux serveurs déjà lancés. Pour mettre le code à jour, vérifiez la branche et
+les changements locaux, puis lancez `git pull` manuellement.
 
 ## Variables d'environnement
 
@@ -63,6 +71,13 @@ JWT_SECRET=clé_secrète_longue
 VITE_API_URL=http://localhost:3001/api
 VITE_SOCKET_URL=http://localhost:3001
 ```
+
+Le chemin relatif de `DATABASE_URL` est résolu depuis
+`backend/prisma/schema.prisma` par Prisma et par les scripts de base de données.
+Avec `file:./dev.db`, le fichier utilisé est donc `backend/prisma/dev.db`.
+Le démarrage synchronise le schéma sans `--accept-data-loss` ; si Prisma détecte
+une modification qui pourrait supprimer des données, il arrête le lancement
+pour demander une intervention explicite.
 
 ## Structure du projet
 

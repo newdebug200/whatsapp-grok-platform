@@ -8,8 +8,9 @@ Date : Mai 2026 | Branche : work
   COMMANDES À LANCER (dans l'ordre)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Récupérer les dernières corrections :
-   git pull origin work
+1. Mettre le code à jour manuellement après vérification de la branche et des
+   modifications locales :
+   git pull
 
 2. Installer les dépendances backend (si pas encore fait) :
    cd backend
@@ -25,12 +26,18 @@ Date : Mai 2026 | Branche : work
 4. Appliquer le schéma Prisma à la base de données :
    cd backend
    npx prisma db push
+   node setup-db.js
 
-   ⚠️  Cette commande est OBLIGATOIRE si c'est la première
-   fois ou après un git pull qui a modifié schema.prisma.
-   Elle crée/met à jour les tables (dont la colonne ia_paused).
+   Le chemin relatif DATABASE_URL=file:./dev.db est partagé par Prisma et
+   setup-db.js : backend/prisma/dev.db. Le démarrage refuse les changements
+   Prisma susceptibles de perdre des données ; n'ajoutez pas
+   --accept-data-loss pour contourner ce refus.
 
-5. Lancer le backend :
+5. Pour démarrer les deux serveurs sous Windows sans arrêter d'autres
+   processus Node, lancer demarrer.bat depuis la racine. Il vérifie d'abord
+   que les ports 3001 et 5173 sont libres.
+
+   Sinon, lancer le backend :
    cd backend
    npm run dev
 

@@ -21,6 +21,7 @@ if (nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 5)) {
 
 const path = require('node:path');
 const fs   = require('node:fs');
+const { resolveSqliteDatabasePath } = require('./src/utils/sqliteDatabasePath');
 
 // ── Charger .env manuellement ─────────────────────────────────────────────
 const envPath = path.join(__dirname, '.env');
@@ -36,9 +37,15 @@ if (fs.existsSync(envPath)) {
 }
 
 // ── Résoudre le chemin SQLite depuis DATABASE_URL ─────────────────────────
-const rawUrl  = process.env.DATABASE_URL || 'file:./dev.db';
-const relPath = rawUrl.replace(/^file:/, '');
-const dbPath  = path.resolve(__dirname, relPath);
+const rawUrl = process.env.DATABASE_URL || 'file:./dev.db';
+let dbPath;
+try {
+  dbPath = resolveSqliteDatabasePath(rawUrl, path.join(__dirname, 'prisma', 'schema.prisma'));
+  if (!dbPath) throw new Error('DATABASE_URL doit pointer vers une base SQLite persistante.');
+} catch (err) {
+  console.error('[DB] DATABASE_URL invalide :', err.message);
+  process.exit(1);
+}
 
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
@@ -320,7 +327,11 @@ const migrations = [
 ];
 
 for (const stmt of migrations) {
-  try { db.exec(stmt); } catch { /* colonne déjà existante — ignoré */ }
+  try {
+    db.exec(stmt);
+  } catch (err) {
+    if (!/duplicate column name/i.test(err.message)) throw err;
+  }
 }
 
 db.exec('PRAGMA foreign_keys = ON;');

@@ -4,7 +4,7 @@
 
 PRÉREQUIS OBLIGATOIRES
 -----------------------
-  1. Node.js 18+ installé → https://nodejs.org
+  1. Node.js 22.5+ installé → https://nodejs.org
   2. Google Chrome ou Chromium installé (requis par WhatsApp Web.js)
   3. Une clé API Groq gratuite → https://console.groq.com/keys
 
@@ -17,7 +17,7 @@ PRÉREQUIS OBLIGATOIRES
   Ouvrir un terminal dans le dossier du projet :
 
     cd backend
-    cp .env.example .env
+    copy .env.example .env
 
   Editer le fichier .env et renseigner :
     GROK_API_KEY=votre_clé_groq_ici
@@ -26,19 +26,27 @@ PRÉREQUIS OBLIGATOIRES
   Puis :
     npm install
     npx prisma generate
-    npx prisma migrate dev --name init
+    npx prisma db push
+    node setup-db.js
 
 ÉTAPE B — Frontend
 -------------------
   Ouvrir un 2ème terminal :
 
     cd frontend
-    cp .env.example .env
+    copy .env.example .env
     npm install
 
 =========================================================
    LANCER L'APPLICATION (après l'installation)
 =========================================================
+
+  Sous Windows, le démarrage recommandé depuis la racine du projet est :
+    demarrer.bat
+
+  Le script ne met pas Git à jour automatiquement, ne ferme pas les processus
+  Node.js et refuse de démarrer si les ports 3001 ou 5173 sont occupés.
+  Il n'applique jamais de migration avec --accept-data-loss.
 
   TERMINAL 1 — Backend (API + WebSocket) :
   -----------------------------------------
@@ -89,9 +97,10 @@ PRÉREQUIS OBLIGATOIRES
     → Changer PORT=3001 dans backend/.env
     → Mettre à jour VITE_API_URL et VITE_SOCKET_URL dans frontend/.env
 
-  Base de données corrompue / réinitialiser :
-    → Supprimer backend/dev.db
-    → Relancer : npx prisma migrate dev --name init
+  Base de données / chemin SQLite :
+    → DATABASE_URL=file:./dev.db pointe vers backend/prisma/dev.db
+    → setup-db.js utilise le même chemin que Prisma
+    → Ne supprimez pas un fichier .db pour résoudre une erreur sans sauvegarde
 
   Sessions WhatsApp perdues après redémarrage :
     → Normal si le dossier backend/.wwebjs_auth/ est absent

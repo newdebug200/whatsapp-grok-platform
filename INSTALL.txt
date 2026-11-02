@@ -4,7 +4,7 @@
 
 PRÉREQUIS
 ---------
-- Node.js 18.x ou supérieure : https://nodejs.org
+- Node.js 22.5 ou supérieure : https://nodejs.org
 - Git (pour cloner le projet)
 - Un compte Groq (gratuit) pour l'API IA : https://console.groq.com
 - Google Chrome ou Chromium (requis par whatsapp-web.js / Puppeteer)
@@ -13,14 +13,13 @@ PRÉREQUIS
 ---------------------------
   git clone https://github.com/debugStaut200/whatsapp-grok-platform.git
   cd whatsapp-grok-platform
-  git checkout work
 
 ÉTAPE 2 - Configurer le backend
 ---------------------------------
   cd backend
 
   2a. Copier le fichier d'environnement :
-      cp .env.example .env
+      copy .env.example .env
 
   2b. Ouvrir .env et renseigner vos valeurs :
       PORT=3001
@@ -35,14 +34,15 @@ PRÉREQUIS
 
   2d. Générer le client Prisma et créer la base de données :
       npx prisma generate
-      npx prisma migrate dev --name init
+      npx prisma db push
+      node setup-db.js
 
 ÉTAPE 3 - Configurer le frontend
 ----------------------------------
   cd ../frontend
 
   3a. Copier le fichier d'environnement :
-      cp .env.example .env
+      copy .env.example .env
 
   3b. Vérifier que .env contient :
       VITE_API_URL=http://localhost:3001/api
@@ -53,7 +53,11 @@ PRÉREQUIS
 
 ÉTAPE 4 - Lancer l'application
 --------------------------------
-  Ouvrir 2 terminaux séparés :
+  Sous Windows, le démarrage recommandé est `demarrer.bat` depuis la racine.
+  Le script protège les autres processus Node, refuse les ports occupés et
+  n'applique jamais `--accept-data-loss`.
+
+  Sinon, ouvrir 2 terminaux séparés :
 
   Terminal 1 (Backend) :
     cd backend
