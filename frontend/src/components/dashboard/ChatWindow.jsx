@@ -812,9 +812,14 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
                   )}
 
                   <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'}`}>
-                    <span className="message-text">
+                    <div className="message-text">
                       {msg.media_path || msg.wa_msg_id ? (
-                        renderMedia(msg)
+                        <>
+                          {renderMedia(msg)}
+                          {msg.content && !/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) && (
+                            <div className="message-caption">{renderText(msg.content)}</div>
+                          )}
+                        </>
                       ) : /^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
                         <span className={`media-badge-fallback ${
                           msg.content === '[Image]' ? 'image' :
@@ -834,7 +839,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
                           <span className="media-badge-unavail">· non disponible</span>
                         </span>
                       ) : renderText(msg.content)}
-                    </span>
+                    </div>
                     <span className="message-time">
                       {formatMsgTime(msg.created_at)}
                       {isSent && (

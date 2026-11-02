@@ -16,11 +16,12 @@ test('preserves a stored WhatsApp ID when a text campaign already resolves that 
 test('campaign documents keep their caption on the direct WhatsApp client transport', async (t) => {
   const originalLookup = whatsappManager._getEntryByProfileId;
   const originalResolve = whatsappManager.resolveRecipientId;
-  const originalTrack = whatsappManager._trackPendingBotMessage;
-  const originalRemove = whatsappManager._removePendingBotMessage;
   const originalTrackSent = whatsappManager.trackBotSentId;
   const originalReportActivity = centralSync.reportActivity;
   const calls = [];
+  const recipient = 'caption-dedupe-test@c.us';
+  const requestedRecipient = 'caption-dedupe-test@lid';
+  const signature = 'media:document:Campaign document caption';
   const client = {
     getChatById: async () => {
       throw new Error('The loaded chat transport should not be used');
@@ -34,18 +35,18 @@ test('campaign documents keep their caption on the direct WhatsApp client transp
   t.after(() => {
     whatsappManager._getEntryByProfileId = originalLookup;
     whatsappManager.resolveRecipientId = originalResolve;
-    whatsappManager._trackPendingBotMessage = originalTrack;
-    whatsappManager._removePendingBotMessage = originalRemove;
     whatsappManager.trackBotSentId = originalTrackSent;
     centralSync.reportActivity = originalReportActivity;
+    for (const pendingRecipient of [recipient, requestedRecipient]) {
+      const pending = whatsappManager._pendingBotMessages.get(`${pendingRecipient}\u0000${signature}`) || [];
+      pending.forEach(message => whatsappManager._removePendingBotMessage(message));
+    }
   });
 
   whatsappManager._getEntryByProfileId = () => ({
     entry: { status: 'connected', client, accountId: 12 }
   });
-  whatsappManager.resolveRecipientId = async (_client, recipient) => recipient;
-  whatsappManager._trackPendingBotMessage = () => ({});
-  whatsappManager._removePendingBotMessage = () => {};
+  whatsappManager.resolveRecipientId = async () => recipient;
   whatsappManager.trackBotSentId = () => {};
   centralSync.reportActivity = async () => true;
 
@@ -53,7 +54,7 @@ test('campaign documents keep their caption on the direct WhatsApp client transp
   const options = { caption: 'Campaign document caption', sendMediaAsDocument: true };
   const result = await whatsappManager.sendMedia(
     7,
-    '123456789@c.us',
+    requestedRecipient,
     media,
     options,
     null,
@@ -62,12 +63,13 @@ test('campaign documents keep their caption on the direct WhatsApp client transp
 
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0], [
-    '123456789@c.us',
+    recipient,
     media,
     { ...options, waitUntilMsgSent: true }
   ]);
-  assert.equal(result.recipient, '123456789@c.us');
+  assert.equal(result.recipient, recipient);
   assert.equal(result.sent.id._serialized, 'message-id');
+  assert.equal(whatsappManager._consumePendingBotMessage(requestedRecipient, signature), true);
 });
 
 test('campaign media removes the invalid WhatsApp model id before sending', async (t) => {
@@ -186,7 +188,7 @@ test('campaign media removes the invalid WhatsApp model id before sending', asyn
     /n'a pas confirmé/
   );
   assert.equal(calls.length, 3);
-  assert.equal(removedPendingMessages, 3);
+  assert.equal(removedPendingMessages, 2);
 });
 
 test('destroying a client waits for Chrome to close before removing its session entry', async (t) => {

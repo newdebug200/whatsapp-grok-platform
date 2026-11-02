@@ -777,7 +777,7 @@ class WhatsAppManager {
             : msg.type === 'audio' || msg.type === 'ptt' ? 'Audio'
             : msg.type === 'document' ? 'Document' : msg.type === 'sticker' ? 'Sticker' : 'Fichier')
           : null;
-        const content = mediaTypeLabel ? `[${mediaTypeLabel}]` : (msg.body || '');
+        const content = mediaTypeLabel ? (msg.body || `[${mediaTypeLabel}]`) : (msg.body || '');
 
         await this.prisma.message.create({
           data: {
@@ -786,7 +786,12 @@ class WhatsAppManager {
             direction: 'sent',
             type: msg.type || 'text',
             created_at: new Date(),
-            unread: false
+            unread: false,
+            ...(msg.hasMedia ? {
+              wa_msg_id: msg.id?._serialized || null,
+              media_filename: msg._data?.filename || null,
+              media_mime: msg._data?.mimetype || null
+            } : {})
           }
         });
 
@@ -1124,10 +1129,9 @@ class WhatsAppManager {
       : sendOptions.sendMediaAsDocument || !/^(image|video|audio)\//.test(mediaMimeType)
         ? 'document'
         : mediaMimeType.split('/')[0];
-    const pendingMessage = this._trackPendingBotMessage(
-      recipient,
-      `media:${mediaType}:${sendOptions.caption || ''}`
-    );
+    const pendingSignature = `media:${mediaType}:${sendOptions.caption || ''}`;
+    const pendingMessages = [...new Set([to, recipient])]
+      .map(pendingRecipient => this._trackPendingBotMessage(pendingRecipient, pendingSignature));
     const sendOptionsWithAck = { ...sendOptions, waitUntilMsgSent: true };
     const sendStartedAt = Math.floor(Date.now() / 1000) - 2;
     const expectedMessageType = mediaType === 'ptt' ? 'audio' : mediaType;
@@ -1214,7 +1218,7 @@ class WhatsAppManager {
         throw new Error("WhatsApp n'a pas confirmé l'envoi du média. Vérifiez l'historique avant de relancer.");
       }
     } catch (error) {
-      this._removePendingBotMessage(pendingMessage);
+      pendingMessages.forEach(pendingMessage => this._removePendingBotMessage(pendingMessage));
       throw error;
     }
 
@@ -1223,7 +1227,6 @@ class WhatsAppManager {
     if (typeof msgId === 'string') {
       this.trackBotSentId(msgId);
     }
-    this._removePendingBotMessage(pendingMessage);
     centralSync.reportActivity(found.entry.accountId, 'whatsapp.message_sent', { profile_id: profileId, to: recipient, has_media: true }).catch(() => {});
     return { sent, recipient };
   }
@@ -1417,6 +1420,8 @@ class WhatsAppManager {
           const target = targets[i];
           const contact = target.contact;
 
+          let sentMediaResult = null;
+          let campaignMedia = null;
           try {
             if (handle.cancelled) break;
 
@@ -1497,28 +1502,27 @@ class WhatsAppManager {
               if (hasMedia) {
                 if (!MessageMedia) throw new Error('Module WhatsApp indisponible pour envoyer les pièces jointes');
                 // ── Send media (with text as caption if present) ──
-                let media = null;
                 if (msg.media_path) {
                   const fileCandidates = [
                     path.join(__dirname, '../../uploads', msg.media_path),
                     path.join(__dirname, '../../backend/uploads', msg.media_path)
                   ];
                   const filePath = fileCandidates.find(candidate => fs.existsSync(candidate));
-                  if (filePath) media = MessageMedia.fromFilePath(filePath);
+                  if (filePath) campaignMedia = MessageMedia.fromFilePath(filePath);
                 } else if (msg.media_url) {
                   try {
-                    media = await MessageMedia.fromUrl(msg.media_url, { unsafeMime: true });
+                    campaignMedia = await MessageMedia.fromUrl(msg.media_url, { unsafeMime: true });
                   } catch (error) {
                     throw new Error(`Impossible de télécharger le média de campagne : ${error.message}`);
                   }
                 }
 
-                if (media) {
+                if (campaignMedia) {
                   const mediaOptions = {
                     ...(content ? { caption: content } : {}),
                     ...(msg.media_type === 'document' ? { sendMediaAsDocument: true } : {})
                   };
-                  await this.sendMedia(profileId, waId, media, mediaOptions, contact.phone_number, { direct: true });
+                  sentMediaResult = await this.sendMedia(profileId, waId, campaignMedia, mediaOptions, contact.phone_number, { direct: true });
                 } else {
                   throw new Error('Média de campagne introuvable ou impossible à télécharger');
                 }
@@ -1538,8 +1542,22 @@ class WhatsAppManager {
             if (!handle.cancelled) {
               const msgType = (msg.media_path || msg.media_url) ? (msg.media_type || 'document') : 'text';
               const savedContent = content || (msg.media_type ? `[${msg.media_type}]` : '');
+              const sentMediaId = sentMediaResult?.sent?.id?._serialized ||
+                (typeof sentMediaResult?.sent?.id === 'string' ? sentMediaResult.sent.id : null);
               this.prisma.message.create({
-                data: { contact_id: contact.id, content: savedContent, direction: 'sent', type: msgType, created_at: new Date() }
+                data: {
+                  contact_id: contact.id,
+                  content: savedContent,
+                  direction: 'sent',
+                  type: msgType,
+                  created_at: new Date(),
+                  ...(campaignMedia ? {
+                    media_path: msg.media_path || null,
+                    wa_msg_id: sentMediaId,
+                    media_filename: campaignMedia.filename || (msg.media_path ? path.basename(msg.media_path) : null),
+                    media_mime: campaignMedia.mimetype || null
+                  } : {})
+                }
               }).catch(() => {});
               await this.prisma.campaignTarget.update({
                 where: { id: target.id },

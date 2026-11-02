@@ -1095,6 +1095,10 @@
   white-space: pre-wrap;
 }
 
+.message-caption {
+  margin-top: 6px;
+}
+
 .message-time {
   font-size: 11px;
   color: #8696a0;

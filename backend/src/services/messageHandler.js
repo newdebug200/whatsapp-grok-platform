@@ -159,7 +159,9 @@ class MessageHandler {
           : message.type === 'document' ? 'Document' : message.type === 'sticker' ? 'Sticker' : 'Fichier')
         : null;
 
-      const messageContent = mediaTypeLabel ? `[${mediaTypeLabel}]` : (message.body || '');
+      const messageContent = mediaTypeLabel
+        ? (message.body || `[${mediaTypeLabel}]`)
+        : (message.body || '');
 
       // ── Save message with unread=true (sentiment is filled in later, only if the bot actually responds) ──
       await prisma.message.create({
