@@ -90,7 +90,7 @@ test('campaign media removes the invalid WhatsApp model id before sending', asyn
     __x_id: undefined,
     filehash: 'media-hash',
     toJSON() {
-      return { __x_id: undefined, filehash: 'media-hash' };
+      return { __x_id: undefined, filehash: 'media-hash', caption: undefined };
     }
   };
   const runtime = {
@@ -110,11 +110,13 @@ test('campaign media removes the invalid WhatsApp model id before sending', asyn
         try {
           const installed = await callback();
           const processed = await runtime.processMediaData();
+          processed.caption = 'Campaign caption';
           const json = processed.toJSON();
           patchResult = {
             installed,
             internalIdEnumerable: Object.prototype.propertyIsEnumerable.call(processed, '__x_id'),
-            serializedIdPresent: Object.prototype.hasOwnProperty.call(json, '__x_id')
+            serializedIdPresent: Object.prototype.hasOwnProperty.call(json, '__x_id'),
+            serializedCaption: json.caption
           };
           return installed;
         } finally {
@@ -167,7 +169,8 @@ test('campaign media removes the invalid WhatsApp model id before sending', asyn
   assert.deepEqual(patchResult, {
     installed: true,
     internalIdEnumerable: false,
-    serializedIdPresent: false
+    serializedIdPresent: false,
+    serializedCaption: 'Campaign caption'
   });
   assert.equal(result.sent.id._serialized, 'recovered-message-id');
   assert.equal(result.sent.ack, 2);

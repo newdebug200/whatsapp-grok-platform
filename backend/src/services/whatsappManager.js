@@ -1155,7 +1155,10 @@ class WhatsAppManager {
               const toJSON = mediaData.toJSON.bind(mediaData);
               mediaData.toJSON = (...jsonArgs) => {
                 const json = toJSON(...jsonArgs);
-                if (json && typeof json === 'object') delete json.__x_id;
+                if (json && typeof json === 'object') {
+                  delete json.__x_id;
+                  if (typeof mediaData.caption === 'string') json.caption = mediaData.caption;
+                }
                 return json;
               };
             }
