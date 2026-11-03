@@ -17,6 +17,7 @@ const PERSONALITIES = [
 
 export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, onResyncWhatsApp }) {
   const personalityGroupId = useId();
+  const personalityTouchedRef = useRef(false);
   const [config, setConfig] = useState({
     bot_name: 'Botora',
     bot_info: '',
@@ -82,7 +83,11 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const loadConfig = async () => {
     try {
       const res = await axios.get(`${API_URL}/config/bot`);
-      setConfig(prev => ({ ...prev, ...res.data }));
+      setConfig(prev => ({
+        ...prev,
+        ...res.data,
+        personality: personalityTouchedRef.current ? prev.personality : res.data.personality
+      }));
     } catch (err) {
       console.error('Erreur chargement config:', err);
     }
@@ -294,7 +299,10 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
                     name={`personality-${personalityGroupId}`}
                     value={p.value}
                     checked={isSelected}
-                    onChange={() => setConfig(c => ({ ...c, personality: p.value }))}
+                    onChange={() => {
+                      personalityTouchedRef.current = true;
+                      setConfig(c => ({ ...c, personality: p.value }));
+                    }}
                     style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
                   />
                   <span style={{
