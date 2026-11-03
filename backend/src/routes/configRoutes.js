@@ -4,6 +4,8 @@ const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const centralSync = require('../services/centralSync');
 
+const VALID_PERSONALITIES = ['autonomous', 'professional', 'friendly', 'commercial', 'support', 'empathetic', 'concise'];
+
 router.use(authMiddleware);
 router.use(profileMiddleware);
 
@@ -30,7 +32,7 @@ router.get('/bot', async (req, res) => {
           timezone: 'UTC',
           away_message: '',
           away_once_per_session: true,
-          personality: 'professional',
+          personality: 'autonomous',
           system_prompt_override: null,
           sentiment_enabled: false,
           sentiment_alert: false,
@@ -39,7 +41,10 @@ router.get('/bot', async (req, res) => {
         }
       });
     }
-    res.json(config);
+    res.json({
+      ...config,
+      personality: VALID_PERSONALITIES.includes(config.personality) ? config.personality : 'autonomous'
+    });
   } catch (error) {
     console.error('Erreur GET bot config:', error);
     res.status(500).json({ error: 'Erreur lors du chargement de la configuration' });
@@ -58,8 +63,6 @@ router.put('/bot', async (req, res) => {
     const delaySeconds = response_delay_seconds !== undefined
       ? Math.max(1, Math.min(300, parseInt(response_delay_seconds) || 15))
       : undefined;
-
-    const VALID_PERSONALITIES = ['professional', 'friendly', 'commercial', 'support'];
 
     const data = {
       ...(bot_name !== undefined && { bot_name }),
@@ -100,7 +103,7 @@ router.put('/bot', async (req, res) => {
           timezone: timezone || 'UTC',
           away_message: away_message || '',
           away_once_per_session: away_once_per_session ?? true,
-          personality: personality || 'professional',
+          personality: VALID_PERSONALITIES.includes(personality) ? personality : 'autonomous',
           system_prompt_override: system_prompt_override || null,
           sentiment_enabled: sentiment_enabled ?? false,
           sentiment_alert: sentiment_alert ?? false,

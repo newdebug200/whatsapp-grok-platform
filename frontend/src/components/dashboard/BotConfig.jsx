@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useId, useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { confirmAction } from '../../utils/confirmAction';
 
@@ -6,20 +6,24 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const CONNECT_COOLDOWN_MS = 9000;
 
 const PERSONALITIES = [
-  { value: 'professional', label: '💼 Professionnel', desc: 'Ton formel, clair et structuré' },
-  { value: 'friendly',     label: '😊 Amical',        desc: 'Chaleureux, proche, naturel' },
-  { value: 'commercial',   label: '🚀 Commercial agressif', desc: 'Orienté conversion et vente' },
-  { value: 'support',      label: '🛠️ Support technique', desc: 'Patient, précis, étape par étape' },
+  { value: 'autonomous',  label: '🤖 Agent autonome', desc: 'Adapte son ton et sa manière de répondre au besoin et à l’émotion du client.' },
+  { value: 'professional', label: '💼 Agent professionnel', desc: 'Courtois, clair et fiable, avec un ton adapté au contexte.' },
+  { value: 'friendly',     label: '😊 Agent amical', desc: 'Chaleureux et naturel, avec des emojis utilisés avec modération.' },
+  { value: 'commercial',   label: '🤝 Agent conseiller commercial', desc: 'Présente les bénéfices et accompagne la décision sans pression.' },
+  { value: 'support',      label: '🛠️ Agent support technique', desc: 'Patient et méthodique, il guide le client étape par étape.' },
+  { value: 'empathetic',   label: '💛 Agent empathique', desc: 'À l’écoute et respectueux, notamment face aux préoccupations ou réclamations.' },
+  { value: 'concise',      label: '⚡ Agent concis et direct', desc: 'Va à l’essentiel et privilégie des réponses courtes et pratiques.' },
 ];
 
 export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, onResyncWhatsApp }) {
+  const personalityGroupId = useId();
   const [config, setConfig] = useState({
     bot_name: 'Botora',
     bot_info: '',
     bot_behavior: '',
     ia_enabled: false,
     response_delay_seconds: 15,
-    personality: 'professional',
+    personality: 'autonomous',
     sentiment_enabled: false,
     sentiment_alert: false,
     media_auto_reply: false,
@@ -274,7 +278,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
 
         <div className="field-group" style={{ marginBottom: 16 }}>
           <label>Personnalité du bot</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+          <div role="radiogroup" aria-label="Personnalité du bot" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
             {PERSONALITIES.map(p => {
               const isSelected = config.personality === p.value;
               return (
@@ -287,7 +291,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
                 }}>
                   <input
                     type="radio"
-                    name="personality"
+                    name={`personality-${personalityGroupId}`}
                     value={p.value}
                     checked={isSelected}
                     onChange={() => setConfig(c => ({ ...c, personality: p.value }))}
