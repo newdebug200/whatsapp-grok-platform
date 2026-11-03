@@ -6,6 +6,7 @@ const pathModule = require('path');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
+const { transcodeAudioToMp3 } = require('../services/mediaTranscoder');
 const {
   ensureCapacity,
   persistWhatsAppMedia,
@@ -70,14 +71,108 @@ async function findMediaMessageInChat(chat, message) {
   }
 }
 
+async function restoreMissingMedia(message) {
+  const client = whatsappManager.getClient(message.contact?.profile_id);
+  if (!client) return null;
+
+  let waMessage = null;
+  if (message.wa_msg_id && typeof client.getMessageById === 'function') {
+    try {
+      waMessage = await client.getMessageById(message.wa_msg_id);
+    } catch (error) {
+      console.warn('[Media] Récupération par identifiant WhatsApp impossible:', error.message);
+    }
+  }
+  if (!waMessage?.hasMedia && message.contact?.wa_id && typeof client.getChatById === 'function') {
+    let chat = null;
+    try {
+      chat = await client.getChatById(message.contact.wa_id);
+    } catch (error) {
+      console.warn('[Media] Ouverture de la discussion WhatsApp impossible:', error.message);
+    }
+    if (typeof chat?.fetchMessages === 'function') {
+      waMessage = await findMediaMessageInChat(chat, message);
+    } else {
+      const { Chat } = require('whatsapp-web.js');
+      chat = new Chat(client, { id: { _serialized: message.contact.wa_id } });
+      waMessage = await findMediaMessageInChat(chat, message);
+    }
+  }
+  if (!waMessage?.hasMedia) return null;
+
+  const storedMedia = await persistWhatsAppMedia(waMessage, prisma);
+  if (!storedMedia) return null;
+  try {
+    await prisma.message.update({
+      where: { id: message.id },
+      data: {
+        ...storedMedia,
+        ...(getWhatsAppMessageId(waMessage) ? { wa_msg_id: getWhatsAppMessageId(waMessage) } : {})
+      }
+    });
+  } catch (error) {
+    try { deleteStoredMedia(storedMedia.media_path); } catch (cleanupError) {
+      console.error('[Media] Nettoyage du média restauré impossible:', cleanupError.message);
+    }
+    throw error;
+  }
+  return storedMedia.media_path;
+}
+
 // ── Route PUBLIQUE — sert les fichiers médias (images, audio, vidéo, stickers) ──
 // Doit être AVANT authMiddleware car le navigateur ne peut pas envoyer de JWT dans <img src>
-router.get('/media/:filename', (req, res) => {
+router.get('/media/:filename', async (req, res) => {
   const filename = req.params.filename;
   if (!/^[\w\-\.]+$/.test(filename)) return res.status(400).json({ error: 'Nom de fichier invalide' });
-  const filePath = pathModule.join(__dirname, '../../uploads', filename);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Fichier introuvable' });
-  res.sendFile(filePath);
+  let filePath = pathModule.join(UPLOADS_DIR, filename);
+  try {
+    if (!fs.existsSync(filePath)) {
+      const message = await prisma.message.findFirst({
+        where: { media_path: filename },
+        select: {
+          id: true,
+          wa_msg_id: true,
+          media_path: true,
+          media_filename: true,
+          media_mime: true,
+          type: true,
+          direction: true,
+          created_at: true,
+          contact: { select: { wa_id: true, profile_id: true } }
+        }
+      });
+      if (!message) return res.status(404).json({ error: 'Fichier introuvable' });
+      const restoredPath = await restoreMissingMedia(message);
+      if (!restoredPath) {
+        return res.status(404).json({ error: 'Fichier introuvable et média WhatsApp indisponible' });
+      }
+      filePath = pathModule.join(UPLOADS_DIR, pathModule.basename(restoredPath));
+    }
+
+    if (!req.query.playback) return res.sendFile(filePath);
+    if (req.query.playback !== 'mp3') {
+      return res.status(400).json({ error: 'Format de lecture audio non pris en charge' });
+    }
+    if (!/\.(ogg|oga|opus)$/i.test(filePath)) {
+      return res.status(415).json({ error: 'Ce fichier audio ne nécessite pas de conversion' });
+    }
+
+    const converted = await transcodeAudioToMp3(filePath);
+    res.type('audio/mpeg');
+    return res.sendFile(converted.path, error => {
+      converted.cleanup().catch(cleanupError => {
+        console.error('[Media] Nettoyage du vocal converti impossible:', cleanupError.message);
+      });
+      if (error) {
+        console.error('[Media] Envoi du vocal converti impossible:', error.message);
+        if (!res.headersSent) res.status(error.statusCode || 500).json({ error: 'Lecture du vocal impossible' });
+      }
+    });
+  } catch (error) {
+    console.error('[Media] Traitement du média impossible:', error.message);
+    if (res.headersSent) return;
+    return res.status(500).json({ error: 'Traitement du média impossible' });
+  }
 });
 
 router.use(authMiddleware);

@@ -427,6 +427,10 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   const renderMedia = (msg) => {
     const src = msg.media_path ? `${API_URL}/messages/media/${msg.media_path}` : null;
     const type = msg.type;
+    const audioPlaybackSrc = src && (
+      /^(audio|application)\/ogg(?:$|;)/i.test(msg.media_mime || '')
+      || /\.(ogg|oga|opus)$/i.test(msg.media_path || '')
+    ) ? `${src}?playback=mp3` : src;
     const typeLabels = {
       image: 'Image',
       video: 'Vidéo',
@@ -448,7 +452,9 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
           </span>
           <span className="media-unavailable-copy">
             <strong>{filename}</strong>
-            <small>{failedMediaIds.has(msg.id) ? 'Fichier introuvable sur le serveur' : 'Pièce jointe indisponible'}</small>
+            <small>{failedMediaIds.has(msg.id)
+              ? (type === 'audio' || type === 'ptt' ? 'Lecture du fichier audio impossible' : 'Fichier introuvable sur le serveur')
+              : 'Pièce jointe indisponible'}</small>
           </span>
         </div>
       );
@@ -514,7 +520,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
               </a>
             </div>
             <audio controls className="media-audio-native" preload="metadata" onError={() => setFailedMediaIds(prev => new Set(prev).add(msg.id))}>
-              <source src={src} />
+              <source src={audioPlaybackSrc} type={audioPlaybackSrc === src ? msg.media_mime || undefined : 'audio/mpeg'} />
             </audio>
           </div>
         </div>
