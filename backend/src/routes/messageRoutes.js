@@ -6,7 +6,14 @@ const pathModule = require('path');
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
-const { ensureCapacity } = require('../services/mediaStorage');
+const {
+  ensureCapacity,
+  persistWhatsAppMedia,
+  deleteStoredMedia,
+  getWhatsAppMessageId,
+  findMatchingWhatsAppMediaMessage,
+  UPLOADS_DIR
+} = require('../services/mediaStorage');
 
 // ── Audio conversion helper (WebM → OGG Opus) ─────────────────────────────────
 async function convertWebmToOgg(base64Data) {
@@ -37,6 +44,32 @@ async function convertWebmToOgg(base64Data) {
   }
 }
 
+async function findMediaMessageInChat(chat, message) {
+  const targetTime = new Date(message.created_at).getTime();
+  let limit = 50;
+  let previousCount = -1;
+
+  while (true) {
+    const messages = await chat.fetchMessages({ limit });
+    const match = findMatchingWhatsAppMediaMessage(messages, {
+      type: message.type,
+      createdAt: message.created_at,
+      fromMe: message.direction === 'sent'
+    });
+    if (match) return match;
+
+    const oldestMessageTime = Number(messages[0]?.timestamp) * 1000;
+    if (!messages.length
+      || messages.length <= previousCount
+      || (Number.isFinite(oldestMessageTime) && oldestMessageTime <= targetTime - 2 * 60 * 1000)) {
+      return null;
+    }
+
+    previousCount = messages.length;
+    limit *= 2;
+  }
+}
+
 // ── Route PUBLIQUE — sert les fichiers médias (images, audio, vidéo, stickers) ──
 // Doit être AVANT authMiddleware car le navigateur ne peut pas envoyer de JWT dans <img src>
 router.get('/media/:filename', (req, res) => {
@@ -49,33 +82,82 @@ router.get('/media/:filename', (req, res) => {
 
 router.use(authMiddleware);
 
-// Le contenu des médias entrants n’est récupéré de WhatsApp qu’à la demande.
-// Les messages conservent seulement leur identifiant WhatsApp et leurs métadonnées.
+// Les anciens médias sans copie locale peuvent encore être récupérés à la demande.
 router.get('/media/message/:id', profileMiddleware, async (req, res) => {
+  let retrievalStage = 'chargement du message';
   try {
     const message = await prisma.message.findFirst({
-      where: { id: Number(req.params.id), wa_msg_id: { not: null }, contact: { profile_id: req.profileId } },
-      select: { wa_msg_id: true, media_filename: true, media_mime: true, type: true }
+      where: { id: Number(req.params.id), contact: { profile_id: req.profileId } },
+      select: {
+        id: true,
+        wa_msg_id: true,
+        media_path: true,
+        media_filename: true,
+        media_mime: true,
+        type: true,
+        created_at: true,
+        contact: { select: { wa_id: true } }
+      }
     });
     if (!message) return res.status(404).json({ error: 'Média introuvable' });
+    if (message.media_path) {
+      return res.sendFile(pathModule.join(UPLOADS_DIR, pathModule.basename(message.media_path)));
+    }
     const client = whatsappManager.getClient(req.profileId);
-    if (!client || typeof client.getMessageById !== 'function') return res.status(503).json({ error: 'WhatsApp doit être connecté pour récupérer ce média' });
-    const waMessage = await client.getMessageById(message.wa_msg_id);
+    if (!client) return res.status(503).json({ error: 'WhatsApp doit être connecté pour récupérer ce média' });
+
+    let waMessage = null;
+    if (message.wa_msg_id && typeof client.getMessageById === 'function') {
+      retrievalStage = 'recherche par identifiant WhatsApp';
+      try {
+        waMessage = await client.getMessageById(message.wa_msg_id);
+      } catch (error) {
+        console.warn('[Media] Récupération par identifiant WhatsApp impossible:', error.message);
+      }
+    }
+    if (!waMessage?.hasMedia && message.contact.wa_id && typeof client.getChatById === 'function') {
+      retrievalStage = 'ouverture de la discussion WhatsApp';
+      let searchCompleted = false;
+      let chat = null;
+      try {
+        chat = await client.getChatById(message.contact.wa_id);
+        if (typeof chat?.fetchMessages === 'function') {
+          retrievalStage = 'recherche du média dans les messages récents';
+          waMessage = await findMediaMessageInChat(chat, message);
+          searchCompleted = true;
+        }
+      } catch (error) {
+        console.warn('[Media] Ouverture classique de la discussion WhatsApp impossible:', error.message);
+      }
+      if (!searchCompleted) {
+        retrievalStage = 'recherche directe des messages récents WhatsApp';
+        const { Chat } = require('whatsapp-web.js');
+        chat = new Chat(client, { id: { _serialized: message.contact.wa_id } });
+        waMessage = await findMediaMessageInChat(chat, message);
+      }
+    }
     if (!waMessage?.hasMedia) return res.status(404).json({ error: 'Média WhatsApp indisponible' });
-    const media = await waMessage.downloadMedia();
-    if (!media?.data) return res.status(404).json({ error: 'Média vide ou expiré' });
-    const buffer = Buffer.from(media.data, 'base64');
-    await ensureCapacity(prisma, buffer.length);
-    const mime = media.mimetype || message.media_mime || 'application/octet-stream';
-    const filename = String(media.filename || message.media_filename || `whatsapp_${message.type || 'file'}`).replace(/[^\w. -]/g, '_');
-    const inline = /^(image|audio|video)\//i.test(mime);
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Length', buffer.length);
-    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${filename}"`);
-    res.send(buffer);
+    retrievalStage = 'téléchargement du média WhatsApp';
+    const storedMedia = await persistWhatsAppMedia(waMessage, prisma);
+    if (!storedMedia) return res.status(404).json({ error: 'Média vide, temporaire ou indisponible' });
+    try {
+      await prisma.message.update({
+        where: { id: message.id },
+        data: {
+          ...storedMedia,
+          ...(getWhatsAppMessageId(waMessage) ? { wa_msg_id: getWhatsAppMessageId(waMessage) } : {})
+        }
+      });
+    } catch (error) {
+      try { deleteStoredMedia(storedMedia.media_path); } catch (cleanupError) {
+        console.error('Nettoyage du média non enregistré impossible:', cleanupError.message);
+      }
+      throw error;
+    }
+    return res.sendFile(pathModule.join(UPLOADS_DIR, storedMedia.media_path));
   } catch (error) {
-    console.error('media on-demand error:', error.message);
-    res.status(500).json({ error: 'Récupération du média impossible' });
+    console.error(`[Media] Échec pendant ${retrievalStage}:`, error.stack || error.message);
+    res.status(500).json({ error: `Récupération impossible pendant ${retrievalStage}` });
   }
 });
 
@@ -253,7 +335,7 @@ router.get('/conversation/:contactId', profileMiddleware, async (req, res) => {
     const [messages, total] = await Promise.all([
       prisma.message.findMany({
         where: { contact_id: contact.id },
-        orderBy: { created_at: 'asc' },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
         skip,
         take: limit
       }),
@@ -297,6 +379,12 @@ router.post('/send', profileMiddleware, async (req, res) => {
     const contact = await prisma.contact.findFirst({
       where: { id: parseInt(contactId), profile_id: req.profileId }
     });
+    try {
+      await whatsappManager.backfillConversationMedia(req.profileId, contact);
+    } catch (error) {
+      console.error('[Media] Récupération des médias manquants de la discussion impossible:', error.message);
+    }
+
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
     if (!contact.wa_id) return res.status(400).json({ error: 'Contact sans ID WhatsApp' });
 
@@ -305,12 +393,21 @@ router.post('/send', profileMiddleware, async (req, res) => {
 
     const sentMsg = await whatsappManager.sendMessage(req.profileId, contact.wa_id, text, { fallbackPhone: contact.phone_number });
     const saved = await prisma.message.create({
-      data: { contact_id: contact.id, content: text, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
+      data: {
+        contact_id: contact.id,
+        content: text,
+        direction: 'sent',
+        type: 'text',
+        created_at: new Date(),
+        unread: false,
+        wa_msg_id: getWhatsAppMessageId(sentMsg)
+      }
     });
     whatsappManager.addToCache(req.profileId, contact.id, 'sent', text);
     res.json(saved);
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de l'envoi du message" });
+    messages.reverse();
   }
 });
 
@@ -410,14 +507,15 @@ router.post('/send-media', profileMiddleware, async (req, res) => {
     if (messageType === 'ptt') sendOptions.sendAudioAsVoice = true;
     if (messageType === 'document') sendOptions.sendMediaAsDocument = true;
 
-    const mediaResult = await whatsappManager.sendMedia(req.profileId, contact.wa_id, media, sendOptions, contact.phone_number);
-    const sentMsg = mediaResult.sent;
-
     const ext = (filename || 'file').split('.').pop().replace(/[^a-z0-9]/gi, '') || 'bin';
     const saveName = `sent_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
-    const savePath = pathModule.join(__dirname, '../../uploads', saveName);
+    uploadedFilePath = pathModule.join(UPLOADS_DIR, saveName);
     await ensureCapacity(prisma, Math.ceil(Buffer.byteLength(data, 'base64')));
-    fs.writeFileSync(savePath, Buffer.from(data, 'base64'));
+    fs.writeFileSync(uploadedFilePath, Buffer.from(data, 'base64'), { flag: 'wx' });
+
+    const mediaResult = await whatsappManager.sendMedia(req.profileId, contact.wa_id, media, sendOptions, contact.phone_number);
+    const sentMsg = mediaResult.sent;
+    whatsappAccepted = true;
 
     const type = messageType || (
       mimeType.startsWith('image') ? 'image' :
@@ -428,6 +526,8 @@ router.post('/send-media', profileMiddleware, async (req, res) => {
       (type === 'ptt' || type === 'audio') ? '[Audio]' : '[Document]';
 
     const saved = await prisma.message.create({
+  let uploadedFilePath = null;
+  let whatsappAccepted = false;
       data: {
         contact_id: contact.id,
         content: contentLabel,
@@ -461,3 +561,13 @@ router.delete('/memory/:contactId', profileMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+        wa_msg_id: getWhatsAppMessageId(sentMsg),
+        media_filename: filename || null,
+        media_mime: mimeType || null,
+    if (uploadedFilePath && !whatsappAccepted) {
+      try { fs.unlinkSync(uploadedFilePath); } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') {
+          console.error('[Media] Nettoyage du média non envoyé impossible:', cleanupError.message);
+        }
+      }
+    }

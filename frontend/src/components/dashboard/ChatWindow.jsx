@@ -5,6 +5,7 @@ import { fr, enUS } from 'date-fns/locale';
 import { getContactDisplayName, getContactInitial } from '../../utils/contactDisplay';
 import { useLanguage } from '../../context/LanguageContext';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const MEDIA_MESSAGE_TYPES = new Set(['image', 'video', 'audio', 'ptt', 'document', 'file', 'sticker']);
 
 const EMOJI_CATEGORIES = {
   '😀': ['😀','😂','🥰','😍','😊','😎','🤔','😅','😭','🥺','😤','😴','🤗','😇','🥳','😏','🙄','😮','😈','🤭','🫠','😬','🤩','🥹','😱'],
@@ -57,8 +58,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   const [mediaModal, setMediaModal] = useState(null);
-  const [mediaUrls, setMediaUrls] = useState({});
-  const [loadingMediaId, setLoadingMediaId] = useState(null);
+  const [failedMediaIds, setFailedMediaIds] = useState(() => new Set());
   const [sendingMedia, setSendingMedia] = useState(false);
   const [recordPhase, setRecordPhase] = useState('idle');
   const [recordDuration, setRecordDuration] = useState(0);
@@ -112,7 +112,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   useEffect(() => {
     if (socket && contact) {
       const handler = (msg) => {
-        if (msg.from === contact.phone_number) loadMessages(contact.id);
+        if (msg.contactId === contact.id || msg.from === contact.phone_number) loadMessages(contact.id);
       };
       socket.on('new-message', handler);
       return () => socket.off('new-message', handler);
@@ -404,41 +404,53 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
 
   const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+\.[^\s]+)/gi;
 
-  const loadMediaOnDemand = async (msg, download = false) => {
-    if (!msg?.id || loadingMediaId === msg.id) return;
-    setLoadingMediaId(msg.id);
+  const downloadMediaFile = async (msg) => {
+    if (!msg?.media_path) return;
     try {
-      const response = await axios.get(`${API_URL}/messages/media/message/${msg.id}`, { responseType: 'blob' });
-      const url = URL.createObjectURL(response.data);
-      setMediaUrls(prev => ({ ...prev, [msg.id]: url }));
-      if (download) {
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = msg.media_filename || `whatsapp_${msg.type || 'file'}`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-      }
+      const response = await axios.get(`${API_URL}/messages/media/${encodeURIComponent(msg.media_path)}`, {
+        responseType: 'blob'
+      });
+      const objectUrl = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = msg.media_filename || `botora-${msg.type || 'media'}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch (error) {
-      setSendError(error.response?.data?.error || 'Ce média n’est plus disponible dans WhatsApp.');
-    } finally {
-      setLoadingMediaId(null);
+      setSendError(error.response?.data?.error || 'Le téléchargement du fichier a échoué.');
+      window.setTimeout(() => setSendError(''), 4000);
     }
   };
 
   const renderMedia = (msg) => {
-    const src = msg.media_path
-      ? `${API_URL}/messages/media/${msg.media_path}`
-      : mediaUrls[msg.id];
+    const src = msg.media_path ? `${API_URL}/messages/media/${msg.media_path}` : null;
     const type = msg.type;
+    const typeLabels = {
+      image: 'Image',
+      video: 'Vidéo',
+      audio: 'Audio',
+      ptt: 'Message vocal',
+      sticker: 'Sticker',
+      document: 'Document',
+      file: 'Fichier'
+    };
+    const filename = msg.media_filename && !/^whatsapp_(image|ptt|audio|video|document|sticker|file)$/i.test(msg.media_filename)
+      ? msg.media_filename
+      : typeLabels[type] || 'Pièce jointe';
 
-    if (!src) {
-      const isDocument = type === 'document' || type === 'file';
+    if (!src || failedMediaIds.has(msg.id)) {
       return (
-        <button className="media-badge-fallback file" onClick={() => loadMediaOnDemand(msg, isDocument)} disabled={loadingMediaId === msg.id}>
-          <span>{isDocument ? '📎' : type === 'image' ? '📷' : type === 'video' ? '🎥' : '🎵'}</span>
-          <span>{loadingMediaId === msg.id ? 'Récupération…' : isDocument ? 'Télécharger le fichier' : 'Charger le média'}</span>
-        </button>
+        <div className="media-unavailable-card" role="status">
+          <span className="media-file-icon">
+            {type === 'image' ? '▧' : type === 'video' ? '▶' : type === 'sticker' ? '✳' : type === 'document' || type === 'file' ? '↧' : '♫'}
+          </span>
+          <span className="media-unavailable-copy">
+            <strong>{filename}</strong>
+            <small>{failedMediaIds.has(msg.id) ? 'Fichier introuvable sur le serveur' : 'Pièce jointe indisponible'}</small>
+          </span>
+        </div>
       );
     }
 
@@ -449,8 +461,8 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
             src={src}
             alt="Sticker"
             className="media-sticker"
-            onClick={() => setMediaModal({ src, type: 'sticker' })}
-            onError={e => { e.target.style.display = 'none'; }}
+            onClick={() => setMediaModal({ src, type: 'sticker', message: msg })}
+            onError={() => setFailedMediaIds(prev => new Set(prev).add(msg.id))}
             style={{ cursor: 'zoom-in' }}
           />
         </div>
@@ -459,46 +471,49 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
 
     if (type === 'image') {
       return (
-        <div className="media-image-wrap" onClick={() => setMediaModal({ src, type: 'image' })}>
+        <div className="media-image-wrap" onClick={() => setMediaModal({ src, type: 'image', message: msg })}>
           <img
             src={src}
-            alt="Image"
+            alt={filename}
             className="media-image"
-            onError={e => { e.target.style.display = 'none'; }}
+            onError={() => setFailedMediaIds(prev => new Set(prev).add(msg.id))}
           />
           <div className="media-image-overlay">
             <svg viewBox="0 0 24 24" fill="white" width="22" height="22">
               <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
             </svg>
           </div>
+          <a
+            href={src}
+            download={filename}
+            className="media-download-btn"
+            title="Télécharger l’image"
+            aria-label="Télécharger l’image"
+            onClick={e => { e.preventDefault(); e.stopPropagation(); downloadMediaFile(msg); }}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17">
+              <path d="M5 20h14v-2H5v2zM11 3h2v8h3l-4 4-4-4h3V3z"/>
+            </svg>
+          </a>
         </div>
       );
     }
 
     if (type === 'ptt' || type === 'audio') {
       const isPtt = type === 'ptt';
-      const bars = [3, 5, 8, 4, 7, 9, 5, 3, 6, 8, 4, 7, 9, 5, 3];
       return (
         <div className="media-audio-card">
-          <div className="media-audio-icon">
-            {isPtt ? (
-              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-              </svg>
-            )}
-          </div>
           <div className="media-audio-body">
-            <div className="media-audio-label">{isPtt ? 'Message vocal' : 'Audio'}</div>
-            <div className="media-audio-waves">
-              {bars.map((h, i) => (
-                <span key={i} className="media-audio-bar" style={{ height: h * 2.4 + 'px' }} />
-              ))}
+            <div className="media-audio-heading">
+              <span className="media-audio-icon" aria-hidden="true">{isPtt ? '♫' : '♪'}</span>
+              <span className="media-audio-label">{filename || (isPtt ? 'Message vocal' : 'Audio')}</span>
+              <a href={src} download={filename} className="media-audio-download" title="Télécharger le fichier audio" aria-label="Télécharger le fichier audio" onClick={e => { e.preventDefault(); downloadMediaFile(msg); }}>
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                  <path d="M5 20h14v-2H5v2zM11 3h2v8h3l-4 4-4-4h3V3z"/>
+                </svg>
+              </a>
             </div>
-            <audio controls className="media-audio-native">
+            <audio controls className="media-audio-native" preload="metadata" onError={() => setFailedMediaIds(prev => new Set(prev).add(msg.id))}>
               <source src={src} />
             </audio>
           </div>
@@ -509,11 +524,11 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
     if (type === 'video') {
       return (
         <div className="media-video-wrap" style={{ position: 'relative' }}>
-          <video controls className="media-video" preload="metadata">
+          <video controls className="media-video" preload="metadata" onError={() => setFailedMediaIds(prev => new Set(prev).add(msg.id))}>
             <source src={src} />
           </video>
           <button
-            onClick={e => { e.stopPropagation(); setMediaModal({ src, type: 'video' }); }}
+            onClick={e => { e.stopPropagation(); setMediaModal({ src, type: 'video', message: msg }); }}
             title="Agrandir"
             style={{
               position: 'absolute', top: 6, right: 6,
@@ -526,6 +541,18 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
               <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
             </svg>
           </button>
+          <a
+            href={src}
+            download={filename}
+            className="media-download-btn media-video-download-btn"
+            title="Télécharger la vidéo"
+            aria-label="Télécharger la vidéo"
+            onClick={e => { e.preventDefault(); e.stopPropagation(); downloadMediaFile(msg); }}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17">
+              <path d="M5 20h14v-2H5v2zM11 3h2v8h3l-4 4-4-4h3V3z"/>
+            </svg>
+          </a>
         </div>
       );
     }
@@ -533,6 +560,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
     if (type === 'document') {
       const ext = (msg.media_filename || msg.media_path || '').split('.').pop().toLowerCase();
       const extLabel = ext ? ext.toUpperCase().slice(0, 4) : 'DOC';
+      const fileName = filename;
       const extColors = {
         pdf: '#e53e3e', doc: '#2b6cb0', docx: '#2b6cb0',
         xls: '#276749', xlsx: '#276749', ppt: '#c05621', pptx: '#c05621',
@@ -540,12 +568,12 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
       };
       const color = extColors[ext] || '#553c9a';
       return (
-        <a href={src} download target="_blank" rel="noopener noreferrer" className="media-document-card">
+        <a href={src} download target="_blank" rel="noopener noreferrer" className="media-document-card" onClick={e => { e.preventDefault(); downloadMediaFile(msg); }}>
           <div className="media-document-icon" style={{ background: color }}>
             <span className="media-document-ext">{extLabel}</span>
           </div>
           <div className="media-document-info">
-            <div className="media-document-name">Document {extLabel}</div>
+            <div className="media-document-name" title={fileName}>{fileName}</div>
             <div className="media-document-dl">
               <svg viewBox="0 0 24 24" fill="currentColor" width="11" height="11" style={{ marginRight: 3 }}>
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/>
@@ -558,9 +586,9 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
     }
 
     return (
-      <a href={src} download target="_blank" rel="noopener noreferrer" className="media-badge-fallback file">
+      <a href={src} download={msg.media_filename || true} target="_blank" rel="noopener noreferrer" className="media-document-card" onClick={e => { e.preventDefault(); downloadMediaFile(msg); }}>
         <span>📎</span>
-        <span>Télécharger le fichier</span>
+        <span className="media-document-name">{filename}</span>
       </a>
     );
   };
@@ -660,7 +688,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
             download
             target="_blank"
             rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
+            onClick={e => { e.preventDefault(); e.stopPropagation(); downloadMediaFile(mediaModal.message); }}
             style={{
               position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
               background: 'rgba(255,255,255,0.15)', color: '#fff', padding: '8px 20px',
@@ -769,6 +797,9 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
             const isHovered = hoveredMsg === msg.id;
             const menuOpen = openMenu === msg.id;
             const isDeleting = deletingMsg === msg.id;
+            const showMediaCaption = msg.content
+              && !/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content)
+              && msg.content.trim() !== msg.media_filename?.trim();
 
             return (
               <React.Fragment key={msg.id}>
@@ -811,32 +842,22 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
                     </div>
                   )}
 
-                  <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'}`}>
+                  <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'} ${msg.media_path || MEDIA_MESSAGE_TYPES.has(msg.type) ? 'has-media' : ''}`}>
                     <div className="message-text">
-                      {msg.media_path || msg.wa_msg_id ? (
+                      {msg.media_path || msg.wa_msg_id || MEDIA_MESSAGE_TYPES.has(msg.type) ? (
                         <>
                           {renderMedia(msg)}
-                          {msg.content && !/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) && (
+                          {showMediaCaption && (
                             <div className="message-caption">{renderText(msg.content)}</div>
                           )}
                         </>
                       ) : /^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
-                        <span className={`media-badge-fallback ${
-                          msg.content === '[Image]' ? 'image' :
-                          msg.content === '[Vidéo]' ? 'video' :
-                          msg.content === '[Audio]' ? 'audio' :
-                          msg.content === '[Document]' ? 'document' :
-                          msg.content === '[Sticker]' ? 'sticker' : 'file'
-                        }`}>
-                          <span className="media-badge-icon">
-                            {msg.content === '[Image]' ? '📷' :
-                             msg.content === '[Vidéo]' ? '🎥' :
-                             msg.content === '[Audio]' ? '🎵' :
-                             msg.content === '[Document]' ? '📄' :
-                             msg.content === '[Sticker]' ? '🎭' : '📎'}
+                        <span className="media-unavailable-card">
+                          <span className="media-file-icon">↧</span>
+                          <span className="media-unavailable-copy">
+                            <strong>{msg.content.replace(/[\[\]]/g, '')}</strong>
+                            <small>Pièce jointe indisponible</small>
                           </span>
-                          <span>{msg.content.replace(/[\[\]]/g, '')}</span>
-                          <span className="media-badge-unavail">· non disponible</span>
                         </span>
                       ) : renderText(msg.content)}
                     </div>

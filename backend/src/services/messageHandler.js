@@ -1,6 +1,7 @@
 const axios = require('axios');
 const centralSync = require('./centralSync');
 const { resolveContactName } = require('../utils/contactDisplay');
+const { persistWhatsAppMedia, deleteStoredMedia, getWhatsAppMessageId } = require('./mediaStorage');
 const PERSONALITY_PROMPTS = {
   professional: "Tu communiques de manière professionnelle, formelle et courtoise. Tu utilises un langage soutenu.",
   friendly: "Tu communiques de manière amicale, chaleureuse et décontractée. Tu tutois le client et utilises des emojis avec modération.",
@@ -147,10 +148,18 @@ class MessageHandler {
       } else {
         const updates = {};
         if (contactName && dbContact.name !== contactName) updates.name = contactName;
-        if (!dbContact.wa_id && waId) updates.wa_id = waId;
+        if (waId && dbContact.wa_id !== waId) updates.wa_id = waId;
         if (Object.keys(updates).length > 0) {
           dbContact = await prisma.contact.update({ where: { id: dbContact.id }, data: updates });
         }
+      }
+
+      const waMessageId = getWhatsAppMessageId(message);
+      if (waMessageId) {
+        const existingMessage = await prisma.message.findFirst({
+          where: { contact_id: dbContact.id, wa_msg_id: waMessageId }
+        });
+        if (existingMessage) return;
       }
 
       const mediaTypeLabel = message.hasMedia
@@ -163,24 +172,45 @@ class MessageHandler {
         ? (message.body || `[${mediaTypeLabel}]`)
         : (message.body || '');
 
-      // ── Save message with unread=true (sentiment is filled in later, only if the bot actually responds) ──
-      await prisma.message.create({
-        data: {
-          contact_id: dbContact.id,
-          content: messageContent,
-          direction: 'received',
-          type: message.type || 'text',
-          created_at: Number.isFinite(Number(message.timestamp))
-            ? new Date(Number(message.timestamp) * 1000)
-            : new Date(),
-          unread: true,
-          // Le média WhatsApp est téléchargé uniquement sur demande via son wa_msg_id.
-          media_path: null,
-          wa_msg_id: message.id?._serialized || null,
-          media_filename: message._data?.filename || null,
-          media_mime: message._data?.mimetype || null
+      let storedMedia = null;
+      if (message.hasMedia) {
+        try {
+          storedMedia = await persistWhatsAppMedia(message, prisma);
+          if (!storedMedia) {
+            console.warn(`[WA] Média entrant non téléchargé (type=${message.type}, identifiant=${getWhatsAppMessageId(message) ? 'présent' : 'absent'})`);
+          }
+        } catch (error) {
+          console.error('[WA] Stockage du média entrant impossible:', error.message);
         }
-      }).catch((err) => console.error('[WA] Enregistrement message entrant:', err.message));
+      }
+
+      // ── Save message with unread=true (sentiment is filled in later, only if the bot actually responds) ──
+      try {
+        await prisma.message.create({
+          data: {
+            contact_id: dbContact.id,
+            content: messageContent,
+            direction: 'received',
+            type: message.type || 'text',
+            created_at: Number.isFinite(Number(message.timestamp))
+              ? new Date(Number(message.timestamp) * 1000)
+              : new Date(),
+            unread: true,
+            media_path: storedMedia?.media_path || null,
+            wa_msg_id: waMessageId,
+            media_filename: storedMedia?.media_filename || message._data?.filename || null,
+            media_mime: storedMedia?.media_mime || message._data?.mimetype || null
+          }
+        });
+      } catch (error) {
+        if (storedMedia?.media_path) {
+          try { deleteStoredMedia(storedMedia.media_path); } catch (cleanupError) {
+            console.error('[WA] Nettoyage du média non enregistré impossible:', cleanupError.message);
+          }
+        }
+        console.error('[WA] Enregistrement message entrant:', error.message);
+        return;
+      }
 
       // ── Increment unread count before notifying the UI ──
       await prisma.contact.update({
@@ -190,6 +220,13 @@ class MessageHandler {
 
       waManager.addToCache(profileId, dbContact.id, 'received', messageContent);
 
+      waManager.emitNewMessage?.(profileId, {
+        contactId: dbContact.id,
+        from: phoneNumber,
+        body: messageContent,
+        timestamp: message.timestamp,
+        messageId: waMessageId
+      });
       const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
       // Les groupes sont traités comme les discussions : ils n’existent ici
       // qu’après un message réel, mais l’IA reste désactivée par défaut.
@@ -259,9 +296,7 @@ class MessageHandler {
       }
 
       if (message.hasMedia) {
-        // Botora ne stocke plus automatiquement les fichiers reçus. Un fichier
-        // fait passer la discussion en mode Humain, sauf si le réglage de réponse
-        // automatique aux médias est explicitement activé.
+        // Les médias sont archivés avant le traitement des réponses automatiques.
         if (!botConfig?.media_auto_reply) {
           await prisma.contact.update({ where: { id: dbContact.id }, data: { ia_paused: true } }).catch(() => {});
         }

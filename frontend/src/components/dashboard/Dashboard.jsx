@@ -148,7 +148,8 @@ export default function Dashboard() {
     const isOnThisConversation = (
       activePanelRef.current === 'chat' &&
       selectedContactRef.current &&
-      msg?.from === selectedContactRef.current?.phone_number
+      (msg?.contactId === selectedContactRef.current?.id ||
+        msg?.from === selectedContactRef.current?.phone_number)
     );
     if (!isOnThisConversation) setUnreadCount(c => c + 1);
     if (soundEnabledRef.current) playNotifSound();
