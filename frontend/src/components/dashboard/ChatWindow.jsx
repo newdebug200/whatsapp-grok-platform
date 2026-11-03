@@ -55,6 +55,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
+  const [handoffNotice, setHandoffNotice] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   const [mediaModal, setMediaModal] = useState(null);
@@ -122,6 +123,17 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   useEffect(() => {
     if (autoScroll) scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (!socket || !contact) return undefined;
+    const handler = (event) => {
+      if (Number(event.contactId) !== Number(contact.id)) return;
+      setIaPaused(true);
+      setHandoffNotice('Un conseiller humain doit prendre le relais. Les réponses automatiques sont suspendues.');
+    };
+    socket.on('human-handoff', handler);
+    return () => socket.off('human-handoff', handler);
+  }, [socket, contact]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -856,6 +868,13 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
                           {renderMedia(msg)}
                           {showMediaCaption && (
                             <div className="message-caption">{renderText(msg.content)}</div>
+      {handoffNotice && (
+        <div className="chat-handoff-notice" role="status">
+          <span>{handoffNotice}</span>
+          <button type="button" onClick={() => setHandoffNotice('')} aria-label="Fermer la notification">×</button>
+        </div>
+      )}
+
                           )}
                         </>
                       ) : /^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (

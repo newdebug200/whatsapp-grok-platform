@@ -992,6 +992,65 @@
   margin-bottom: 2px;
 }
 .message-row.sent  { flex-direction: row; justify-content: flex-end; }
+.chat-handoff-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  color: #664d03;
+  background: #fff3cd;
+  border-bottom: 1px solid #ffecb5;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.chat-handoff-notice button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.human-handoff-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(460px, calc(100vw - 32px));
+  padding: 14px 16px;
+  color: #173b32;
+  background: #e8f5ee;
+  border: 1px solid #b7dfc9;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.human-handoff-toast > div { display: flex; flex-direction: column; gap: 4px; }
+.human-handoff-toast strong { font-size: 13px; }
+.human-handoff-toast span { font-size: 12px; line-height: 1.4; }
+.human-handoff-toast button {
+  padding: 7px 10px;
+  color: #fff;
+  background: #087f5b;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.human-handoff-toast .human-handoff-dismiss {
+  padding: 2px 4px;
+  color: #365b4e;
+  background: transparent;
+  font-size: 20px;
+}
+
 .message-row.received { flex-direction: row; justify-content: flex-start; }
 .message-row.system { justify-content: center; }
 
@@ -2294,6 +2353,9 @@
 
 .app-navigation-sub-icon {
   width: 20px;
+[data-theme="dark"] .chat-handoff-notice { color: #f2d896; background: #453b20; border-bottom-color: #65562c; }
+[data-theme="dark"] .human-handoff-toast { color: #d7f0e2; background: #18382c; border-color: #315d49; }
+[data-theme="dark"] .human-handoff-toast .human-handoff-dismiss { color: #d7f0e2; }
   height: 20px;
   display: inline-flex;
   align-items: center;

@@ -66,6 +66,7 @@ export default function Dashboard() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('botora-notif-sound') !== 'off');
   const [botError, setBotError] = useState(null);
+  const [handoffAlert, setHandoffAlert] = useState(null);
   const [platformConfig, setPlatformConfig] = useState({});
   const [creditBalance, setCreditBalance] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -239,6 +240,25 @@ export default function Dashboard() {
     s.on('bot-error', (data) => {
       setBotError(data);
       setTimeout(() => setBotError(null), 8000);
+    });
+
+    s.on('human-handoff', (data) => {
+      if (data.profileId && Number(data.profileId) !== Number(activeProfileRef.current?.id)) return;
+      setHandoffAlert(data);
+      setContacts(prev => prev.map(contact => Number(contact.id) === Number(data.contactId)
+        ? { ...contact, ia_paused: true }
+        : contact));
+      setSelectedContact(prev => prev && Number(prev.id) === Number(data.contactId)
+        ? { ...prev, ia_paused: true }
+        : prev);
+      loadContactsForProfile(activeProfileRef.current?.id, s);
+      if (document.hidden && Notification.permission === 'granted') {
+        new Notification('Botora — Reprise humaine requise', {
+          body: `Un conseiller doit reprendre la conversation avec ${data.contactName || 'un contact'}.`,
+          icon: '/icons/icon-96.png',
+          silent: false
+        });
+      }
     });
 
     s.on('reconnect', () => {
@@ -447,6 +467,28 @@ export default function Dashboard() {
     : 'Aucun profil';
 
   const noProfile = !activeProfile;
+  const humanHandoffToast = handoffAlert && (
+    <div className="human-handoff-toast" role="status">
+      <div>
+        <strong>Reprise humaine requise</strong>
+        <span>{handoffAlert.contactName || 'Un contact'} attend un conseiller. Les réponses automatiques sont suspendues.</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          const handoffContact = contacts.find(item => Number(item.id) === Number(handoffAlert.contactId));
+          if (handoffContact) {
+            handleSelectContact({ ...handoffContact, ia_paused: true });
+            setActivePanel('chat');
+          }
+          setHandoffAlert(null);
+        }}
+      >
+        Ouvrir
+      </button>
+      <button type="button" className="human-handoff-dismiss" onClick={() => setHandoffAlert(null)} aria-label="Fermer">×</button>
+    </div>
+  );
 
   if (activePanel === 'home') {
     return (
@@ -467,6 +509,7 @@ export default function Dashboard() {
           }}
           onSelectContact={(contact) => { handleSelectContact(contact); setActivePanel('chat'); }}
         />
+        {humanHandoffToast}
         {botError && (
           <div style={{
             position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
@@ -882,6 +925,8 @@ export default function Dashboard() {
       {(showMenu || showProfileMenu) && (
         <div className="overlay" onClick={() => { setShowMenu(false); setShowProfileMenu(false); }} />
       )}
+
+      {humanHandoffToast}
 
       {botError && (
         <div style={{
