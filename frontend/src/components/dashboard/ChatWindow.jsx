@@ -797,6 +797,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
             const isHovered = hoveredMsg === msg.id;
             const menuOpen = openMenu === msg.id;
             const isDeleting = deletingMsg === msg.id;
+            const hasMediaAttachment = Boolean(msg.media_path) || MEDIA_MESSAGE_TYPES.has(msg.type);
             const showMediaCaption = msg.content
               && !/^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content)
               && msg.content.trim() !== msg.media_filename?.trim();
@@ -842,9 +843,9 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
                     </div>
                   )}
 
-                  <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'} ${msg.media_path || MEDIA_MESSAGE_TYPES.has(msg.type) ? 'has-media' : ''}`}>
+                  <div className={`message-bubble ${isSent ? 'sent' : isSystem ? 'system' : 'received'} ${hasMediaAttachment ? 'has-media' : ''}`}>
                     <div className="message-text">
-                      {msg.media_path || msg.wa_msg_id || MEDIA_MESSAGE_TYPES.has(msg.type) ? (
+                      {hasMediaAttachment ? (
                         <>
                           {renderMedia(msg)}
                           {showMediaCaption && (
