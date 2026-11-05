@@ -75,10 +75,10 @@ export default function FAQManager() {
 
   return (
     <section className="keyword-replies-panel legacy-replies-page">
-      <div className="keyword-replies-header"><div><p>Les FAQ sont utilisées par le bot pour répondre aux questions fréquentes.</p></div></div>
+      <div className="keyword-replies-header"><div><p>Les FAQ sont utilisées par l’agent pour répondre aux questions fréquentes.</p></div></div>
 
       <form className="keyword-replies-form" onSubmit={handleSubmit}>
-        <div className="keyword-replies-form-heading"><div><span className="keyword-replies-section-label">Nouvelle FAQ</span><h3>{editingId ? 'Modifier la FAQ' : 'Créer une FAQ'}</h3><p>Ajoutez une question fréquente et la réponse que le bot doit utiliser.</p></div><span className="keyword-replies-form-badge">{editingId ? 'Modification' : 'Disponible'}</span></div>
+        <div className="keyword-replies-form-heading"><div><span className="keyword-replies-section-label">Nouvelle FAQ</span><h3>{editingId ? 'Modifier la FAQ' : 'Créer une FAQ'}</h3><p>Ajoutez une question fréquente et la réponse que l’agent doit utiliser.</p></div><span className="keyword-replies-form-badge">{editingId ? 'Modification' : 'Disponible'}</span></div>
         <div className="keyword-replies-fields">
         <label><span>Question</span><small>La question à reconnaître</small>
           <input

@@ -1,0 +1,57 @@
+{
+  "projectType": "server",
+  "setup": [
+    {
+      "command": "npm",
+      "args": ["ci"],
+      "timeoutSeconds": 600
+    },
+    {
+      "command": "npx",
+      "args": ["prisma", "generate"],
+      "timeoutSeconds": 180
+    },
+    {
+      "command": "node",
+      "args": ["setup-db.js"],
+      "env": {
+        "DATABASE_URL": "file:../.tsupgrader/runtime-validation/runtime.db"
+      },
+      "timeoutSeconds": 120
+    }
+  ],
+  "assertions": [
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": ["test"],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "prisma-schema-valid",
+      "kind": "process",
+      "command": "npx",
+      "args": ["prisma", "validate"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 120
+    },
+    {
+      "name": "backend-healthz-200",
+      "kind": "http-probe",
+      "startCommand": "npm",
+      "startArgs": ["run", "start"],
+      "env": {
+        "PORT": "3002",
+        "DATABASE_URL": "file:../.tsupgrader/runtime-validation/runtime.db"
+      },
+      "url": "http://127.0.0.1:3002/api/healthz",
+      "verificationMethod": "http-status",
+      "expected": "200",
+      "timeoutSeconds": 90
+    }
+  ]
+}

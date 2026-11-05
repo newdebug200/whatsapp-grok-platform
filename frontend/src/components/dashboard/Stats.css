@@ -177,7 +177,8 @@
 /* ===== SUMMARY ROW ===== */
 .stats-summary-row {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 }
 
 .summary-item {
@@ -194,8 +195,12 @@
   flex-shrink: 0;
 }
 
-.received-dot { background: #34b7f1; }
-.sent-dot { background: #25d366; }
+.ai-bar { background: #25d366; }
+.campaign-bar { background: #667eea; }
+.manual-bar { background: #f6c90e; }
+.automation-bar { background: #128c7e; }
+.whatsapp-bar { background: #8e44ad; }
+.unknown-bar { background: #9aa5ae; }
 
 .summary-label {
   color: #667781;
@@ -257,13 +262,6 @@
   border-radius: 0;
 }
 
-.sent-bar     { background: #25d366; }
-.received-bar { background: #34b7f1; }
-
-.chart-bar-stack .sent-bar:first-child {
-  border-radius: 4px 4px 0 0;
-}
-
 .chart-label {
   font-size: 10px;
   color: #8696a0;
@@ -281,6 +279,7 @@
 
 .chart-legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   font-size: 11px;
   color: #667781;

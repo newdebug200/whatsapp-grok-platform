@@ -5,6 +5,251 @@ const { test } = require('node:test');
 const whatsappManager = require('./whatsappManager');
 const centralSync = require('./centralSync');
 
+test('syncs existing WhatsApp groups and their recent messages for the groups filter', async (t) => {
+  const originalPrisma = whatsappManager.prisma;
+  const originalIO = whatsappManager.io;
+  const originalIsSyncActive = whatsappManager._isSyncActive;
+  const originalResolveName = whatsappManager._resolveChatContactName;
+  const upsertedContacts = [];
+  const savedMessages = [];
+  const emittedEvents = [];
+  const groupChat = {
+    isGroup: true,
+    id: { _serialized: '12345-67890@g.us' },
+    isArchived: false,
+    pinned: true,
+    fetchMessages: async ({ limit }) => {
+      assert.equal(limit, 50);
+      return [{
+        id: { _serialized: 'group-message-id' },
+        body: 'Recent group message',
+        type: 'chat',
+        timestamp: 1_798_000_000,
+        fromMe: false,
+        hasMedia: false
+      }];
+    }
+  };
+  const client = {
+    getChats: async () => [
+      { isGroup: false, id: { _serialized: '123456789@c.us' } },
+      groupChat
+    ]
+  };
+
+  t.after(() => {
+    whatsappManager.prisma = originalPrisma;
+    whatsappManager.io = originalIO;
+    whatsappManager._isSyncActive = originalIsSyncActive;
+    whatsappManager._resolveChatContactName = originalResolveName;
+  });
+
+  whatsappManager._isSyncActive = () => true;
+  whatsappManager._resolveChatContactName = async () => 'Botora Test Group';
+  whatsappManager.prisma = {
+    contact: {
+      upsert: async (args) => {
+        upsertedContacts.push(args);
+        return { id: 45 };
+      }
+    },
+    message: {
+      findFirst: async () => null,
+      create: async (args) => { savedMessages.push(args); }
+    }
+  };
+  whatsappManager.io = {
+    to: (room) => ({
+      emit: (event, payload) => emittedEvents.push({ room, event, payload })
+    })
+  };
+
+  await whatsappManager._syncGroupConversations(client, 7, 12, {});
+
+  assert.equal(upsertedContacts.length, 1);
+  assert.equal(upsertedContacts[0].where.profile_id_phone_number.phone_number, 'group_12345-67890');
+  assert.equal(upsertedContacts[0].create.name, 'Botora Test Group');
+  assert.equal(upsertedContacts[0].create.is_favorite, true);
+  assert.equal(savedMessages.length, 1);
+  assert.equal(savedMessages[0].data.contact_id, 45);
+  assert.equal(savedMessages[0].data.content, 'Recent group message');
+  assert.equal(savedMessages[0].data.unread, false);
+  assert.deepEqual(emittedEvents[0], {
+    room: 'account_12',
+    event: 'sync-complete',
+    payload: {
+      profileId: 7,
+      syncedChats: 1,
+      syncedMessages: 1,
+      message: 'Groupes WhatsApp synchronisés.'
+    }
+  });
+});
+
+test('matches legacy messages without WhatsApp IDs so their media can be backfilled', async (t) => {
+  const originalPrisma = whatsappManager.prisma;
+  const lookups = [];
+  const legacyMessage = { id: 91, wa_msg_id: null, media_path: null };
+  t.after(() => {
+    whatsappManager.prisma = originalPrisma;
+  });
+
+  whatsappManager.prisma = {
+    message: {
+      findFirst: async ({ where }) => {
+        lookups.push(where);
+        return lookups.length === 2 ? legacyMessage : null;
+      }
+    }
+  };
+
+  const createdAt = new Date('2026-11-02T15:49:12.000Z');
+  const found = await whatsappManager._findSyncedMessage(7, {
+    id: { _serialized: 'wa-message-91' }
+  }, 'received', '[Image]', createdAt);
+
+  assert.equal(found, legacyMessage);
+  assert.equal(lookups[0].wa_msg_id, 'wa-message-91');
+  assert.equal(lookups[1].wa_msg_id, null);
+  assert.equal(lookups[1].direction, 'received');
+  assert.equal(lookups[1].content, '[Image]');
+  assert.equal(lookups[1].created_at.gte.getTime(), createdAt.getTime() - 120000);
+});
+
+test('backfills missing image and audio files when their conversation is opened', async (t) => {
+  const originalPrisma = whatsappManager.prisma;
+  const originalGetClient = whatsappManager.getClient;
+  const originalPersist = whatsappManager._persistWhatsAppMedia;
+  const updates = [];
+  t.after(() => {
+    whatsappManager.prisma = originalPrisma;
+    whatsappManager.getClient = originalGetClient;
+    whatsappManager._persistWhatsAppMedia = originalPersist;
+  });
+
+  const recentMessages = [
+    { id: { _serialized: 'wa-image' }, type: 'image', body: '', hasMedia: true, fromMe: false, timestamp: 1_798_000_000 },
+    { id: { _serialized: 'wa-audio' }, type: 'ptt', body: '', hasMedia: true, fromMe: false, timestamp: 1_798_000_010 },
+    { id: { _serialized: 'wa-sent-image' }, type: 'image', body: '', hasMedia: true, fromMe: true, timestamp: 1_798_000_020 },
+    ...Array.from({ length: 75 }, (_, index) => ({
+      id: { _serialized: `wa-text-${index}` },
+      type: 'chat',
+      body: `message ${index}`,
+      hasMedia: false,
+      fromMe: false,
+      timestamp: 1_798_001_000 + index * 60
+    }))
+  ];
+  const requestedLimits = [];
+  whatsappManager.getClient = (profileId) => {
+    assert.equal(profileId, 7);
+    return { getChatById: async waId => {
+      assert.equal(waId, '15551234567@c.us');
+      return {
+        fetchMessages: async ({ limit }) => {
+          requestedLimits.push(limit);
+          return recentMessages.slice(-limit);
+        }
+      };
+    } };
+  };
+  whatsappManager._persistWhatsAppMedia = async message => ({
+    media_path: `${message.type}.media`,
+    media_filename: `${message.type}.file`,
+    media_mime: message.type === 'image' ? 'image/jpeg' : 'audio/ogg'
+  });
+  whatsappManager.prisma = {
+    message: {
+      findMany: async ({ where, orderBy }) => {
+        assert.deepEqual(where.direction, { in: ['received', 'sent'] });
+        assert.deepEqual(orderBy, { created_at: 'asc' });
+        return [
+          { id: 1, wa_msg_id: 'wa-image', type: 'image', direction: 'received', created_at: new Date(1_798_000_000 * 1000) },
+          { id: 2, wa_msg_id: 'wa-audio', type: 'ptt', direction: 'received', created_at: new Date(1_798_000_010 * 1000) },
+          { id: 3, wa_msg_id: 'wa-sent-image', type: 'image', direction: 'sent', created_at: new Date(1_798_000_020 * 1000) }
+        ];
+      },
+      findFirst: async ({ where }) => {
+        const index = recentMessages.findIndex(message => message.id._serialized === where.wa_msg_id);
+        return index < 0 ? null : { id: index + 1, media_path: null };
+      },
+      update: async args => updates.push(args)
+    }
+  };
+
+  const saved = await whatsappManager.backfillConversationMedia(7, {
+    id: 13,
+    wa_id: '15551234567@c.us'
+  });
+
+  assert.equal(saved, 3);
+  assert.deepEqual(requestedLimits, [50, 100]);
+  assert.equal(updates.length, 3);
+  assert.equal(updates[0].where.id, 1);
+  assert.equal(updates[0].data.media_path, 'image.media');
+  assert.equal(updates[1].where.id, 2);
+  assert.equal(updates[1].data.media_path, 'ptt.media');
+  assert.equal(updates[2].where.id, 3);
+  assert.equal(updates[2].data.media_path, 'image.media');
+});
+
+test('recovers group chat listings when whatsapp-web.js cannot serialize all chats', async (t) => {
+  const originalPrisma = whatsappManager.prisma;
+  const originalIO = whatsappManager.io;
+  const originalIsSyncActive = whatsappManager._isSyncActive;
+  const originalResolveName = whatsappManager._resolveChatContactName;
+  const previousWindow = global.window;
+  const upsertedContacts = [];
+  const rawGroup = {
+    id: { _serialized: '23456-78901@g.us' },
+    name: 'Group from local chat collection',
+    serialize: () => ({ id: { _serialized: '23456-78901@g.us' } })
+  };
+  const client = {
+    getChats: async () => { throw new Error('chat serialization failed'); },
+    pupPage: {
+      evaluate: async (callback) => {
+        global.window = {
+          require: () => ({ Chat: { getModelsArray: () => [rawGroup] } })
+        };
+        try {
+          return await callback();
+        } finally {
+          if (previousWindow === undefined) delete global.window;
+          else global.window = previousWindow;
+        }
+      }
+    }
+  };
+
+  t.after(() => {
+    whatsappManager.prisma = originalPrisma;
+    whatsappManager.io = originalIO;
+    whatsappManager._isSyncActive = originalIsSyncActive;
+    whatsappManager._resolveChatContactName = originalResolveName;
+    if (previousWindow === undefined) delete global.window;
+    else global.window = previousWindow;
+  });
+
+  whatsappManager._isSyncActive = () => true;
+  whatsappManager._resolveChatContactName = async () => 'Group from local chat collection';
+  whatsappManager.prisma = {
+    contact: {
+      upsert: async (args) => {
+        upsertedContacts.push(args);
+        return { id: 46 };
+      }
+    }
+  };
+  whatsappManager.io = null;
+
+  await whatsappManager._syncGroupConversations(client, 7, 12, {}, false);
+
+  assert.equal(upsertedContacts.length, 1);
+  assert.equal(upsertedContacts[0].where.profile_id_phone_number.phone_number, 'group_23456-78901');
+  assert.equal(upsertedContacts[0].create.name, 'Group from local chat collection');
+});
+
 test('preserves a stored WhatsApp ID when a text campaign already resolves that contact', async () => {
   const resolvedId = await whatsappManager.resolveRecipientId({
     getNumberId: async () => { throw new Error('Stored WhatsApp IDs should be reused'); }

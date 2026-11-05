@@ -43,6 +43,8 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [emojiCategory, setEmojiCategory] = useState('😀');
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [showChatTools, setShowChatTools] = useState(false);
   const [iaPaused, setIaPaused] = useState(false);
   const [togglingIA, setTogglingIA] = useState(false);
   const [sendError, setSendError] = useState('');
@@ -53,9 +55,9 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   const [openMenu, setOpenMenu] = useState(null);
   const [deletingMsg, setDeletingMsg] = useState(null);
   const [showNotes, setShowNotes] = useState(false);
+  const [handoffNotice, setHandoffNotice] = useState('');
   const [notes, setNotes] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
-  const [handoffNotice, setHandoffNotice] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   const [mediaModal, setMediaModal] = useState(null);
@@ -70,6 +72,8 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const emojiRef = useRef(null);
+  const formattingRef = useRef(null);
+  const chatToolsRef = useRef(null);
   const templatesRef = useRef(null);
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -121,10 +125,6 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   }, [socket, contact]);
 
   useEffect(() => {
-    if (autoScroll) scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
     if (!socket || !contact) return undefined;
     const handler = (event) => {
       if (Number(event.contactId) !== Number(contact.id)) return;
@@ -136,12 +136,32 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   }, [socket, contact]);
 
   useEffect(() => {
+    if (autoScroll) scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
     const handleClickOutside = (e) => {
       if (emojiRef.current && !emojiRef.current.contains(e.target)) setShowEmoji(false);
     };
     if (showEmoji) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showEmoji]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (formattingRef.current && !formattingRef.current.contains(e.target)) setShowFormatting(false);
+    };
+    if (showFormatting) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFormatting]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (chatToolsRef.current && !chatToolsRef.current.contains(e.target)) setShowChatTools(false);
+    };
+    if (showChatTools) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showChatTools]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -208,6 +228,8 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
     setSending(true);
     setShowEmoji(false);
     setShowTemplates(false);
+    setShowFormatting(false);
+    setShowChatTools(false);
     try {
       await axios.post(`${API_URL}/messages/send`, { contactId: contact.id, content: text });
       setIaPaused(true);
@@ -228,6 +250,38 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const applyFormatting = (marker) => {
+    const input = inputRef.current;
+    if (!input) return;
+    const start = input.selectionStart ?? inputText.length;
+    const end = input.selectionEnd ?? inputText.length;
+    const selectedText = inputText.slice(start, end);
+    const hasSelectedFormatting = selectedText
+      && inputText.slice(start - marker.length, start) === marker
+      && inputText.slice(end, end + marker.length) === marker;
+    if (hasSelectedFormatting) {
+      const updatedText = `${inputText.slice(0, start - marker.length)}${selectedText}${inputText.slice(end + marker.length)}`;
+      setInputText(updatedText);
+      setShowFormatting(false);
+      setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(start - marker.length, end - marker.length);
+      }, 0);
+      return;
+    }
+    const updatedText = `${inputText.slice(0, start)}${marker}${selectedText}${marker}${inputText.slice(end)}`;
+    setInputText(updatedText);
+    setShowFormatting(false);
+    setTimeout(() => {
+      input.focus();
+      if (selectedText) input.setSelectionRange(start + marker.length, end + marker.length);
+      else {
+        const cursor = start + marker.length;
+        input.setSelectionRange(cursor, cursor);
+      }
+    }, 0);
   };
 
   const handleToggleIA = async () => {
@@ -283,6 +337,35 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
       setShowEmoji(false);
     }
     setShowTemplates(v => !v);
+  };
+
+  const toggleChatTools = () => {
+    const willOpen = !showChatTools;
+    setShowChatTools(willOpen);
+    if (willOpen) {
+      setShowEmoji(false);
+      setShowFormatting(false);
+      setShowTemplates(false);
+    }
+  };
+
+  const selectChatTool = (tool) => {
+    setShowChatTools(false);
+    if (tool === 'templates') {
+      handleToggleTemplates();
+    } else if (tool === 'formatting') {
+      setShowEmoji(false);
+      setShowTemplates(false);
+      setShowFormatting(true);
+    } else if (tool === 'emoji') {
+      setShowFormatting(false);
+      setShowTemplates(false);
+      setShowEmoji(true);
+    } else if (tool === 'attachment') {
+      fileInputRef.current?.click();
+    } else if (tool === 'audio') {
+      handleStartRecord();
+    }
   };
 
   const handleFileSelect = async (e) => {
@@ -612,14 +695,18 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
   };
 
   const renderText = (text) => {
-    const parts = text.split(URL_REGEX);
-    return parts.map((part, idx) => {
-      if (URL_REGEX.test(part)) {
-        URL_REGEX.lastIndex = 0;
-        const href = part.startsWith('http') ? part : 'https://' + part;
+    const formattingPattern = /```([\s\S]+?)```|\*([^*\n]+)\*|_([^_\n]+)_|~([^~\n]+)~/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    let partIndex = 0;
+
+    const renderLinks = (value, keyPrefix) => value.split(URL_REGEX).map((part, idx) => {
+      if (/^(https?:\/\/|www\.)/i.test(part)) {
+        const href = part.startsWith('http') ? part : `https://${part}`;
         return (
           <a
-            key={idx}
+            key={`${keyPrefix}-link-${idx}`}
             href={href}
             target="_blank"
             rel="noopener noreferrer"
@@ -632,6 +719,22 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
       }
       return part;
     });
+
+    while ((match = formattingPattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(...renderLinks(text.slice(lastIndex, match.index), `text-${partIndex++}`));
+      }
+      const content = match[1] ?? match[2] ?? match[3] ?? match[4];
+      const children = renderLinks(content, `formatted-${partIndex}`);
+      if (match[1] !== undefined) parts.push(<code key={partIndex++}>{children}</code>);
+      else if (match[2] !== undefined) parts.push(<strong key={partIndex++}>{children}</strong>);
+      else if (match[3] !== undefined) parts.push(<em key={partIndex++}>{children}</em>);
+      else parts.push(<s key={partIndex++}>{children}</s>);
+      lastIndex = formattingPattern.lastIndex;
+    }
+
+    if (lastIndex < text.length) parts.push(...renderLinks(text.slice(lastIndex), `text-${partIndex++}`));
+    return parts;
   };
 
   if (!contact) {
@@ -730,15 +833,14 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
           {getContactInitial(contact)}
         </div>
         <div className="chat-header-info">
-          <div className="chat-header-name">{getContactDisplayName(contact)}</div>
-          <div className="chat-header-phone">{contact.phone_number || contact.wa_id || ''}</div>
+          <div className="chat-header-name" title={getContactDisplayName(contact)}>{getContactDisplayName(contact)}</div>
         </div>
 
         <button
           className={`ia-mode-btn ${iaPaused ? 'human' : 'ai'}`}
           onClick={handleToggleIA}
           disabled={togglingIA}
-          title={iaPaused ? "Mode Humain — cliquer pour réactiver l'IA" : "Mode IA actif — cliquer pour prendre la main"}
+          title={iaPaused ? "Mode Humain — cliquer pour réactiver l’agent IA" : "Mode agent IA actif — cliquer pour prendre la main"}
         >
           {iaPaused ? (
             <><span className="ia-mode-icon">👤</span><span className="ia-mode-label">{t('Human')}</span></>
@@ -765,6 +867,13 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
           </svg>
         </button>
       </div>
+
+      {handoffNotice && (
+        <div className="chat-handoff-notice" role="status">
+          <span>{handoffNotice}</span>
+          <button type="button" onClick={() => setHandoffNotice('')} aria-label="Fermer la notification">×</button>
+        </div>
+      )}
 
       {showNotes && (
         <div style={{
@@ -868,13 +977,6 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
                           {renderMedia(msg)}
                           {showMediaCaption && (
                             <div className="message-caption">{renderText(msg.content)}</div>
-      {handoffNotice && (
-        <div className="chat-handoff-notice" role="status">
-          <span>{handoffNotice}</span>
-          <button type="button" onClick={() => setHandoffNotice('')} aria-label="Fermer la notification">×</button>
-        </div>
-      )}
-
                           )}
                         </>
                       ) : /^\[(Image|Vidéo|Audio|Document|Sticker|Fichier)\]$/.test(msg.content) ? (
@@ -1008,19 +1110,50 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
       />
 
       <div className="chat-input-bar">
-        {quickRepliesEnabled && (
-          <button
-            className={`emoji-toggle-btn quick-replies-toggle ${showTemplates ? 'active' : ''}`}
-            onClick={handleToggleTemplates}
-            title={t('Quick replies')}
-            type="button"
-            style={{ fontSize: '1rem', fontWeight: 700 }}
-          >
-            ⚡
-          </button>
+        {showFormatting && (
+          <div className="chat-formatting-menu" ref={formattingRef} role="toolbar" aria-label="Mise en forme WhatsApp">
+            <button type="button" onClick={() => applyFormatting('*')} title="Gras (*texte*)" aria-label="Mettre en gras"><strong>B</strong></button>
+            <button type="button" onClick={() => applyFormatting('_')} title="Italique (_texte_)" aria-label="Mettre en italique"><em>I</em></button>
+            <button type="button" onClick={() => applyFormatting('~')} title="Barré (~texte~)" aria-label="Barrer le texte"><s>S</s></button>
+            <button type="button" onClick={() => applyFormatting('```')} title="Monospace (```texte```)" aria-label="Mettre en monospace"><code>{'{ }'}</code></button>
+          </div>
         )}
+        <div className="chat-tools-wrap" ref={chatToolsRef}>
+          <button
+            type="button"
+            className={`emoji-toggle-btn chat-tools-toggle ${showChatTools ? 'active' : ''}`}
+            onClick={toggleChatTools}
+            title="Outils de rédaction"
+            aria-label="Ouvrir les outils de rédaction"
+            aria-haspopup="menu"
+            aria-expanded={showChatTools}
+          >
+            <span aria-hidden="true">{showChatTools ? '×' : '+'}</span>
+          </button>
+          {showChatTools && (
+            <div className="chat-tools-menu" role="menu" aria-label="Outils de rédaction">
+              {quickRepliesEnabled && (
+                <button type="button" role="menuitem" onClick={() => selectChatTool('templates')}>
+                  <span className="chat-tools-menu-icon">⚡</span><span>Réponses rapides</span>
+                </button>
+              )}
+              <button type="button" role="menuitem" onClick={() => selectChatTool('formatting')}>
+                <span className="chat-tools-menu-icon chat-tools-format-icon">Aa</span><span>Mise en forme</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => selectChatTool('emoji')}>
+                <span className="chat-tools-menu-icon">☺</span><span>Emojis</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => selectChatTool('attachment')} disabled={sendingMedia || !waStatus.isConnected}>
+                <span className="chat-tools-menu-icon">📎</span><span>Joindre un fichier</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => selectChatTool('audio')} disabled={sendingMedia || !waStatus.isConnected}>
+                <span className="chat-tools-menu-icon">🎙</span><span>Message vocal</span>
+              </button>
+            </div>
+          )}
+        </div>
         <button
-          className={`emoji-toggle-btn ${showEmoji ? 'active' : ''}`}
+          className={`emoji-toggle-btn chat-tool-legacy ${showEmoji ? 'active' : ''}`}
           onClick={() => { setShowEmoji(v => !v); setShowTemplates(false); }}
           title={t('Emojis')}
           type="button"
@@ -1030,7 +1163,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
           </svg>
         </button>
         <button
-          className="emoji-toggle-btn"
+          className="emoji-toggle-btn chat-tool-legacy"
           onClick={() => fileInputRef.current?.click()}
           title={t('Attach a file')}
           type="button"
@@ -1121,7 +1254,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
           <>
             <button
               type="button"
-              className="emoji-toggle-btn"
+              className="emoji-toggle-btn chat-tool-legacy"
               onClick={handleStartRecord}
               title="Enregistrer un message vocal"
               disabled={sendingMedia || !waStatus.isConnected}
@@ -1134,7 +1267,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
               ref={inputRef}
               type="text"
               className="chat-input"
-              placeholder={iaPaused ? 'Écrire un message...' : 'Écrire un message (prendra la main sur l\'IA)...'}
+              placeholder={iaPaused ? 'Écrire un message...' : 'Écrire un message (prendra la main sur l’agent IA)...'}
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}

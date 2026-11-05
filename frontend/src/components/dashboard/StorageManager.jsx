@@ -48,7 +48,7 @@ export default function StorageManager({ isAdmin = false, noProfile = false, onG
   };
 
   const items = storage ? [
-    { kind: 'media', icon: '▧', title: 'Médias téléchargés', description: 'Images, vidéos, audios et documents conservés dans les messages ou campagnes.', value: formatBytes(storage.media?.bytes), detail: `${storage.media?.files || 0} fichier(s)`, action: 'Supprimer les médias' },
+    { kind: 'media', icon: '▧', title: 'Médias téléchargés', description: 'Images, stickers, vidéos, audios et documents stockés sur le disque qui héberge Botora, pour ce profil.', value: formatBytes(storage.media?.bytes), detail: `${storage.media?.files || 0} fichier(s)`, action: 'Supprimer les médias' },
     ...(isAdmin ? [{ kind: 'local-queue', icon: '≡', title: 'File locale Dressursite', description: 'Numéros et messages copiés dans la file locale. La file en ligne ne sera pas touchée.', value: `${storage.localQueue?.items || 0}`, detail: 'élément(s)', action: 'Vider la file locale' }] : []),
     { kind: 'archived-messages', icon: '⌫', title: 'Messages archivés', description: 'Messages appartenant à des contacts déjà archivés. Les contacts et réglages sont conservés.', value: `${storage.archivedMessages?.items || 0}`, detail: 'message(s)', action: 'Supprimer les messages archivés', danger: true },
   ] : [];

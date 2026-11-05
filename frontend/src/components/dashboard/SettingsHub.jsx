@@ -14,7 +14,7 @@ import { isFeatureEnabled } from '../../utils/featureFlags';
 
 const BOT_TABS = [
   {
-    key: 'config', label: 'Settings bot',
+    key: 'config', label: 'Settings agent',
     icon: <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 2a2 2 0 012 2 2 2 0 01-2 2 2 2 0 01-2-2 2 2 0 012-2m0 5c.55 0 1 .45 1 1h1a3 3 0 013 3v1a1 1 0 011 1v3a1 1 0 01-1 1v1a3 3 0 01-3 3H9a3 3 0 01-3-3v-1a1 1 0 01-1-1v-3a1 1 0 011-1v-1a3 3 0 013-3h1c0-.55.45-1 1-1zm-3 4a1 1 0 00-1 1v5a1 1 0 001 1h6a1 1 0 001-1v-5a1 1 0 00-1-1H9zm1.5 2a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2zm-4 3h5l-.5 1h-4l-.5-1z"/></svg>
   },
   {
@@ -65,13 +65,13 @@ export default function SettingsHub({ waStatus, onConnectWhatsApp, onResyncWhats
   const currentTab = [...visibleBotTabs, ...accountTabs].find(item => item.key === tab) || visibleBotTabs[0] || accountTabs[0];
   const getTabLabel = (item) => {
     if (!item) return 'Réglages';
-    if (item.key === 'config') return 'Réglages Bot';
+    if (item.key === 'config') return 'Réglages Agent';
     if (item.key === 'keywordReplies') return 'Réponses automatiques';
     return item.label === 'FAQ' || item.label === 'Tags' ? item.label : t(item.label);
   };
   const pageDescriptions = {
-    config: 'Configurez le bot, les options IA et la connexion WhatsApp.',
-    faq: 'Gérez les questions et réponses utilisées par votre bot.',
+    config: 'Configurez votre agent IA et sa connexion WhatsApp.',
+    faq: 'Gérez les questions et réponses utilisées par votre agent.',
     templates: 'Préparez des messages réutilisables pour vos conversations.',
     keywordReplies: 'Déclenchez des réponses automatiques selon les mots-clés reçus.',
     tags: 'Organisez vos contacts avec des étiquettes personnalisées.',

@@ -1,0 +1,136 @@
+{
+  "planHash": "779ab9520581216cbd279ec557d18a23a8c9934291b30be581e42e701bf8ad55",
+  "phase": "standalone",
+  "recordedAtUtc": "2026-11-02T16:26:34.9816918Z",
+  "retryCount": 1,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 47451,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E whatsapp-grok-backend@1.0.0 test\r\n\u003E node --test\r\n\r\n\u2714 auto mode uses the local Botora Admin API by default (12.4257ms)\r\n\u2714 auto mode uses the online API in production (1.891ms)\r\n\u2714 auto mode detects public and local APP_URL values (1.516ms)\r\n\u2714 explicit mode can force either API (0.4891ms)\r\n\u2714 an explicit API URL overrides automatic detection (0.7938ms)\r\n\u2714 uses the development service key only for local API communication (0.5254ms)\r\n\u2714 rejects invalid mode, URL and app URL settings (3.6958ms)\r\n\u2714 restarting a completed campaign resets all targets and completion state atomically (3.8967ms)\r\n\u2714 campaign upload receives file variants separately from campaign text (169.4779ms)\r\n\u2714 multipart campaign creation preserves its name and can be loaded by id (50.258ms)\r\n\u2714 campaign selects one variant for each contact (6.3848ms)\r\n\u2714 campaign variant selection rejects an empty message list (1.0845ms)\r\n\u2714 persists incoming media with safe metadata and an on-disk file (30.7856ms)\r\n\u2714 does not download view-once or disappearing media (2.8399ms)\r\n\u2714 retries transient media download failures before persisting (7.1863ms)\r\n\u2714 extracts serialized WhatsApp IDs and finds a recent media message by type and timestamp (0.8807ms)\r\n\u2714 rejects attempts to delete a media path outside the uploads directory (2.8416ms)\r\n\u2714 message stats count sent messages by origin without mixing received messages (4.4739ms)\r\n\u2714 message stats classify missing or unsupported sent origins as unknown (0.9507ms)\r\n\u2714 message origin migration leaves existing messages classified as unknown (3.1735ms)\r\n[WA] Groupes synchronis\u00E9s \u2014 1 groupe(s), 1 message(s) \u2014 profil 7\r\n[WA] Lecture des chats WhatsApp impossible, repli sur les groupes locaux: Error: chat serialization failed\r\n    at Object.getChats (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\src\\services\\whatsappManager.test.js:183:35)\r\n    at WhatsAppManager._syncGroupConversations (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\src\\services\\whatsappManager.js:561:30)\r\n    at TestContext.\u003Canonymous\u003E (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\src\\services\\whatsappManager.test.js:220:25)\r\n    at Test.runInAsyncScope (node:async_hooks:227:14)\r\n    at Test.run (node:internal/test_runner/test:1201:25)\r\n    at Test.processPendingSubtests (node:internal/test_runner/test:831:18)\r\n    at Test.postRun (node:internal/test_runner/test:1330:19)\r\n    at Test.run (node:internal/test_runner/test:1258:12)\r\n    at async Test.processPendingSubtests (node:internal/test_runner/test:831:7)\r\n[WA] Groupes synchronis\u00E9s \u2014 1 groupe(s), 0 message(s) \u2014 profil 7\r\n\u2714 syncs existing WhatsApp groups and their recent messages for the groups filter (58.515ms)\r\n\u2714 matches legacy messages without WhatsApp IDs so their media can be backfilled (0.472ms)\r\n\u2714 backfills missing image and audio files when their conversation is opened (0.9433ms)\r\n\u2714 recovers group chat listings when whatsapp-web.js cannot serialize all chats (1.2445ms)\r\n\u2714 preserves a stored WhatsApp ID when a text campaign already resolves that contact (0.3104ms)\r\n\u2714 campaign documents keep their caption on the direct WhatsApp client transport (1.3001ms)\r\n\u2714 campaign media removes the invalid WhatsApp model id before sending (2.0981ms)\r\n\u2714 destroying a client waits for Chrome to close before removing its session entry (0.5587ms)\r\n\u2714 a failed Chrome shutdown keeps the session entry available for a safe retry (0.445ms)\r\n\u2714 resolves a relative SQLite URL from the Prisma schema directory (2.6871ms)\r\n\u2714 ignores SQLite URL query parameters when resolving the file (0.9616ms)\r\n\u2714 resolves absolute SQLite file URLs and encoded path segments (1.4959ms)\r\n\u2714 returns null for supported in-memory SQLite URLs (0.7398ms)\r\n\u2714 rejects non-SQLite and malformed database URLs (0.6858ms)\r\n\u2139 tests 34\r\n\u2139 suites 0\r\n\u2139 pass 34\r\n\u2139 fail 0\r\n\u2139 cancelled 0\r\n\u2139 skipped 0\r\n\u2139 todo 0\r\n\u2139 duration_ms 2054.139\r\n",
+        "durationMs": 3481,
+        "testResults": {
+          "testFramework": "unknown",
+          "runnerDetectedFrom": "none",
+          "testsTotal": 0,
+          "testsPassed": 0,
+          "testsFailed": 0,
+          "testsSkipped": 0,
+          "parseFailed": true
+        }
+      },
+      {
+        "name": "prisma-schema-valid",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "Environment variables loaded from .env\r\nPrisma schema loaded from prisma\\schema.prisma\r\nThe schema at prisma\\schema.prisma is valid \uD83D\uDE80\r\n",
+        "durationMs": 3425
+      },
+      {
+        "name": "backend-healthz-200",
+        "kind": "http-probe",
+        "verificationMethod": "http-status",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": null,
+        "outputSample": "HTTP 200\n{\u0022status\u0022:\u0022ok\u0022,\u0022ts\u0022:1793636794935}\n--- server output ---\n\r\n\u003E whatsapp-grok-backend@1.0.0 start\r\n\u003E node src/server.js\r\n\r\nBotora Backend d\u00E9marr\u00E9 sur port 3002\r\nRestauration de 0 session(s) WhatsApp\r\n",
+        "durationMs": 2805
+      }
+    ],
+    "executions": [
+      {
+        "source": "setup[0]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "ci"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "setup[1]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npx.CMD",
+        "args": [
+          "prisma",
+          "generate"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "setup[2]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "args": [
+          "setup-db.js"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend",
+        "env": {
+          "DATABASE_URL": "file:../.tsupgrader/runtime-validation/runtime.db"
+        },
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "test"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "prisma-schema-valid",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npx.CMD",
+        "args": [
+          "prisma",
+          "validate"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "backend-healthz-200",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "start"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend",
+        "env": {
+          "PORT": "3002",
+          "DATABASE_URL": "file:../.tsupgrader/runtime-validation/runtime.db"
+        },
+        "prependPath": [],
+        "platform": "win32"
+      }
+    ]
+  }
+}

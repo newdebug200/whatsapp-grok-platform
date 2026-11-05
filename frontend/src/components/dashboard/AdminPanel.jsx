@@ -91,8 +91,8 @@ function PlatformConfigSection() {
 
   const flags = [
     { key: 'whatsapp_discussions_enabled', label: 'Discussions WhatsApp', desc: 'Affiche ou masque la messagerie WhatsApp pour les utilisateurs', default: true },
-    { key: 'ia_enabled_global', label: 'Bot IA', desc: 'Active ou désactive le bot IA pour toute la plateforme', default: true },
-    { key: 'auto_replies_enabled', label: 'Réponses automatiques', desc: 'Autorise les réponses automatiques du bot', default: true },
+    { key: 'ia_enabled_global', label: 'Agent IA', desc: 'Active ou désactive l’agent IA pour toute la plateforme', default: true },
+    { key: 'auto_replies_enabled', label: 'Réponses automatiques', desc: 'Autorise les réponses automatiques de l’agent', default: true },
     { key: 'faq_enabled', label: 'FAQ automatique', desc: 'Affiche ou masque la gestion des FAQ automatiques', default: true },
     { key: 'quick_replies_enabled', label: 'Réponses rapides', desc: 'Affiche ou masque les modèles de réponses rapides', default: true },
     { key: 'funnel_enabled', label: 'Entonnoir de contacts', desc: 'Affiche ou masque le suivi des prospects', default: true },
@@ -431,7 +431,7 @@ function VerificationSection() {
           <h3 className="admin-verif-title">Vérification WhatsApp</h3>
         </div>
         <p className="admin-verif-desc">
-          Quand un utilisateur envoie exactement l'un de ces textes, le bot vérifie son numéro via l'API externe et lui renvoie le résultat. L'IA ne répond pas.
+          Quand un utilisateur envoie exactement l'un de ces textes, l’agent vérifie son numéro via l'API externe et lui renvoie le résultat. L’agent IA ne génère pas de réponse automatique.
         </p>
       </div>
 

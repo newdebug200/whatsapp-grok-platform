@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const { deleteStoredMedia } = require('../services/mediaStorage');
 const path = require('path');
 const router = express.Router();
 const prisma = require('../prisma');
@@ -233,10 +234,13 @@ router.delete('/storage/:kind', async (req, res) => {
       ]);
       const filenames = [...new Set([...messageMedia, ...campaignMedia].map(item => item.media_path).filter(Boolean))];
       for (const filename of filenames) {
-        try { fs.unlinkSync(path.join(uploadsDirectory, path.basename(filename))); } catch (_) {}
+        deleteStoredMedia(filename, uploadsDirectory);
       }
       await Promise.all([
-        prisma.message.updateMany({ where: { contact: { profile_id: profileId }, media_path: { not: null } }, data: { media_path: null } }),
+        prisma.message.updateMany({
+          where: { contact: { profile_id: profileId }, media_path: { not: null } },
+          data: { media_path: null, wa_msg_id: null }
+        }),
         prisma.campaignMessage.updateMany({ where: { campaign: { profile_id: profileId }, media_path: { not: null } }, data: { media_path: null } }),
       ]);
       return res.json({ ok: true, deleted: filenames.length });

@@ -12,15 +12,20 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const [tags, setTags] = useState([]);
   const [activeTagId, setActiveTagId] = useState(null);
   const [showOlderConversations, setShowOlderConversations] = useState(false);
-  const [hoveredContact, setHoveredContact] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const contextMenuRef = useRef(null);
+  const actionMenuRef = useRef(null);
+  const [actionMenuContactId, setActionMenuContactId] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
   const activeTabRef = useRef('all');
   const [unreadBadge, setUnreadBadge] = useState(0);
-  const [searchResults, setSearchResults] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinningContactId, setPinningContactId] = useState(null);
   const searchTimeout = useRef(null);
+  const searchRequestId = useRef(0);
 
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
@@ -39,6 +44,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
       const params = tab !== 'all' ? { filter: tab } : {};
       const res = await axios.get(`${API_URL}/messages/conversations`, { params });
       const sorted = [...res.data].sort((a, b) => {
+        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
         const getTimestamp = (contact) => {
           const value = contact.last_message_at || contact.messages?.[0]?.created_at || contact.created_at;
           const timestamp = new Date(value).getTime();
@@ -76,14 +82,18 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
       if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
         setContextMenu(null);
       }
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target)) {
+        setActionMenuContactId(null);
+      }
     };
-    if (contextMenu) document.addEventListener('mousedown', handleClick);
+    if (contextMenu || actionMenuContactId !== null) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [contextMenu]);
+  }, [contextMenu, actionMenuContactId]);
 
   const handleArchive = async (contact, e) => {
     e?.stopPropagation();
     setContextMenu(null);
+    setActionMenuContactId(null);
     try {
       await axios.post(`${API_URL}/messages/conversations/archive/${contact.id}`);
       onContactsUpdate(contacts.filter(c => c.id !== contact.id));
@@ -94,9 +104,30 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     }
   };
 
+  const handlePinToggle = async (contact, e) => {
+    e?.stopPropagation();
+    setActionMenuContactId(null);
+    setPinError('');
+    setPinningContactId(contact.id);
+    try {
+      await axios.post(`${API_URL}/messages/conversations/pin/${contact.id}`);
+      await loadConversations();
+    } catch (err) {
+      if (err.response?.status === 409) {
+        setPinError(err.response.data?.error || 'Vous pouvez épingler trois discussions maximum.');
+      } else {
+        console.error('Erreur épinglage:', err);
+        setPinError('Impossible de modifier l’épinglage de cette discussion.');
+      }
+    } finally {
+      setPinningContactId(null);
+    }
+  };
+
   const handleUnarchive = async (contact, e) => {
     e?.stopPropagation();
     setContextMenu(null);
+    setActionMenuContactId(null);
     try {
       await axios.post(`${API_URL}/messages/conversations/unarchive/${contact.id}`);
       loadConversations();
@@ -108,6 +139,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const handleFavoriteToggle = async (contact, e) => {
     e?.stopPropagation();
     setContextMenu(null);
+    setActionMenuContactId(null);
     try {
       await axios.post(`${API_URL}/messages/favorites/${contact.id}`);
       loadConversations();
@@ -119,31 +151,51 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
 
   const handleContextMenu = (e, contact) => {
     e.preventDefault();
+    setActionMenuContactId(null);
     setContextMenu({ contactId: contact.id, contact, x: e.clientX, y: e.clientY });
   };
 
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!search.trim()) { setSearchResults(null); return; }
+    const requestId = ++searchRequestId.current;
+    if (search.trim().length < 2) {
+      setSearchResults([]);
+      setSearchError('');
+      setSearchLoading(false);
+      return;
+    }
     searchTimeout.current = setTimeout(async () => {
       setSearchLoading(true);
+      setSearchError('');
       try {
         const res = await axios.get(`${API_URL}/messages/search`, { params: { q: search.trim() } });
-        setSearchResults(res.data);
-      } catch { setSearchResults(null); }
-      finally { setSearchLoading(false); }
+        if (requestId === searchRequestId.current) setSearchResults(res.data);
+      } catch (err) {
+        if (requestId === searchRequestId.current) {
+          console.error('Erreur recherche messages:', err);
+          setSearchResults([]);
+          setSearchError('La recherche des messages est temporairement indisponible.');
+        }
+      }
+      finally {
+        if (requestId === searchRequestId.current) setSearchLoading(false);
+      }
     }, 400);
     return () => clearTimeout(searchTimeout.current);
   }, [search]);
 
-  const filtered = searchResults !== null
-    ? contacts.filter(c => searchResults.some(m => m.contact_id === c.id || m.contactId === c.id))
-    : contacts.filter(c => {
-        const q = search.toLowerCase();
-        const matchSearch = !q || c.phone_number?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q);
-        const matchTag = !activeTagId || c.tags?.some(ct => ct.tag_id === activeTagId);
-        return matchSearch && matchTag;
-      });
+  const query = search.toLocaleLowerCase();
+  const messageContactIds = new Set((searchResults || []).map(message => message.contact_id ?? message.contactId));
+  const filtered = contacts.filter(contact => {
+    const contactName = getContactDisplayName(contact) || '';
+    const matchSearch = !query
+      || contactName.toLocaleLowerCase().includes(query)
+      || contact.phone_number?.toLocaleLowerCase().includes(query)
+      || contact.wa_id?.toLocaleLowerCase().includes(query)
+      || messageContactIds.has(contact.id);
+    const matchTag = !activeTagId || contact.tags?.some(contactTag => contactTag.tag_id === activeTagId);
+    return matchSearch && matchTag;
+  });
 
   const getLastMessageTime = (contact) => {
     const value = contact.last_message_at || contact.messages?.[0]?.created_at || contact.created_at;
@@ -152,8 +204,8 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   };
 
   const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
-  const recentFiltered = filtered.filter(c => getLastMessageTime(c) >= cutoff24h);
-  const olderFiltered = filtered.filter(c => getLastMessageTime(c) < cutoff24h);
+  const recentFiltered = filtered.filter(c => c.is_pinned || getLastMessageTime(c) >= cutoff24h);
+  const olderFiltered = filtered.filter(c => !c.is_pinned && getLastMessageTime(c) < cutoff24h);
 
   const formatTime = (ts) => {
     if (!ts) return '';
@@ -177,15 +229,12 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
     const lastMsg = contact.messages[0];
     const isSelected = selectedContact?.id === contact.id;
     const isPaused = contact.ia_paused;
-    const isHovered = hoveredContact === contact.id;
     const contactTags = contact.tags?.map(ct => ct.tag).filter(Boolean) || [];
     return (
       <div
         key={contact.id}
-        className={`contact-item ${isSelected ? 'selected' : ''}`}
-        onClick={() => { setContextMenu(null); onSelectContact(contact); }}
-        onMouseEnter={() => setHoveredContact(contact.id)}
-        onMouseLeave={() => setHoveredContact(null)}
+        className={`contact-item ${isSelected ? 'selected' : ''} ${actionMenuContactId === contact.id ? 'action-menu-open' : ''}`}
+        onClick={() => { setContextMenu(null); setActionMenuContactId(null); onSelectContact(contact); }}
         onContextMenu={(e) => handleContextMenu(e, contact)}
         style={{ position: 'relative' }}
       >
@@ -200,7 +249,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                   <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
                 </svg>
               )}
-              <span title={contact.phone_number || contact.wa_id || undefined}>{getContactDisplayName(contact)}</span>
+              <span title={getContactDisplayName(contact)}>{getContactDisplayName(contact)}</span>
             </span>
             <div className="contact-row-right">
               {isArchivedTab ? (
@@ -209,7 +258,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
                 isPaused && contact.sensitive_flagged ? (
                   <span className="contact-mode-badge flagged" title="En attente humain — sujet sensible détecté">🚨</span>
                 ) : (
-                  <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'IA active'}>
+                  <span className={`contact-mode-badge ${isPaused ? 'human' : 'ai'}`} title={isPaused ? 'Prise en main humaine' : 'Agent IA actif'}>
                     {isPaused ? '👤' : '🤖'}
                   </span>
                 )
@@ -272,29 +321,65 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
           </div>
         </div>
 
-        {isHovered && !isArchivedTab && (
+        <div
+          className={`conversation-actions ${actionMenuContactId === contact.id ? 'open' : ''}`}
+          ref={actionMenuContactId === contact.id ? actionMenuRef : null}
+          onClick={(e) => e.stopPropagation()}
+        >
           <button
-            className="contact-archive-btn"
-            onClick={(e) => handleArchive(contact, e)}
-            title="Archiver cette discussion"
+            className="conversation-actions-trigger"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActionMenuContactId(current => current === contact.id ? null : contact.id);
+            }}
+            aria-label="Actions de la discussion"
+            aria-haspopup="menu"
+            aria-expanded={actionMenuContactId === contact.id}
+            title="Actions de la discussion"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-              <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+              <circle cx="12" cy="5" r="1.8"/>
+              <circle cx="12" cy="12" r="1.8"/>
+              <circle cx="12" cy="19" r="1.8"/>
             </svg>
           </button>
-        )}
-        {isHovered && isArchivedTab && (
-          <button
-            className="contact-archive-btn"
-            onClick={(e) => handleUnarchive(contact, e)}
-            title="Désarchiver cette discussion"
-            style={{ color: '#25d366' }}
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-              <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 6.5l5.5 5.5H14v2h-4v-2H6.5L12 6.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
-            </svg>
-          </button>
-        )}
+          {actionMenuContactId === contact.id && (
+            <div className="conversation-actions-menu" role="menu">
+              <button
+                role="menuitem"
+                onClick={(e) => handlePinToggle(contact, e)}
+                disabled={pinningContactId === contact.id}
+              >
+                <svg viewBox="0 0 24 24" fill={contact.is_pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" width="16" height="16" aria-hidden="true">
+                  <path d="m16 3 5 5-4 1-3 3 1 4-2 2-3-5-5 5-1-1 5-5-5-3 2-2 4 1 3-3z"/>
+                </svg>
+                {contact.is_pinned ? 'Désépingler' : 'Épingler'}
+              </button>
+              <button role="menuitem" onClick={(e) => handleFavoriteToggle(contact, e)}>
+                <svg viewBox="0 0 24 24" fill={contact.is_favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" width="16" height="16" aria-hidden="true">
+                  <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                </svg>
+                {contact.is_favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              </button>
+              {!isArchivedTab ? (
+                <button role="menuitem" onClick={(e) => handleArchive(contact, e)}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
+                    <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+                  </svg>
+                  Archiver
+                </button>
+              ) : (
+                <button role="menuitem" onClick={(e) => handleUnarchive(contact, e)}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
+                    <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c-.48-.17-.93-.46-1.27zM12 6.5l5.5 5.5H14v2h-4v-2H6.5L12 6.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+                  </svg>
+                  Désarchiver
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
     );
   };
@@ -310,7 +395,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
   const hasNoResults = filtered.length === 0;
 
   const emptyLabel = activeTab === 'unread' ? t('No unread messages')
-    : activeTab === 'favorites' ? t('No favorites — right-click a conversation to add one')
+    : activeTab === 'favorites' ? t('No favorites — use the star on a conversation to add one')
     : activeTab === 'groups' ? t('No groups')
     : activeTab === 'archived' ? t('No archived conversations')
     : search || activeTagId ? t('No results found') : t('No conversations');
@@ -333,12 +418,21 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
             type="text"
             placeholder={t('Search a conversation...')}
             value={search}
-            onChange={e => { setSearch(e.target.value); setShowOlderConversations(true); }}
+            onChange={e => {
+              setSearch(e.target.value);
+              setSearchResults([]);
+              setSearchError('');
+              setPinError('');
+              setShowOlderConversations(true);
+            }}
             className="search-input"
           />
           {searchLoading && <span style={{ fontSize: '0.75rem', color: '#25d366', marginRight: 4 }}>…</span>}
-          {search && <button className="search-clear" onClick={() => { setSearch(''); setShowOlderConversations(false); setSearchResults(null); }}>✕</button>}
+          {search && <button className="search-clear" onClick={() => { setSearch(''); setShowOlderConversations(false); setSearchResults([]); setSearchError(''); setPinError(''); }}>✕</button>}
         </div>
+
+        {pinError && <div className="conversation-action-error" role="alert">{pinError}</div>}
+        {searchError && <div className="conversation-action-error" role="alert">{searchError}</div>}
       </div>
 
       {/* Tab bar — style WhatsApp Web */}
@@ -353,7 +447,7 @@ export default function ConversationList({ contacts, selectedContact, onSelectCo
         {TABS.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => { setActiveTab(tab.id); setActionMenuContactId(null); }}
             style={{
               flex: '1 1 0',
               minWidth: 52,

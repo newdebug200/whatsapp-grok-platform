@@ -47,16 +47,16 @@ export default function DashboardHome({
     { key: 'credits', label: 'Recharger les crédits', desc: 'Payer avec FedaPay', emoji: '₣', color: '#0aa37f' },
     { key: 'credit-usage', label: 'Utilisation des crédits', desc: 'Consulter votre consommation', emoji: '▤', color: '#087f72' },
     { key: 'api', label: 'Accès API', desc: 'Connecter vos applications', emoji: '⌘', color: '#667eea' },
-    ...(featureEnabled('stats_enabled') ? [{ key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses IA, tendances', emoji: '📈', color: '#34b7f1' }] : []),
+    ...(featureEnabled('stats_enabled') ? [{ key: 'stats', label: 'Statistiques', desc: 'Volumes, réponses de l’agent IA, tendances', emoji: '📈', color: '#34b7f1' }] : []),
     ...(featureEnabled('sentiments_enabled') ? [{ key: 'sentiments', label: 'Sentiments clients', desc: 'Alertes et messages à traiter', emoji: '💛', color: '#e47738', badge: data?.sentimentAlerts > 0 ? data.sentimentAlerts : null }] : []),
     ...(campaignsEnabled ? [{ key: 'broadcast', label: 'Campagnes', desc: 'Diffusions groupées', emoji: '📣', color: '#f39c12' }] : []),
-    ...(featureEnabled('ia_enabled_global') ? [{ key: 'bot', label: 'Bot & WhatsApp', desc: 'Configuration IA, connexion, FAQ', emoji: '⚙️', color: '#128c7e' }] : []),
+    ...(featureEnabled('ia_enabled_global') ? [{ key: 'bot', label: 'Agent & WhatsApp', desc: 'Configuration de l’agent IA, connexion, FAQ', emoji: '⚙️', color: '#128c7e' }] : []),
     { key: 'settings', label: 'Paramètres', desc: 'Compte et préférences', emoji: '🔧', color: '#8e9baa' },
     ...(isAdmin ? [{ key: 'admin', label: 'Administration', desc: 'Gestion de la plateforme', emoji: '🛠️', color: '#9b59b6' }] : []),
   ];
 
   const settingsSections = [
-    ...(featureEnabled('ia_enabled_global') ? [{ key: 'settings-config', tab: 'config', label: 'Réglages du bot', desc: 'IA, comportement et connexion WhatsApp', emoji: '🤖', color: '#128c7e' }] : []),
+    ...(featureEnabled('ia_enabled_global') ? [{ key: 'settings-config', tab: 'config', label: 'Réglages de l’agent', desc: 'Agent IA, comportement et connexion WhatsApp', emoji: '🤖', color: '#128c7e' }] : []),
     ...(featureEnabled('faq_enabled') ? [{ key: 'settings-faq', tab: 'faq', label: 'FAQ', desc: 'Questions et réponses automatiques', emoji: '❓', color: '#667eea' }] : []),
     { key: 'settings-tags', tab: 'tags', label: 'Tags', desc: 'Organiser et segmenter vos contacts', emoji: '🏷️', color: '#f39c12' },
     { key: 'settings-keywordReplies', tab: 'keywordReplies', label: 'Réponses automatiques', desc: 'Répondre selon un mot-clé', emoji: '↪', color: '#0aa37f' },

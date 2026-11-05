@@ -1,7 +1,7 @@
 {
-  "name": "Botora - Assistant WhatsApp IA",
+  "name": "Botora - Agent IA WhatsApp",
   "short_name": "Botora",
-  "description": "Plateforme multi-utilisateurs WhatsApp avec intelligence artificielle Groq",
+  "description": "Plateforme multi-utilisateurs WhatsApp avec un agent IA propulsé par Groq",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
@@ -93,7 +93,7 @@
     {
       "name": "Configuration",
       "short_name": "Config",
-      "description": "Configurer le bot Botora",
+      "description": "Configurer l’agent IA Botora",
       "url": "/?panel=config",
       "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96" }]
     }

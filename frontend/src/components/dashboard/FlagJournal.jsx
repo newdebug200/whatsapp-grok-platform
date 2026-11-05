@@ -161,7 +161,7 @@ export default function FlagJournal({ noProfile = false, onGoConfig }) {
                     fontSize: '0.72rem',
                     fontWeight: 600
                   }}>
-                    🤖 IA reprise
+                    🤖 Agent IA réactivé
                   </span>
                 )}
                 <span style={{ marginLeft: 'auto', fontSize: '0.78rem', color: 'var(--text-secondary, #999)' }}>

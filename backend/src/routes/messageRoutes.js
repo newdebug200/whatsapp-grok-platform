@@ -296,6 +296,9 @@ router.get('/contacts', profileMiddleware, async (req, res) => {
 router.get('/conversations', profileMiddleware, async (req, res) => {
   try {
     const { filter } = req.query;
+    if (filter === 'groups') {
+      await whatsappManager.syncGroupConversations(req.profileId);
+    }
     let whereExtra = {};
     if (filter === 'unread') {
       whereExtra = { archived: false, unread_count: { gt: 0 } };
@@ -309,13 +312,22 @@ router.get('/conversations', profileMiddleware, async (req, res) => {
       whereExtra = { archived: false };
     }
     const contacts = await prisma.contact.findMany({
-      where: { profile_id: req.profileId, messages: { some: {} }, ...whereExtra },
+      where: {
+        profile_id: req.profileId,
+        ...whereExtra,
+        OR: [
+          { messages: { some: {} } },
+          { phone_number: { startsWith: 'group_' } },
+          ...(filter === 'favorites' ? [{ is_favorite: true }] : [])
+        ]
+      },
       include: {
         messages: { orderBy: { created_at: 'desc' }, take: 1 },
         tags: { include: { tag: true } }
       }
     });
     const sorted = contacts.sort((a, b) => {
+      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
       const dateA = a.messages[0]?.created_at || a.created_at;
       const dateB = b.messages[0]?.created_at || b.created_at;
       return new Date(dateB) - new Date(dateA);
@@ -325,6 +337,45 @@ router.get('/conversations', profileMiddleware, async (req, res) => {
     res.json(sorted);
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors du chargement des conversations' });
+  }
+});
+
+// POST /api/messages/conversations/pin/:contactId — toggle pin (max 3 per profile)
+router.post('/conversations/pin/:contactId', profileMiddleware, async (req, res) => {
+  try {
+    const contactId = Number(req.params.contactId);
+    if (!Number.isSafeInteger(contactId) || contactId <= 0) return res.status(400).json({ error: 'Contact invalide' });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const contact = await tx.contact.findFirst({
+        where: { id: contactId, profile_id: req.profileId },
+        select: { id: true, is_pinned: true }
+      });
+      if (!contact) return { notFound: true };
+
+      if (!contact.is_pinned) {
+        const pinnedCount = await tx.contact.count({
+          where: { profile_id: req.profileId, is_pinned: true }
+        });
+        if (pinnedCount >= 3) return { limitReached: true };
+      }
+
+      const updated = await tx.contact.update({
+        where: { id: contact.id },
+        data: { is_pinned: !contact.is_pinned },
+        select: { is_pinned: true }
+      });
+      return { is_pinned: updated.is_pinned };
+    });
+
+    if (result.notFound) return res.status(404).json({ error: 'Discussion introuvable' });
+    if (result.limitReached) {
+      return res.status(409).json({ error: 'Vous pouvez épingler trois discussions maximum.' });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur épinglage discussion:', error.message);
+    res.status(500).json({ error: 'Erreur lors du changement de statut épinglé' });
   }
 });
 
@@ -423,6 +474,12 @@ router.get('/conversation/:contactId', profileMiddleware, async (req, res) => {
     });
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
 
+    try {
+      await whatsappManager.backfillConversationMedia(req.profileId, contact);
+    } catch (error) {
+      console.error('[Media] Récupération des médias manquants de la discussion impossible:', error.message);
+    }
+
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const skip = (page - 1) * limit;
@@ -437,6 +494,7 @@ router.get('/conversation/:contactId', profileMiddleware, async (req, res) => {
       prisma.message.count({ where: { contact_id: contact.id } })
     ]);
 
+    messages.reverse();
     res.json({
       messages,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total }
@@ -474,12 +532,6 @@ router.post('/send', profileMiddleware, async (req, res) => {
     const contact = await prisma.contact.findFirst({
       where: { id: parseInt(contactId), profile_id: req.profileId }
     });
-    try {
-      await whatsappManager.backfillConversationMedia(req.profileId, contact);
-    } catch (error) {
-      console.error('[Media] Récupération des médias manquants de la discussion impossible:', error.message);
-    }
-
     if (!contact) return res.status(404).json({ error: 'Contact introuvable' });
     if (!contact.wa_id) return res.status(400).json({ error: 'Contact sans ID WhatsApp' });
 
@@ -492,6 +544,7 @@ router.post('/send', profileMiddleware, async (req, res) => {
         contact_id: contact.id,
         content: text,
         direction: 'sent',
+        origin: 'manual',
         type: 'text',
         created_at: new Date(),
         unread: false,
@@ -502,7 +555,6 @@ router.post('/send', profileMiddleware, async (req, res) => {
     res.json(saved);
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de l'envoi du message" });
-    messages.reverse();
   }
 });
 
@@ -568,6 +620,8 @@ router.get('/memory/:contactId', profileMiddleware, async (req, res) => {
 
 // POST /api/messages/send-media — envoyer un fichier ou audio via WhatsApp (base64)
 router.post('/send-media', profileMiddleware, async (req, res) => {
+  let uploadedFilePath = null;
+  let whatsappAccepted = false;
   try {
     const { contactId, filename, mimeType, data, messageType } = req.body;
     if (!contactId || !data || !mimeType) {
@@ -621,14 +675,16 @@ router.post('/send-media', profileMiddleware, async (req, res) => {
       (type === 'ptt' || type === 'audio') ? '[Audio]' : '[Document]';
 
     const saved = await prisma.message.create({
-  let uploadedFilePath = null;
-  let whatsappAccepted = false;
       data: {
         contact_id: contact.id,
         content: contentLabel,
         direction: 'sent',
+        origin: 'manual',
         type,
         media_path: saveName,
+        wa_msg_id: getWhatsAppMessageId(sentMsg),
+        media_filename: filename || null,
+        media_mime: mimeType || null,
         created_at: new Date(),
         unread: false
       }
@@ -637,6 +693,13 @@ router.post('/send-media', profileMiddleware, async (req, res) => {
     res.json(saved);
   } catch (error) {
     console.error('send-media error:', error);
+    if (uploadedFilePath && !whatsappAccepted) {
+      try { fs.unlinkSync(uploadedFilePath); } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') {
+          console.error('[Media] Nettoyage du média non envoyé impossible:', cleanupError.message);
+        }
+      }
+    }
     res.status(500).json({ error: "Erreur lors de l'envoi du fichier" });
   }
 });
@@ -656,13 +719,3 @@ router.delete('/memory/:contactId', profileMiddleware, async (req, res) => {
 });
 
 module.exports = router;
-        wa_msg_id: getWhatsAppMessageId(sentMsg),
-        media_filename: filename || null,
-        media_mime: mimeType || null,
-    if (uploadedFilePath && !whatsappAccepted) {
-      try { fs.unlinkSync(uploadedFilePath); } catch (cleanupError) {
-        if (cleanupError.code !== 'ENOENT') {
-          console.error('[Media] Nettoyage du média non envoyé impossible:', cleanupError.message);
-        }
-      }
-    }

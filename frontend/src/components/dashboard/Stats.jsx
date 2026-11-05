@@ -46,11 +46,16 @@ export default function Stats({ socket, onBack }) {
 
   const p = stats.messages[period];
   const maxVal = stats.dailyMessages.reduce((m, d) => Math.max(m, d.sent + d.received, 1), 1);
-
-  const rate = stats.aiResponseRate;
-  const rateColor = rate >= 80 ? '#25d366' : rate >= 50 ? '#f6c90e' : '#e74c3c';
-
   const todayData = stats.dailyMessages[stats.dailyMessages.length - 1];
+  const messageOrigins = [
+    { key: 'received', label: 'Reçus', color: '#34b7f1' },
+    { key: 'ai', label: 'Agent IA', color: '#25d366' },
+    { key: 'campaign', label: 'Campagnes', color: '#667eea' },
+    { key: 'manual', label: 'Manuels', color: '#f6c90e' },
+    { key: 'automation', label: 'Automatisations', color: '#128c7e' },
+    { key: 'whatsapp', label: 'WhatsApp', color: '#8e44ad' },
+    { key: 'unknown', label: 'Origine inconnue', color: '#9aa5ae' }
+  ];
 
   return (
     <div className="stats-panel">
@@ -89,12 +94,12 @@ export default function Stats({ socket, onBack }) {
           <div className="stat-card-label">Envoyés aujourd'hui</div>
         </div>
 
-        <div className="stat-card" style={{ '--accent': rateColor }}>
-          <div className="stat-card-icon" style={{ color: rateColor }}>
+        <div className="stat-card" style={{ '--accent': '#25d366' }}>
+          <div className="stat-card-icon" style={{ color: '#25d366' }}>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
           </div>
-          <div className="stat-card-value" style={{ color: rateColor }}>{rate}%</div>
-          <div className="stat-card-label">Taux réponse IA (7j)</div>
+          <div className="stat-card-value">{stats.messages.week.ai}</div>
+          <div className="stat-card-label">Messages de l’agent IA (7j)</div>
         </div>
       </div>
 
@@ -119,16 +124,13 @@ export default function Stats({ socket, onBack }) {
         </div>
 
         <div className="stats-summary-row">
-          <div className="summary-item">
-            <span className="summary-dot received-dot" />
-            <span className="summary-label">Reçus</span>
-            <span className="summary-val">{p.received}</span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-dot sent-dot" />
-            <span className="summary-label">Envoyés</span>
-            <span className="summary-val">{p.sent}</span>
-          </div>
+          {messageOrigins.map(origin => (
+            <div className="summary-item" key={origin.key}>
+              <span className="summary-dot" style={{ background: origin.color }} />
+              <span className="summary-label">{origin.label}</span>
+              <span className="summary-val">{p[origin.key]}</span>
+            </div>
+          ))}
           <div className="summary-item">
             <span className="summary-label">Total</span>
             <span className="summary-val">{p.sent + p.received}</span>
@@ -141,15 +143,19 @@ export default function Stats({ socket, onBack }) {
         <div className="chart-bars">
           {stats.dailyMessages.map(day => {
             const total = day.sent + day.received;
-            const sentH = total > 0 ? (day.sent / maxVal) * 100 : 0;
-            const recvH = total > 0 ? (day.received / maxVal) * 100 : 0;
             const isToday = day.date === new Date().toISOString().slice(0, 10);
             return (
               <div key={day.date} className={`chart-col ${isToday ? 'today' : ''}`}>
                 <div className="chart-bar-wrap">
                   <div className="chart-bar-stack">
-                    <div className="chart-bar sent-bar" style={{ height: `${sentH}%` }} title={`${day.sent} envoyés`} />
-                    <div className="chart-bar received-bar" style={{ height: `${recvH}%` }} title={`${day.received} reçus`} />
+                    {messageOrigins.map(origin => day[origin.key] > 0 && (
+                      <div
+                        key={origin.key}
+                        className={`chart-bar ${origin.key}-bar`}
+                        style={{ height: `${(day[origin.key] / maxVal) * 100}%` }}
+                        title={`${day[origin.key]} ${origin.label.toLocaleLowerCase()}`}
+                      />
+                    ))}
                   </div>
                 </div>
                 <div className="chart-label">{day.label}</div>
@@ -159,8 +165,12 @@ export default function Stats({ socket, onBack }) {
           })}
         </div>
         <div className="chart-legend">
-          <span><span className="legend-dot received-dot" />Reçus</span>
-          <span><span className="legend-dot sent-dot" />Envoyés par l'IA</span>
+          {messageOrigins.map(origin => (
+            <span key={origin.key}>
+              <span className="legend-dot" style={{ background: origin.color }} />
+              {origin.label}
+            </span>
+          ))}
         </div>
       </div>
 

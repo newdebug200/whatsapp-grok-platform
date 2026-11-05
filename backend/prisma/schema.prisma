@@ -94,6 +94,7 @@ model Contact {
   funnel_stage      String   @default("prospect")
   unread_count      Int      @default(0)
   is_favorite       Boolean  @default(false)
+  is_pinned         Boolean  @default(false)
 
   messages          Message[]
   profile           WhatsAppProfile  @relation(fields: [profile_id], references: [id])
@@ -143,6 +144,7 @@ model Message {
   contact_id Int
   content    String
   direction  String
+  origin     String   @default("unknown")
   type       String
   created_at DateTime @default(now())
   unread     Boolean  @default(true)

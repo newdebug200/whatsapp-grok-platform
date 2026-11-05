@@ -40,7 +40,7 @@ class MessageHandler {
     const sent = await waManager.sendMessage(profileId, waId, matched.response_text, { fallbackPhone: dbContact.phone_number });
     waManager.trackBotSentId(sent?.id?._serialized);
     waManager.addToCache(profileId, dbContact.id, 'sent', matched.response_text);
-    await prisma.message.create({ data: { contact_id: dbContact.id, content: matched.response_text, direction: 'sent', type: 'text', created_at: new Date(), unread: false } }).catch(() => {});
+    await prisma.message.create({ data: { contact_id: dbContact.id, content: matched.response_text, direction: 'sent', origin: 'automation', type: 'text', created_at: new Date(), unread: false } }).catch(() => {});
     console.log(`[AutoReply] Réponse envoyée — profil=${profileId}, mot-clé=${JSON.stringify(matched.keyword)}`);
     return true;
   }
@@ -194,6 +194,7 @@ class MessageHandler {
             contact_id: dbContact.id,
             content: messageContent,
             direction: 'received',
+            origin: 'whatsapp',
             type: message.type || 'text',
             created_at: Number.isFinite(Number(message.timestamp))
               ? new Date(Number(message.timestamp) * 1000)
@@ -222,7 +223,6 @@ class MessageHandler {
       }).catch((err) => console.error('[WA] Mise à jour compteur non-lu:', err.message));
 
       waManager.addToCache(profileId, dbContact.id, 'received', messageContent);
-
       waManager.emitNewMessage?.(profileId, {
         contactId: dbContact.id,
         from: phoneNumber,
@@ -230,6 +230,7 @@ class MessageHandler {
         timestamp: message.timestamp,
         messageId: waMessageId
       });
+
       const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
       // Les groupes sont traités comme les discussions : ils n’existent ici
       // qu’après un message réel, mais l’IA reste désactivée par défaut.
@@ -312,7 +313,7 @@ class MessageHandler {
           waManager.trackBotSentId(sentMediaReply?.id?._serialized);
           waManager.addToCache(profileId, dbContact.id, 'sent', response);
           prisma.message.create({
-            data: { contact_id: dbContact.id, content: response, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
+            data: { contact_id: dbContact.id, content: response, direction: 'sent', origin: 'automation', type: 'text', created_at: new Date(), unread: false }
           }).catch(() => {});
         }
         return;
@@ -419,7 +420,7 @@ class MessageHandler {
       waManager.trackBotSentId(sentVerif?.id?._serialized);
       waManager.addToCache(profileId, dbContact.id, 'sent', replyText);
       prisma.message.create({
-        data: { contact_id: dbContact.id, content: replyText, direction: 'sent', type: 'text', created_at: new Date(), unread: false }
+        data: { contact_id: dbContact.id, content: replyText, direction: 'sent', origin: 'automation', type: 'text', created_at: new Date(), unread: false }
       }).catch(() => {});
     } catch (err) {
       console.error('[Verification] Erreur:', err.message);
@@ -508,9 +509,9 @@ class MessageHandler {
       ) {
         return {
           reply: parsed.reply.trim(),
-          handoff: parsed.handoff === true,
           inScope: parsed.in_scope,
-          handoffReason: typeof parsed.handoff_reason === 'string' ? parsed.handoff_reason : ''
+          handoff: parsed.handoff === true,
+          handoffReason: parsed.handoff_reason
         };
       }
     } catch (_) {}
@@ -714,8 +715,8 @@ class MessageHandler {
         {
           model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
           messages: [{ role: 'system', content: systemPrompt }, ...historyMessages, { role: 'user', content: messageText }],
-          temperature: 0.2,
           response_format: { type: 'json_object' },
+          temperature: 0.2,
           max_tokens: 600
         },
         { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }

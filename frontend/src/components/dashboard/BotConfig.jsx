@@ -17,6 +17,7 @@ const PERSONALITIES = [
 
 export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsApp, onResyncWhatsApp }) {
   const personalityGroupId = useId();
+  const sensitiveTopicInputId = useId();
   const personalityTouchedRef = useRef(false);
   const [config, setConfig] = useState({
     bot_name: 'Botora',
@@ -52,6 +53,11 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   useEffect(() => {
     const { status, qrCode, isConnected } = waStatus;
     if (qrCode || isConnected) { setConnecting(false); setWaError(''); clearCooldown(); }
+    if (status === 'initializing') {
+      setConnecting(true);
+      setWaError('');
+      clearCooldown();
+    }
     if (status === 'error' || status === 'auth_failure') {
       setConnecting(false);
       const msg = waStatus.message || (status === 'auth_failure'
@@ -182,10 +188,11 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const sectionStyle = { marginTop: 24 };
   const labelStyle = { fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary, #888)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 };
   const fieldStyle = { padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border, #e0e0e0)', fontSize: '0.9rem', background: 'var(--bg-secondary, #f5f5f5)', color: 'var(--text-primary, #111)' };
+  const activeKeywordCount = keywords.filter(kw => kw.is_active).length;
 
   return (
     <div className="panel-content">
-      <div className="panel-title">Configuration du Bot</div>
+      <div className="panel-title">Configuration de l’agent</div>
 
       {/* ── WhatsApp ── */}
       <div className="wa-section">
@@ -239,7 +246,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             <div className="qr-waiting-spinner" />
             <div>
               <div className="qr-waiting-title">Connexion en cours…</div>
-              <div className="qr-waiting-desc">Le QR code peut prendre jusqu'à 60 secondes. Ne cliquez pas à nouveau pendant l'initialisation.</div>
+              <div className="qr-waiting-desc">Le QR code peut prendre jusqu'à 150 secondes. Ne cliquez pas à nouveau pendant l'initialisation.</div>
             </div>
           </div>
         )}
@@ -260,42 +267,44 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
         )}
       </div>
 
-      {/* ── Identité du bot ── */}
+      {/* ── Identité de l’agent ── */}
       <div className="config-section">
-        <div className="section-label">Identité du bot</div>
+        <div className="section-label">Identité de l’agent</div>
 
         <div className="field-group">
-          <label>Nom du bot</label>
+          <label>Nom de l’agent</label>
           <input type="text" value={config.bot_name} onChange={e => setConfig({ ...config, bot_name: e.target.value })} placeholder="Botora" />
         </div>
 
         <div className="field-group">
           <label>Informations à sa disposition</label>
           <textarea value={config.bot_info} onChange={e => setConfig({ ...config, bot_info: e.target.value })}
-            placeholder={`Décrivez ici tout ce que le bot doit connaître : produits, services, tarifs, adresses, horaires…`} rows={7} />
+            placeholder={`Décrivez ici tout ce que l’agent doit connaître : produits, services, tarifs, adresses, horaires…`} rows={7} />
         </div>
 
         <div className="field-group">
           <label>Comportement & ton souhaité</label>
           <textarea value={config.bot_behavior} onChange={e => setConfig({ ...config, bot_behavior: e.target.value })}
-            placeholder={`Décrivez comment le bot doit se comporter.\n\nExemple :\n- Répondre en français uniquement\n- Être chaleureux et professionnel`} rows={6} />
+            placeholder={`Décrivez comment l’agent doit se comporter.\n\nExemple :\n- Répondre en français uniquement\n- Être chaleureux et professionnel`} rows={6} />
         </div>
 
         <div className="field-group" style={{ marginBottom: 16 }}>
-          <label>Personnalité du bot</label>
-          <div role="radiogroup" aria-label="Personnalité du bot" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+          <label>Personnalité de l’agent</label>
+          <div role="radiogroup" aria-label="Personnalité de l’agent" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
             {PERSONALITIES.map(p => {
               const isSelected = config.personality === p.value;
               return (
-                <label key={p.value} style={{
+                <label key={p.value} className="bot-personality-option" style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                  position: 'relative',
                   border: `1.5px solid ${isSelected ? '#25d366' : 'var(--border, rgba(255,255,255,0.1))'}`,
                   background: isSelected ? 'rgba(37,211,102,0.08)' : 'var(--bg-secondary, rgba(255,255,255,0.03))',
                   transition: 'all 0.15s'
                 }}>
                   <input
                     type="radio"
+                    className="bot-personality-radio"
                     name={`personality-${personalityGroupId}`}
                     value={p.value}
                     checked={isSelected}
@@ -303,7 +312,6 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
                       personalityTouchedRef.current = true;
                       setConfig(c => ({ ...c, personality: p.value }));
                     }}
-                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
                   />
                   <span style={{
                     width: 18, height: 18, borderRadius: 4, flexShrink: 0,
@@ -330,8 +338,8 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
 
         <div className="toggle-row">
           <div>
-            <div className="toggle-label">Intelligence Artificielle</div>
-            <div className="toggle-desc">Le bot répond automatiquement grâce à l'IA</div>
+            <div className="toggle-label">Agent IA</div>
+            <div className="toggle-desc">L’agent répond automatiquement grâce à l’IA</div>
           </div>
           <button className={`toggle-btn ${config.ia_enabled ? 'on' : 'off'}`} onClick={() => setConfig({ ...config, ia_enabled: !config.ia_enabled })}>
             <span className="toggle-knob" />
@@ -361,7 +369,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
         <div className="toggle-row" style={{ marginTop: 12 }}>
           <div>
             <div className="toggle-label">🖼️ Réponse automatique aux médias</div>
-            <div className="toggle-desc">Le bot répond automatiquement quand un contact envoie une image, vidéo, audio, sticker ou document</div>
+            <div className="toggle-desc">L’agent répond automatiquement quand un contact envoie une image, vidéo, audio, sticker ou document</div>
           </div>
           <button className={`toggle-btn ${config.media_auto_reply ? 'on' : 'off'}`} onClick={() => setConfig(c => ({ ...c, media_auto_reply: !c.media_auto_reply }))}>
             <span className="toggle-knob" />
@@ -370,15 +378,15 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
 
         <div className="toggle-row" style={{ marginTop: 12 }}>
           <div>
-            <div className="toggle-label">👥 Autoriser l’IA dans les groupes</div>
-            <div className="toggle-desc">Par défaut, les messages de groupe sont enregistrés sans réponse automatique de l’IA</div>
+            <div className="toggle-label">👥 Autoriser l’agent IA à répondre dans les groupes</div>
+            <div className="toggle-desc">Par défaut, les messages de groupe sont enregistrés sans réponse automatique de l’agent IA</div>
           </div>
           <button
             type="button"
             className={`toggle-btn ${config.ia_group_enabled ? 'on' : 'off'}`}
             role="switch"
             aria-checked={config.ia_group_enabled === true}
-            aria-label="Autoriser l’IA dans les groupes"
+            aria-label="Autoriser l’agent IA à répondre dans les groupes"
             onClick={() => setConfig(c => ({ ...c, ia_group_enabled: !c.ia_group_enabled }))}
           >
             <span className="toggle-knob" />
@@ -400,7 +408,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--accent, #25d366)' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary, #888)', marginTop: 2 }}>
             <span>1s</span>
-            <span style={{ fontSize: '0.7rem' }}>Délai avant que le bot réponde après le dernier message reçu</span>
+            <span style={{ fontSize: '0.7rem' }}>Délai avant que l’agent réponde après le dernier message reçu</span>
             <span>5min</span>
           </div>
         </div>
@@ -412,35 +420,52 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
       </div>
 
       {/* ── Sujets sensibles ── */}
-      <div className="config-section" style={sectionStyle}>
-        <div className="section-label">Sujets sensibles</div>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #888)', marginBottom: 8, lineHeight: 1.5 }}>
-          Si un message reçu contient l'un de ces mots, le bot se tait automatiquement et la conversation est transmise à un humain.
-        </p>
-        <p style={{ fontSize: '0.78rem', color: 'var(--accent, #25d366)', marginBottom: 14, lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ fontSize: '0.85rem' }}>ℹ️</span>
-          La détection est insensible à la casse — <strong>avocat</strong>, <strong>Avocat</strong> et <strong>AVOCAT</strong> seront tous détectés, peu importe comment vous avez saisi le mot.
-        </p>
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <input type="text" value={newKeyword} onChange={e => setNewKeyword(e.target.value)} onKeyDown={handleKwKeyDown}
-            placeholder="Ex : avocat, remboursement, plainte…"
-            style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border, #e0e0e0)', fontSize: '0.9rem', background: 'var(--bg-secondary, #f5f5f5)', color: 'var(--text-primary, #111)' }} />
-          <button onClick={handleAddKeyword} disabled={kwSaving || !newKeyword.trim()}
-            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--accent, #25d366)', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem', opacity: (!newKeyword.trim() || kwSaving) ? 0.5 : 1 }}>
-            + Ajouter
-          </button>
+      <div className="config-section sensitive-topics-section" style={sectionStyle}>
+        <div className="sensitive-topics-header">
+          <div className="sensitive-topics-heading">
+            <span className="sensitive-topics-icon" aria-hidden="true">!</span>
+            <div>
+              <div className="section-label">Sujets sensibles</div>
+              <p className="sensitive-topics-description">
+                Si un message reçu contient l’un de ces termes, l’agent ne répond pas et confie la conversation à un humain.
+              </p>
+            </div>
+          </div>
+          <span className="sensitive-topics-count" aria-live="polite">{keywords.length} {keywords.length === 1 ? 'sujet' : 'sujets'}</span>
         </div>
 
-        {kwMsg && <div style={{ background: '#fdecea', color: '#c0392b', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem', marginBottom: 8 }}>{kwMsg}</div>}
+        <div className="sensitive-topics-notice" role="note">
+          <span aria-hidden="true">ℹ</span>
+          <p>La détection ignore les majuscules : <strong>avocat</strong>, <strong>Avocat</strong> et <strong>AVOCAT</strong> sont tous détectés.</p>
+        </div>
+
+        <div className="sensitive-topics-form">
+          <label className="sensitive-topics-label" htmlFor={sensitiveTopicInputId}>Ajouter un terme à surveiller</label>
+          <div className="sensitive-topics-input-row">
+            <input id={sensitiveTopicInputId} type="text" value={newKeyword} onChange={e => setNewKeyword(e.target.value)} onKeyDown={handleKwKeyDown}
+              className="sensitive-topics-input"
+              placeholder="Ex : avocat, remboursement, plainte…"
+            />
+            <button type="button" className="sensitive-topics-add" onClick={handleAddKeyword} disabled={kwSaving || !newKeyword.trim()}>
+              {kwSaving ? 'Ajout…' : '+ Ajouter'}
+            </button>
+          </div>
+        </div>
+
+        {kwMsg && <div className="sensitive-topics-error" role="alert">{kwMsg}</div>}
 
         {keywords.length === 0 ? (
           <div className="keyword-replies-state keyword-replies-state-empty"><span className="keyword-replies-state-icon">＋</span><strong>Aucun sujet sensible</strong><p>Ajoutez un mot ou groupe de mots à surveiller ci-dessus.</p></div>
         ) : (
-          <div className="keyword-replies-list">
+          <div className="sensitive-topics-list">
+            <div className="sensitive-topics-list-heading">
+              <span>Termes surveillés</span>
+              <span>{activeKeywordCount} actif{activeKeywordCount === 1 ? '' : 's'}</span>
+            </div>
+            <div className="keyword-replies-list">
             {keywords.map(kw => (
               <article key={kw.id} className={`keyword-replies-item ${kw.is_active ? '' : 'is-disabled'}`}>
-                <div className="keyword-replies-item-content"><div className="keyword-replies-item-keyword"><span className="keyword-replies-keyword-dot" />{kw.keyword}<span className={`keyword-replies-status ${kw.is_active ? 'active' : 'inactive'}`}>{kw.is_active ? 'Actif' : 'Inactif'}</span></div><p>Le bot transmet ce sujet à un humain sans répondre automatiquement.</p></div>
+                <div className="keyword-replies-item-content"><div className="keyword-replies-item-keyword"><span className="keyword-replies-keyword-dot" />{kw.keyword}<span className={`keyword-replies-status ${kw.is_active ? 'active' : 'inactive'}`}>{kw.is_active ? 'Actif' : 'Inactif'}</span></div><p>L’agent transmet ce sujet à un humain sans répondre automatiquement.</p></div>
                 <div className="keyword-replies-item-actions">
                 <button type="button" className="keyword-replies-action" onClick={() => handleToggleKeyword(kw)} title={kw.is_active ? 'Désactiver' : 'Activer'}>
                   {kw.is_active ? 'Désactiver' : 'Activer'}
@@ -451,6 +476,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
                 </div>
               </article>
             ))}
+            </div>
           </div>
         )}
       </div>

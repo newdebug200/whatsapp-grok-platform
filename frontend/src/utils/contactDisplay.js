@@ -22,9 +22,7 @@ export function getContactDisplayName(contact) {
     || comparableName === phoneDigits
     || comparableName === waDigits;
 
-  if (!nameLooksLikeIdentifier) return name;
-  if (phone && !isRawWhatsAppIdentifier(phone)) return phone;
-  return 'Contact inconnu';
+  return nameLooksLikeIdentifier ? 'Contact inconnu' : name;
 }
 
 export function getContactInitial(contact) {

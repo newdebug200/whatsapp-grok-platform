@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS "Message" (
   "contact_id" INTEGER  NOT NULL,
   "content"    TEXT     NOT NULL,
   "direction"  TEXT     NOT NULL,
+  "origin"     TEXT     NOT NULL DEFAULT 'unknown',
   "type"       TEXT     NOT NULL,
   "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "unread"     INTEGER  NOT NULL DEFAULT 1,
@@ -316,6 +317,7 @@ const migrations = [
   'ALTER TABLE "Message" ADD COLUMN "unread"     INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE "Message" ADD COLUMN "sentiment"  TEXT',
   'ALTER TABLE "Message" ADD COLUMN "media_path" TEXT',
+  'ALTER TABLE "Message" ADD COLUMN "origin"     TEXT NOT NULL DEFAULT \'unknown\'',
   // Campaign
   'ALTER TABLE "Campaign" ADD COLUMN "tag_id"       INTEGER',
   'ALTER TABLE "Campaign" ADD COLUMN "scheduled_at" DATETIME',

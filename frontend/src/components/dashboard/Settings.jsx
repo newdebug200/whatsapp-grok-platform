@@ -155,14 +155,14 @@ export default function Settings() {
         <div className="settings-row settings-row-info-only">
           <div className="settings-row-info">
             <span className="settings-row-label">Délai de regroupement</span>
-            <span className="settings-row-desc">Configurable dans "Bot Config" — le bot attend avant de répondre pour regrouper les messages fragmentés</span>
+            <span className="settings-row-desc">Configurable dans « Réglages Agent » — l’agent attend avant de répondre pour regrouper les messages fragmentés</span>
           </div>
           <span className="settings-badge">Config</span>
         </div>
         <div className="settings-row settings-row-info-only">
           <div className="settings-row-info">
             <span className="settings-row-label">Prise en main humaine</span>
-            <span className="settings-row-desc">Envoyer un message manuellement met automatiquement l'IA en pause pour ce contact</span>
+            <span className="settings-row-desc">Envoyer un message manuellement met automatiquement l’agent IA en pause pour ce contact</span>
           </div>
           <span className="settings-badge active">Auto</span>
         </div>
@@ -196,7 +196,7 @@ export default function Settings() {
         </button>
       </div>
 
-      <div className="settings-version">Botora v1.0 — Plateforme WhatsApp IA</div>
+      <div className="settings-version">Botora v1.0 — Plateforme WhatsApp avec agent IA</div>
 
       {showDeleteModal && (
         <div style={{

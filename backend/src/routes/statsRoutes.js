@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
+const { addMessageCount, createMessageCounts } = require('../services/messageStats');
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
@@ -27,8 +28,7 @@ router.get('/', async (req, res) => {
     if (totalContacts === 0) {
       return res.json({
         totalContacts: 0,
-        messages: { today: { sent: 0, received: 0 }, week: { sent: 0, received: 0 }, month: { sent: 0, received: 0 } },
-        aiResponseRate: 0,
+        messages: { today: createMessageCounts(), week: createMessageCounts(), month: createMessageCounts() },
         dailyMessages: buildEmptyDays(7),
         topContacts: []
       });
@@ -39,34 +39,25 @@ router.get('/', async (req, res) => {
         contact_id: { in: contactIds },
         created_at: { gte: start30Days }
       },
-      select: { direction: true, created_at: true, contact_id: true }
+      select: { direction: true, origin: true, created_at: true, contact_id: true }
     });
 
     const countByPeriod = (msgs, since) => {
-      const subset = msgs.filter(m => new Date(m.created_at) >= since);
-      return {
-        sent: subset.filter(m => m.direction === 'sent').length,
-        received: subset.filter(m => m.direction === 'received').length
-      };
+      return msgs
+        .filter(message => new Date(message.created_at) >= since)
+        .reduce(addMessageCount, createMessageCounts());
     };
 
     const today = countByPeriod(allMessages, startOfToday);
     const week = countByPeriod(allMessages, start7Days);
     const month = countByPeriod(allMessages, start30Days);
 
-    const aiResponseRate = week.received > 0
-      ? Math.round((week.sent / week.received) * 100)
-      : 0;
-
     const dailyMessages = buildEmptyDays(7);
     const weekMessages = allMessages.filter(m => new Date(m.created_at) >= start7Days);
     for (const msg of weekMessages) {
       const dateKey = new Date(msg.created_at).toISOString().slice(0, 10);
       const day = dailyMessages.find(d => d.date === dateKey);
-      if (day) {
-        if (msg.direction === 'sent') day.sent++;
-        else if (msg.direction === 'received') day.received++;
-      }
+      if (day) addMessageCount(day, msg);
     }
 
     const contactMsgCount = {};
@@ -92,7 +83,6 @@ router.get('/', async (req, res) => {
     res.json({
       totalContacts,
       messages: { today, week, month },
-      aiResponseRate,
       dailyMessages,
       topContacts
     });
@@ -110,8 +100,7 @@ function buildEmptyDays(n) {
     days.push({
       date: d.toISOString().slice(0, 10),
       label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
-      sent: 0,
-      received: 0
+      ...createMessageCounts()
     });
   }
   return days;

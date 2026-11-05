@@ -28,7 +28,8 @@ try {
 }
 
 const REINIT_COOLDOWN_MS = 10000;
-const QR_INITIALIZATION_TIMEOUT_MS = 60000;
+const WHATSAPP_AUTH_TIMEOUT_MS = 120000;
+const QR_INITIALIZATION_TIMEOUT_MS = 150000;
 const RECONNECT_DELAYS_MS = [5000, 15000, 30000, 60000];
 const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
 const CONTEXT_MAX = 20;
@@ -42,6 +43,8 @@ class WhatsAppManager {
     this._botSentIds = new Set(); // WA message IDs sent by Botora API — used to skip duplicates in message_create
     this._pendingBotMessages = new Map();
     this._handledWhatsAppMessageIds = new Set();
+    this.groupSyncPromises = new Map();
+    this.groupSyncAt = new Map();
     this.reconnectAttempts = new Map();
     this.reconnectTimers = new Map();
     this.manualLogoutProfiles = new Set();
@@ -52,8 +55,6 @@ class WhatsAppManager {
   setIO(io) { this.io = io; }
   setPrisma(prisma) { this.prisma = prisma; }
 
-  _isSyncActive(profileId, client, token) {
-    if (token?.cancelled) return false;
   emitNewMessage(profileId, payload) {
     const found = this._getEntryByProfileId(profileId);
     if (!found?.entry?.accountId || !this.io) return false;
@@ -189,6 +190,8 @@ class WhatsAppManager {
     return saved;
   }
 
+  _isSyncActive(profileId, client, token) {
+    if (token?.cancelled) return false;
     const found = this._getEntryByProfileId(profileId);
     return Boolean(found && found.entry.client === client && found.entry.status === 'connected');
   }
@@ -527,6 +530,7 @@ class WhatsAppManager {
                 contact_id: dbContact.id,
                 content,
                 direction,
+                origin: msg.fromMe ? 'unknown' : 'whatsapp',
                 type: msg.type || 'text',
                 created_at: msgDate,
                 unread: false,
@@ -574,6 +578,164 @@ class WhatsAppManager {
     } catch (err) {
       console.warn('[WA] Sync historique impossible:', err.message);
       this.io?.to(`account_${accountId}`).emit('sync-failed', { profileId, message: 'La session WhatsApp est conservée, mais la synchronisation doit être relancée.' });
+    }
+  }
+
+  async syncGroupConversations(profileId) {
+    const pending = this.groupSyncPromises.get(profileId);
+    if (pending) return pending;
+    if (Date.now() - (this.groupSyncAt.get(profileId) || 0) < 30000) return;
+
+    const found = this._getEntryByProfileId(profileId);
+    if (!found || found.entry.status !== 'connected') return;
+
+    const sync = this._syncGroupConversations(
+      found.entry.client,
+      profileId,
+      found.entry.accountId,
+      found.entry.syncToken,
+      false
+    );
+    this.groupSyncPromises.set(profileId, sync);
+    try {
+      await sync;
+      this.groupSyncAt.set(profileId, Date.now());
+    } finally {
+      if (this.groupSyncPromises.get(profileId) === sync) this.groupSyncPromises.delete(profileId);
+    }
+  }
+
+  async _syncGroupConversations(client, profileId, accountId, token, notify = true) {
+    try {
+      let chats;
+      try {
+        chats = await client.getChats();
+      } catch (error) {
+        const detail = error?.stack || error?.message || String(error);
+        console.warn(`[WA] Lecture des chats WhatsApp impossible, repli sur les groupes locaux: ${detail}`);
+        if (typeof client.pupPage?.evaluate !== 'function') throw error;
+        chats = await client.pupPage.evaluate(() => {
+          const collection = window.require('WAWebCollections').Chat;
+          return collection.getModelsArray().flatMap(chat => {
+            const data = chat.serialize();
+            const waId = chat.id?._serialized || data.id?._serialized;
+            if (!waId?.endsWith('@g.us')) return [];
+            const title = chat.name || chat.formattedTitle || data.name || data.formattedTitle || null;
+            return [{
+              id: { _serialized: waId, user: chat.id?.user },
+              name: title,
+              formattedTitle: title,
+              isGroup: true,
+              isArchived: Boolean(data.archive),
+              pinned: Boolean(data.pin)
+            }];
+          });
+        });
+      }
+      let syncedGroups = 0;
+      let syncedMessages = 0;
+
+      for (const chat of chats) {
+        if (!this._isSyncActive(profileId, client, token)) return;
+        const waId = chat?.id?._serialized;
+        if (!(chat?.isGroup || waId?.endsWith('@g.us')) || !waId) continue;
+        const groupId = chat.id.user || waId.slice(0, -'@g.us'.length);
+        if (!groupId) continue;
+
+        try {
+          const phoneNumber = `group_${groupId}`;
+          const contactName = await this._resolveChatContactName(client, chat, phoneNumber, waId);
+          const dbContact = await this.prisma.contact.upsert({
+            where: { profile_id_phone_number: { profile_id: profileId, phone_number: phoneNumber } },
+            create: {
+              profile_id: profileId,
+              phone_number: phoneNumber,
+              wa_id: waId,
+              name: contactName,
+              archived: Boolean(chat.isArchived),
+              is_favorite: Boolean(chat.pinned)
+            },
+            update: {
+              wa_id: waId,
+              ...(contactName ? { name: contactName } : {}),
+              ...(chat.isArchived ? { archived: true } : {}),
+              ...(chat.pinned ? { is_favorite: true } : {})
+            }
+          });
+          syncedGroups++;
+
+          if (typeof chat.fetchMessages !== 'function') continue;
+          const messages = await chat.fetchMessages({ limit: 50 });
+          for (const message of messages) {
+            if (!this._isSyncActive(profileId, client, token)) return;
+            if (!message.body && !message.hasMedia) continue;
+            if (['e2e_notification', 'notification_template', 'call_log', 'gp2'].includes(message.type)) continue;
+
+            const mediaTypeLabel = message.hasMedia
+              ? (message.type === 'image' ? 'Image' : message.type === 'video' ? 'Vidéo'
+                : message.type === 'audio' || message.type === 'ptt' ? 'Audio'
+                : message.type === 'document' ? 'Document' : message.type === 'sticker' ? 'Sticker' : 'Fichier')
+              : null;
+            const content = mediaTypeLabel ? (message.body || `[${mediaTypeLabel}]`) : message.body;
+            if (!content?.trim()) continue;
+
+            const createdAt = new Date(Number(message.timestamp) * 1000);
+            if (!Number.isFinite(createdAt.getTime())) continue;
+            const direction = message.fromMe ? 'sent' : 'received';
+            const existing = await this._findSyncedMessage(dbContact.id, message, direction, content, createdAt);
+            if (existing) {
+              const storedMedia = message.hasMedia && !existing.media_path
+                ? await this._persistWhatsAppMedia(message)
+                : null;
+              if (!existing.wa_msg_id || storedMedia) {
+                await this.prisma.message.update({
+                  where: { id: existing.id },
+                  data: {
+                    ...(getWhatsAppMessageId(message) ? { wa_msg_id: getWhatsAppMessageId(message) } : {}),
+                    ...(storedMedia || {})
+                  }
+                });
+              }
+              continue;
+            }
+
+            const storedMedia = message.hasMedia
+              ? await this._persistWhatsAppMedia(message)
+              : null;
+            await this.prisma.message.create({
+              data: {
+                contact_id: dbContact.id,
+                content,
+                direction,
+                origin: message.fromMe ? 'unknown' : 'whatsapp',
+                type: message.type || 'text',
+                created_at: createdAt,
+                unread: false,
+                wa_msg_id: getWhatsAppMessageId(message),
+                media_path: storedMedia?.media_path || null,
+                media_filename: storedMedia?.media_filename || message._data?.filename || null,
+                media_mime: storedMedia?.media_mime || message._data?.mimetype || null
+              }
+            });
+            syncedMessages++;
+          }
+        } catch (error) {
+          console.warn(`[WA] Synchronisation du groupe ${chat.id._serialized} impossible: ${error.message}`);
+        }
+      }
+
+      console.log(`[WA] Groupes synchronisés — ${syncedGroups} groupe(s), ${syncedMessages} message(s) — profil ${profileId}`);
+      if (notify) {
+        this.io?.to(`account_${accountId}`).emit('sync-complete', {
+          profileId,
+          syncedChats: syncedGroups,
+          syncedMessages,
+          message: 'Groupes WhatsApp synchronisés.'
+        });
+      }
+    } catch (error) {
+      console.warn(`[WA] Synchronisation des groupes impossible — profil ${profileId}: ${error.message}`);
+      throw error;
     }
   }
 
@@ -683,6 +845,7 @@ class WhatsAppManager {
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: sessionId, dataPath: SESSION_BASE }),
+      authTimeoutMs: WHATSAPP_AUTH_TIMEOUT_MS,
       puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 600000 }
     });
 
@@ -696,7 +859,7 @@ class WhatsAppManager {
       if (this.clients.get(clientKey) !== entry || entry.status !== 'initializing') return;
       entry.status = 'error';
       entry.lastErrorAt = Date.now();
-      const message = 'WhatsApp n’a pas fourni de QR code après 60 secondes. Vérifiez Chrome, la connexion Internet et les journaux du backend, puis réessayez.';
+      const message = 'WhatsApp n’a pas fourni de QR code après 150 secondes. Vérifiez Chrome, la connexion Internet et les journaux du backend, puis réessayez.';
       console.error(`[WA] Délai dépassé — compte ${accountId}, clé ${clientKey}`);
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'error', profileId, message
@@ -820,6 +983,8 @@ class WhatsAppManager {
       centralSync.getKeywordAutoReplies(profile.id).catch(error => console.warn(`[WA] Réponses automatiques non synchronisées: ${error.message}`));
 
       // Connexion légère : aucun carnet de contacts, chat ou historique n’est chargé ici.
+      this._syncGroupConversations(client, profile.id, accountId, readyEntry?.syncToken)
+        .catch(error => console.warn(`[WA] Synchronisation des groupes impossible — profil ${profile.id}: ${error.message}`));
       // Les contacts sont créés/enrichis uniquement lorsqu’un message réel arrive
       // ou qu’un message est envoyé depuis la plateforme ou le téléphone.
     });
@@ -857,6 +1022,7 @@ class WhatsAppManager {
           console.log(`[WA] Message entrant ignoré pendant la reconnexion (timestamp=${message.timestamp}, protection jusqu'à ${ignoreIncomingUntil || readyAt})`);
           return;
         }
+        if (!this._claimWhatsAppMessage(currentProfileId, message)) return;
 
         // If a campaign is running for this profile, save message but skip AI
         const campaignActive = [...this.runningCampaigns.values()].some(h => h.profileId === currentProfileId);
@@ -888,6 +1054,7 @@ class WhatsAppManager {
           || this._findEntryByClient(client);
         if (!entry?.entry?.profileId) return;
         const currentProfileId = entry.entry.profileId;
+        if (!this._claimWhatsAppMessage(currentProfileId, msg)) return;
 
         // Skip messages older than session ready time (avoid replaying history on reconnect)
         const readyAt = entry.entry.readyAt || 0;
@@ -913,21 +1080,31 @@ class WhatsAppManager {
           });
         }
 
+        if (msgId) {
+          const existingMessage = await this.prisma.message.findFirst({
+            where: { contact_id: dbContact.id, wa_msg_id: msgId }
+          });
+          if (existingMessage) return;
+        }
+
         const mediaTypeLabel = msg.hasMedia
           ? (msg.type === 'image' ? 'Image' : msg.type === 'video' ? 'Vidéo'
             : msg.type === 'audio' || msg.type === 'ptt' ? 'Audio'
             : msg.type === 'document' ? 'Document' : msg.type === 'sticker' ? 'Sticker' : 'Fichier')
           : null;
         const content = mediaTypeLabel ? (msg.body || `[${mediaTypeLabel}]`) : (msg.body || '');
+        const storedMedia = msg.hasMedia ? await this._persistWhatsAppMedia(msg) : null;
 
         await this.prisma.message.create({
           data: {
             contact_id: dbContact.id,
             content,
             direction: 'sent',
+            origin: 'whatsapp',
             type: msg.type || 'text',
             created_at: new Date(),
             unread: false,
+            wa_msg_id: getWhatsAppMessageId(msg),
             ...(msg.hasMedia ? {
               media_filename: msg._data?.filename || null,
               media_mime: msg._data?.mimetype || null,
@@ -1018,7 +1195,6 @@ class WhatsAppManager {
           console.error(`[WA] Fermeture après échec d'authentification impossible: ${err.message}`);
         });
       } else {
-        if (!this._claimWhatsAppMessage(currentProfileId, message)) return;
         client.destroy().catch(err => {
           console.error(`[WA] Fermeture après échec d'authentification impossible: ${err.message}`);
         });
@@ -1028,7 +1204,8 @@ class WhatsAppManager {
     // ── Init error ──
     const handleInitializationError = async (err) => {
       clearTimeout(entry.initializationTimer);
-      console.error(`[WA] Erreur init:`, err.message);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`[WA] Erreur init:`, errorMessage);
       try { await client.destroy(); } catch (destroyError) {
         console.error(`[WA] Fermeture après erreur d'initialisation impossible: ${destroyError.message}`);
       }
@@ -1036,12 +1213,15 @@ class WhatsAppManager {
       if (!found || found.entry !== entry || entry.status !== 'initializing') return;
       entry.status = 'error';
       entry.lastErrorAt = Date.now();
-      const isBrowserLocked = err.message?.includes('already running') || err.message?.includes('userDataDir');
-      const isContextDestroyed = err.message?.includes('context was destroyed') || err.message?.includes('Navigating frame');
+      const isBrowserLocked = errorMessage.includes('already running') || errorMessage.includes('userDataDir');
+      const isContextDestroyed = errorMessage.includes('context was destroyed') || errorMessage.includes('Navigating frame');
+      const isWhatsAppWebTimeout = /Waiting failed:\s*\d+ms exceeded|auth timeout|ready timeout/i.test(errorMessage);
       let userMessage;
       if (isBrowserLocked) userMessage = 'Une ancienne instance de Chrome utilise encore cette session. Redémarrez le backend puis réessayez.';
       else if (isContextDestroyed) userMessage = 'Chrome a planté. Vérifiez que Google Chrome est installé.';
-      else userMessage = `Erreur WhatsApp: ${err.message}`;
+      else if (isWhatsAppWebTimeout) {
+        userMessage = 'WhatsApp Web met trop de temps à établir la connexion. Vérifiez l’accès Internet et l’accès à web.whatsapp.com, puis réessayez.';
+      } else userMessage = `Erreur WhatsApp: ${errorMessage}`;
       this.io?.to(`account_${accountId}`).emit('status', {
         isConnected: false, qrCode: null, status: 'error', profileId, message: userMessage
       });
@@ -1056,7 +1236,6 @@ class WhatsAppManager {
       throw err;
     }
   }
-        if (!this._claimWhatsAppMessage(currentProfileId, msg)) return;
 
   // ─── Status ───────────────────────────────────────────────────────────────
 
@@ -1082,20 +1261,12 @@ class WhatsAppManager {
   }
 
   // Statut d'une éventuelle tentative d'ajout de nouveau numéro déjà en cours
-        if (msgId) {
-          const existingMessage = await this.prisma.message.findFirst({
-            where: { contact_id: dbContact.id, wa_msg_id: msgId }
-          });
-          if (existingMessage) return;
-        }
-
   // (entrée temporaire, pas encore rattachée à un profileId). Ne tient pas
   // compte des numéros déjà connectés — ceux-ci ne doivent pas bloquer un ajout.
   getPendingNewConnection(accountId) {
     const entries = this._getEntriesForAccount(accountId);
     const pending = entries.find(e =>
       e.entry.profileId === null && ['initializing', 'connected', 'qr'].includes(e.entry.status)
-        const storedMedia = msg.hasMedia ? await this._persistWhatsAppMedia(msg) : null;
     );
     if (!pending) return null;
     return {
@@ -1106,7 +1277,6 @@ class WhatsAppManager {
 
   getAllStatuses(accountId) {
     return this._getEntriesForAccount(accountId).map(({ entry }) => ({
-            wa_msg_id: getWhatsAppMessageId(msg),
       profileId: entry.profileId, phoneNumber: entry.phoneNumber,
       status: entry.status, isConnected: entry.status === 'connected'
     }));
@@ -1236,7 +1406,7 @@ class WhatsAppManager {
       const sent = await chat.sendMessage(content, options.sendOptions || {});
       trackSent(sent);
       reportSent();
-      return;
+      return sent;
     }
 
     // ── Méthode 2 : WPP.js natif via pupPage ──────────────────────────────────
@@ -1257,7 +1427,7 @@ class WhatsAppManager {
       if (wppResult && wppResult.ok) {
         if (wppResult.messageId) trackSent({ id: wppResult.messageId });
         reportSent();
-        return;
+        return wppResult.messageId ? { id: { _serialized: wppResult.messageId } } : null;
       }
       if (wppResult && wppResult.error && wppResult.error !== 'WPP non disponible') {
         throw new Error(wppResult.error);
@@ -1271,6 +1441,7 @@ class WhatsAppManager {
     if (!result) throw new Error(`Envoi échoué — contact non joignable (${to})`);
     trackSent(result);
     reportSent();
+    return result;
   }
 
   async sendMedia(profileId, to, media, sendOptions = {}, fallbackPhone = null, { direct = false } = {}) {
@@ -1428,14 +1599,13 @@ class WhatsAppManager {
   async restoreExistingSessions() {
     if (!WWEB_AVAILABLE) {
       console.log('[WA] Restauration ignorée : whatsapp-web.js non installé');
-      return sent;
+      return;
     }
     try {
       const profiles = await this.prisma.whatsAppProfile.findMany();
       const restorableProfiles = profiles.filter(profile => profile.is_connected || this._hasSession(profile.id));
       console.log(`Restauration de ${restorableProfiles.length} session(s) WhatsApp`);
       for (const profile of restorableProfiles) {
-    return result;
         this._prepareSessionDirectory(profile.id);
         await this.initializeClient(profile.account_id, profile.id);
         await new Promise(r => setTimeout(r, 3000));
@@ -1545,7 +1715,7 @@ class WhatsAppManager {
         await this.prisma.campaign.update({
           where: { id: campaignId }, data: { status: 'completed', completed_at: new Date() }
         });
-        return wppResult.messageId ? { id: { _serialized: wppResult.messageId } } : null;
+        return;
       }
 
       await this.prisma.campaign.update({
@@ -1709,6 +1879,7 @@ class WhatsAppManager {
                   contact_id: contact.id,
                   content: savedContent,
                   direction: 'sent',
+                  origin: 'campaign',
                   type: msgType,
                   created_at: new Date(),
                   ...(campaignMedia ? {
