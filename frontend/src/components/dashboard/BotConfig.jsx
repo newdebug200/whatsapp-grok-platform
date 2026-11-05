@@ -4,6 +4,15 @@ import { confirmAction } from '../../utils/confirmAction';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const CONNECT_COOLDOWN_MS = 9000;
+const KNOWLEDGE_CATEGORIES = [
+  ['company', 'Présentation de l’entreprise'],
+  ['catalog', 'Produits et services'],
+  ['pricing', 'Tarifs et offres'],
+  ['policies', 'Conditions et politiques'],
+  ['support', 'Procédures de support'],
+  ['faq', 'Questions fréquentes'],
+  ['other', 'Autre document']
+];
 
 const PERSONALITIES = [
   { value: 'autonomous',  label: '🤖 Agent autonome', desc: 'Adapte son ton et sa manière de répondre au besoin et à l’émotion du client.' },
@@ -40,6 +49,16 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const [waError, setWaError] = useState('');
   const [cooldownLeft, setCooldownLeft] = useState(0);
 
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState([]);
+  const [activeKnowledgeDocument, setActiveKnowledgeDocument] = useState(null);
+  const [knowledgeDraft, setKnowledgeDraft] = useState('');
+  const [knowledgeCategory, setKnowledgeCategory] = useState('company');
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [knowledgeSaving, setKnowledgeSaving] = useState(false);
+  const [knowledgeEditing, setKnowledgeEditing] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState('');
+  const [knowledgeNotice, setKnowledgeNotice] = useState('');
+
   const [keywords, setKeywords] = useState([]);
   const [newKeyword, setNewKeyword] = useState('');
   const [kwSaving, setKwSaving] = useState(false);
@@ -48,7 +67,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const cooldownTimer = useRef(null);
   const cooldownInterval = useRef(null);
 
-  useEffect(() => { loadConfig(); loadKeywords(); }, []);
+  useEffect(() => { loadConfig(); loadKeywords(); loadKnowledgeDocuments(); }, []);
 
   useEffect(() => {
     const { status, qrCode, isConnected } = waStatus;
@@ -104,6 +123,98 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
       const res = await axios.get(`${API_URL}/config/keywords`);
       setKeywords(res.data);
     } catch {}
+  };
+
+  const loadKnowledgeDocuments = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/knowledge-documents`);
+      setKnowledgeDocuments(response.data);
+    } catch (err) {
+      setKnowledgeError(err.response?.data?.error || 'Impossible de charger les documents de référence.');
+    }
+  };
+
+  const handleKnowledgeUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.set('category', knowledgeCategory);
+    formData.set('file', file);
+    setKnowledgeLoading(true);
+    setKnowledgeError('');
+    setKnowledgeNotice('');
+    try {
+      const response = await axios.post(`${API_URL}/knowledge-documents`, formData);
+      setKnowledgeDocuments(current => [response.data, ...current]);
+      setActiveKnowledgeDocument(response.data);
+      setKnowledgeDraft(response.data.extracted_text);
+      setKnowledgeEditing(true);
+      setKnowledgeNotice('Texte extrait. Relisez-le et corrigez-le avant de le valider.');
+    } catch (err) {
+      setKnowledgeError(err.response?.data?.error || 'Impossible d’extraire le texte de ce document.');
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  };
+
+  const handleSelectKnowledgeDocument = async (document) => {
+    setKnowledgeLoading(true);
+    setKnowledgeError('');
+    setKnowledgeNotice('');
+    try {
+      const response = await axios.get(`${API_URL}/knowledge-documents/${document.id}`);
+      setActiveKnowledgeDocument(response.data);
+      setKnowledgeDraft(response.data.extracted_text);
+      setKnowledgeEditing(response.data.status !== 'validated');
+    } catch (err) {
+      setKnowledgeError(err.response?.data?.error || 'Impossible de charger le document sélectionné.');
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  };
+
+  const handleValidateKnowledgeDocument = async () => {
+    if (!activeKnowledgeDocument || !knowledgeDraft.trim()) {
+      setKnowledgeError('Le texte à valider ne peut pas être vide.');
+      return;
+    }
+    setKnowledgeSaving(true);
+    setKnowledgeError('');
+    setKnowledgeNotice('');
+    try {
+      const response = await axios.put(
+        `${API_URL}/knowledge-documents/${activeKnowledgeDocument.id}/validate`,
+        { extracted_text: knowledgeDraft }
+      );
+      setActiveKnowledgeDocument(response.data);
+      setKnowledgeDraft(response.data.extracted_text);
+      setKnowledgeDocuments(current => current.map(document => document.id === response.data.id ? response.data : document));
+      setKnowledgeEditing(false);
+      setKnowledgeNotice('Document validé. L’agent pourra désormais utiliser ces informations.');
+    } catch (err) {
+      setKnowledgeError(err.response?.data?.error || 'Impossible de valider ce document.');
+    } finally {
+      setKnowledgeSaving(false);
+    }
+  };
+
+  const handleDeleteKnowledgeDocument = async (document) => {
+    if (!await confirmAction(`Supprimer « ${document.file_name} » des documents de référence ?`)) return;
+    setKnowledgeError('');
+    setKnowledgeNotice('');
+    try {
+      await axios.delete(`${API_URL}/knowledge-documents/${document.id}`);
+      setKnowledgeDocuments(current => current.filter(item => item.id !== document.id));
+      if (activeKnowledgeDocument?.id === document.id) {
+        setActiveKnowledgeDocument(null);
+        setKnowledgeDraft('');
+        setKnowledgeEditing(false);
+      }
+    } catch (err) {
+      setKnowledgeError(err.response?.data?.error || 'Impossible de supprimer ce document.');
+    }
   };
 
   const handleAddKeyword = async () => {
@@ -280,6 +391,117 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           <label>Informations à sa disposition</label>
           <textarea value={config.bot_info} onChange={e => setConfig({ ...config, bot_info: e.target.value })}
             placeholder={`Décrivez ici tout ce que l’agent doit connaître : produits, services, tarifs, adresses, horaires…`} rows={7} />
+        </div>
+
+        <div className="field-group">
+          <label>Documents de référence</label>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)', lineHeight: 1.5, margin: '0 0 12px' }}>
+            Ajoutez la présentation, le catalogue, les tarifs ou les conditions de l’entreprise. Botora extrait le texte pour que vous puissiez le relire avant validation. Les fichiers PDF scannés sans texte ne sont pas encore pris en charge.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            <select
+              aria-label="Catégorie du document"
+              value={knowledgeCategory}
+              onChange={event => setKnowledgeCategory(event.target.value)}
+              disabled={knowledgeLoading || knowledgeDocuments.length >= 20}
+              style={fieldStyle}
+            >
+              {KNOWLEDGE_CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <label
+              className="btn-connect"
+              style={{ display: 'inline-flex', alignItems: 'center', opacity: knowledgeLoading || knowledgeDocuments.length >= 20 ? 0.6 : 1, cursor: knowledgeLoading || knowledgeDocuments.length >= 20 ? 'not-allowed' : 'pointer' }}
+            >
+              {knowledgeLoading ? 'Traitement…' : 'Ajouter un document'}
+              <input
+                type="file"
+                accept=".pdf,.docx,.txt,.csv,.xlsx"
+                aria-label="Choisir un document de référence"
+                disabled={knowledgeLoading || knowledgeDocuments.length >= 20}
+                onChange={handleKnowledgeUpload}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #888)', marginBottom: 12 }}>
+            PDF, DOCX, TXT, CSV ou XLSX · 10 Mo maximum par fichier · 20 documents maximum.
+          </div>
+
+          {knowledgeError && <div className="config-error" role="alert">{knowledgeError}</div>}
+          {knowledgeNotice && <div className="wa-session-notice wa-session-synced" role="status">{knowledgeNotice}</div>}
+
+          {knowledgeDocuments.length > 0 && (
+            <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+              {knowledgeDocuments.map(document => (
+                <div key={document.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px',
+                  border: '1px solid var(--border, #e0e0e0)', borderRadius: 8,
+                  background: activeKnowledgeDocument?.id === document.id ? 'rgba(37,211,102,0.08)' : 'var(--bg-secondary, #f5f5f5)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectKnowledgeDocument(document)}
+                    disabled={knowledgeLoading}
+                    style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 0, padding: 0, background: 'transparent', color: 'var(--text-primary, #111)', cursor: 'pointer' }}
+                  >
+                    <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                      {document.file_name}
+                    </span>
+                    <span style={{ display: 'block', color: 'var(--text-secondary, #888)', fontSize: '0.75rem', marginTop: 3 }}>
+                      {KNOWLEDGE_CATEGORIES.find(([value]) => value === document.category)?.[1] || 'Autre document'}
+                      {' · '}
+                      {document.status === 'validated' ? 'Validé pour l’agent' : 'À relire et valider'}
+                    </span>
+                  </button>
+                  <button type="button" className="btn-disconnect" onClick={() => handleDeleteKnowledgeDocument(document)}>
+                    Supprimer
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeKnowledgeDocument && (
+            <div style={{ padding: 12, border: '1px solid var(--border, #e0e0e0)', borderRadius: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                <strong style={{ overflowWrap: 'anywhere' }}>{activeKnowledgeDocument.file_name}</strong>
+                <span style={{ color: 'var(--text-secondary, #888)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                  {activeKnowledgeDocument.status === 'validated' ? 'Validé' : 'En attente'}
+                </span>
+              </div>
+              <textarea
+                aria-label={`Texte extrait de ${activeKnowledgeDocument.file_name}`}
+                value={knowledgeDraft}
+                onChange={event => setKnowledgeDraft(event.target.value)}
+                readOnly={!knowledgeEditing}
+                rows={10}
+                style={{ ...fieldStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.5, opacity: knowledgeEditing ? 1 : 0.8 }}
+              />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                {knowledgeEditing ? (
+                  <>
+                    <button type="button" className="btn-connect" onClick={handleValidateKnowledgeDocument} disabled={knowledgeSaving || knowledgeLoading}>
+                      {knowledgeSaving ? 'Validation…' : activeKnowledgeDocument.status === 'validated' ? 'Enregistrer et valider' : 'Valider le texte'}
+                    </button>
+                    {activeKnowledgeDocument.status === 'validated' && (
+                      <button
+                        type="button"
+                        className="btn-disconnect"
+                        onClick={() => { setKnowledgeDraft(activeKnowledgeDocument.extracted_text); setKnowledgeEditing(false); }}
+                        disabled={knowledgeSaving}
+                      >
+                        Annuler
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button type="button" className="btn-connect" onClick={() => setKnowledgeEditing(true)}>
+                    Modifier le texte
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="field-group">

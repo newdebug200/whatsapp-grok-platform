@@ -8,6 +8,7 @@ SanRobot est une plateforme web qui permet à chaque utilisateur de connecter so
 - **Interface WhatsApp Web** : clone fidèle (liste de conversations, bulles de messages, séparateurs de date, double-coche)
 - **Bot IA Groq** : répond automatiquement selon les informations et le comportement configurés
 - **FAQ** : questions/réponses intégrées au contexte du bot
+- **Documents de référence** : extraction, aperçu et validation des documents métier avant utilisation par l’agent
 - **PWA installable** : bureau (Chrome/Edge) + mobile Android + iPhone (Safari)
 - **Temps réel** : Socket.io pour les nouveaux messages et le QR code
 - **Auth JWT** : inscription/connexion sécurisées, token 7 jours
@@ -89,6 +90,15 @@ La clé de développement locale est partagée automatiquement. En production,
 configurez la même clé forte `BOTORA_ADMIN_SERVICE_KEY` sur ce backend et
 `BOTORA_SERVICE_KEY` sur Botora Admin. Les appels protégés de consommation de
 crédits et de récupération de compte nécessitent cette clé.
+
+## Documents de référence de l’agent
+
+Dans **Réglages Bot**, l’entreprise peut ajouter jusqu’à 20 documents PDF,
+DOCX, TXT, CSV ou XLSX (10 Mo maximum chacun). Botora extrait le texte côté
+serveur et affiche un aperçu modifiable. Seuls les documents validés sont
+ajoutés au contexte de l’agent, dans la limite de 30 000 caractères cumulés.
+Le fichier original n’est pas conservé. Les PDF scannés sans texte sélectionnable
+ne sont pas pris en charge dans cette première version.
 
 ## Structure du projet
 
