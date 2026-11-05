@@ -96,7 +96,7 @@ crédits et de récupération de compte nécessitent cette clé.
 Dans **Réglages Bot**, l’entreprise peut ajouter jusqu’à 20 documents PDF,
 DOCX, TXT, CSV ou XLSX (10 Mo maximum chacun). Botora extrait le texte côté
 serveur et affiche un aperçu modifiable. Seuls les documents validés sont
-ajoutés au contexte de l’agent, dans la limite de 30 000 caractères cumulés.
+ajoutés au contexte de l’agent, dans la limite de 200 000 caractères cumulés.
 Le fichier original n’est pas conservé. Les PDF scannés sans texte sélectionnable
 ne sont pas pris en charge dans cette première version.
 

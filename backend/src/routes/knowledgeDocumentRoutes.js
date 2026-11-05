@@ -10,7 +10,7 @@ const { extractDocumentText, MAX_EXTRACTED_TEXT_CHARS } = require('../services/k
 const router = express.Router();
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_DOCUMENTS_PER_PROFILE = 20;
-const MAX_VALIDATED_TEXT_CHARS = 30000;
+const MAX_VALIDATED_TEXT_CHARS = 200000;
 const CATEGORIES = new Set(['company', 'catalog', 'pricing', 'policies', 'support', 'faq', 'other']);
 const upload = multer({
   storage: multer.memoryStorage(),

@@ -112,7 +112,7 @@ test('reference documents can be uploaded, reviewed, validated, and deleted per 
     const overLimitValidation = await fetch(`${baseUrl}/${secondDocument.id}/validate`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ extracted_text: 'x'.repeat(30000) })
+      body: JSON.stringify({ extracted_text: 'x'.repeat(200000) })
     });
     assert.equal(overLimitValidation.status, 413);
 

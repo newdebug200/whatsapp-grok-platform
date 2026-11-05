@@ -127,5 +127,6 @@ test('rejects unsupported, invalid, empty, and oversized text files', async () =
   await assert.rejects(extractDocumentText(Buffer.from('x'), 'image.png'), /Format non pris en charge/);
   await assert.rejects(extractDocumentText(Buffer.from(''), 'vide.txt'), /vide ou invalide/);
   await assert.rejects(extractDocumentText(Buffer.from([0, 1]), 'binaire.txt'), /données binaires/);
-  await assert.rejects(extractDocumentText(Buffer.alloc(30001, 97), 'long.txt'), /dépasse la limite/);
+  assert.equal((await extractDocumentText(Buffer.alloc(30001, 97), 'long-mais-valide.txt')).length, 30001);
+  await assert.rejects(extractDocumentText(Buffer.alloc(200001, 97), 'long.txt'), /dépasse la limite/);
 });

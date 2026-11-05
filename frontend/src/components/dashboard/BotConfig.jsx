@@ -56,6 +56,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeSaving, setKnowledgeSaving] = useState(false);
   const [knowledgeEditing, setKnowledgeEditing] = useState(false);
+  const [knowledgeDragActive, setKnowledgeDragActive] = useState(false);
   const [knowledgeError, setKnowledgeError] = useState('');
   const [knowledgeNotice, setKnowledgeNotice] = useState('');
 
@@ -134,26 +135,60 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     }
   };
 
-  const handleKnowledgeUpload = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
+  const handleKnowledgeUpload = async (files) => {
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
+    const availableSlots = Math.max(0, 20 - knowledgeDocuments.length);
+    if (availableSlots === 0) {
+      setKnowledgeError('Ce profil a déjà atteint la limite de 20 documents.');
+      return;
+    }
 
-    const formData = new FormData();
-    formData.set('category', knowledgeCategory);
-    formData.set('file', file);
+    const filesToProcess = selectedFiles.slice(0, availableSlots);
+    const skippedCount = selectedFiles.length - filesToProcess.length;
     setKnowledgeLoading(true);
     setKnowledgeError('');
     setKnowledgeNotice('');
+    let uploadedCount = 0;
+    let lastUploaded = null;
+    const errors = [];
+
     try {
-      const response = await axios.post(`${API_URL}/knowledge-documents`, formData);
-      setKnowledgeDocuments(current => [response.data, ...current]);
-      setActiveKnowledgeDocument(response.data);
-      setKnowledgeDraft(response.data.extracted_text);
-      setKnowledgeEditing(true);
-      setKnowledgeNotice('Texte extrait. Relisez-le et corrigez-le avant de le valider.');
+      for (const [index, file] of filesToProcess.entries()) {
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        if (!['pdf', 'docx', 'txt', 'csv', 'xlsx'].includes(extension)) {
+          errors.push(`${file.name} : format non pris en charge.`);
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          errors.push(`${file.name} : le fichier dépasse 10 Mo.`);
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.set('category', knowledgeCategory);
+        formData.set('file', file);
+        setKnowledgeNotice(`Extraction ${index + 1}/${filesToProcess.length} : ${file.name}`);
+        try {
+          const response = await axios.post(`${API_URL}/knowledge-documents`, formData);
+          lastUploaded = response.data;
+          uploadedCount += 1;
+          setKnowledgeDocuments(current => [response.data, ...current]);
+        } catch (err) {
+          errors.push(`${file.name} : ${err.response?.data?.error || 'échec de l’extraction.'}`);
+        }
+      }
+
+      if (lastUploaded) {
+        setActiveKnowledgeDocument(lastUploaded);
+        setKnowledgeDraft(lastUploaded.extracted_text);
+        setKnowledgeEditing(true);
+      }
+      if (errors.length > 0) setKnowledgeError(errors.join('\n'));
+      const summary = `${uploadedCount} document${uploadedCount > 1 ? 's' : ''} extrait${uploadedCount > 1 ? 's' : ''}. Relisez et validez chacun avant qu’il soit utilisé par l’agent.`;
+      setKnowledgeNotice(skippedCount > 0 ? `${summary} ${skippedCount} fichier${skippedCount > 1 ? 's' : ''} ignoré${skippedCount > 1 ? 's' : ''} : limite de 20 documents.` : summary);
     } catch (err) {
-      setKnowledgeError(err.response?.data?.error || 'Impossible d’extraire le texte de ce document.');
+      setKnowledgeError(err.response?.data?.error || err.message || 'Impossible de traiter les fichiers sélectionnés.');
     } finally {
       setKnowledgeLoading(false);
     }
@@ -396,7 +431,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
         <div className="field-group">
           <label>Documents de référence</label>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)', lineHeight: 1.5, margin: '0 0 12px' }}>
-            Ajoutez la présentation, le catalogue, les tarifs ou les conditions de l’entreprise. Botora extrait le texte pour que vous puissiez le relire avant validation. Les fichiers PDF scannés sans texte ne sont pas encore pris en charge.
+            Ajoutez la présentation, le catalogue, les tarifs ou les conditions de l’entreprise. Déposez plusieurs fichiers à la fois ou sélectionnez-les. Botora les extrait un par un pour que vous puissiez relire chaque texte avant validation. Les PDF scannés sans texte ne sont pas encore pris en charge.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             <select
@@ -408,26 +443,64 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
             >
               {KNOWLEDGE_CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
+          </div>
+          <div
+            onDragEnter={event => {
+              event.preventDefault();
+              if (!knowledgeLoading && knowledgeDocuments.length < 20) setKnowledgeDragActive(true);
+            }}
+            onDragOver={event => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = knowledgeLoading || knowledgeDocuments.length >= 20 ? 'none' : 'copy';
+            }}
+            onDragLeave={event => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setKnowledgeDragActive(false);
+            }}
+            onDrop={event => {
+              event.preventDefault();
+              setKnowledgeDragActive(false);
+              if (!knowledgeLoading) handleKnowledgeUpload(event.dataTransfer.files);
+            }}
+            style={{
+              padding: '22px 16px',
+              border: `2px dashed ${knowledgeDragActive ? 'var(--accent, #25d366)' : 'var(--border, #b8c2c8)'}`,
+              borderRadius: 10,
+              background: knowledgeDragActive ? 'rgba(37,211,102,0.08)' : 'var(--bg-secondary, #f5f5f5)',
+              textAlign: 'center',
+              opacity: knowledgeDocuments.length >= 20 ? 0.6 : 1,
+              transition: 'border-color 0.15s, background 0.15s'
+            }}
+          >
+            <div style={{ fontWeight: 600, color: 'var(--text-primary, #111)', marginBottom: 5 }}>
+              {knowledgeDragActive ? 'Déposez vos fichiers ici' : 'Glissez-déposez vos documents ici'}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)', marginBottom: 10 }}>
+              {knowledgeLoading ? 'Extraction en cours…' : 'Vous pouvez sélectionner ou déposer plusieurs documents à la fois.'}
+            </div>
             <label
               className="btn-connect"
               style={{ display: 'inline-flex', alignItems: 'center', opacity: knowledgeLoading || knowledgeDocuments.length >= 20 ? 0.6 : 1, cursor: knowledgeLoading || knowledgeDocuments.length >= 20 ? 'not-allowed' : 'pointer' }}
             >
-              {knowledgeLoading ? 'Traitement…' : 'Ajouter un document'}
+              Choisir des fichiers
               <input
                 type="file"
                 accept=".pdf,.docx,.txt,.csv,.xlsx"
-                aria-label="Choisir un document de référence"
+                multiple
+                aria-label="Choisir des documents de référence"
                 disabled={knowledgeLoading || knowledgeDocuments.length >= 20}
-                onChange={handleKnowledgeUpload}
+                onChange={event => {
+                  handleKnowledgeUpload(event.target.files);
+                  event.target.value = '';
+                }}
                 style={{ display: 'none' }}
               />
             </label>
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #888)', marginBottom: 12 }}>
-            PDF, DOCX, TXT, CSV ou XLSX · 10 Mo maximum par fichier · 20 documents maximum.
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #888)', marginTop: 8, marginBottom: 12 }}>
+            PDF, DOCX, TXT, CSV ou XLSX · 10 Mo maximum par fichier · 20 documents maximum · 200 000 caractères cumulés utilisables par l’agent.
           </div>
 
-          {knowledgeError && <div className="config-error" role="alert">{knowledgeError}</div>}
+          {knowledgeError && <div className="config-error" role="alert" style={{ whiteSpace: 'pre-line' }}>{knowledgeError}</div>}
           {knowledgeNotice && <div className="wa-session-notice wa-session-synced" role="status">{knowledgeNotice}</div>}
 
           {knowledgeDocuments.length > 0 && (

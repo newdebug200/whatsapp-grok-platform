@@ -3,13 +3,14 @@
 const { Readable } = require('node:stream');
 const path = require('node:path');
 
-const MAX_EXTRACTED_TEXT_CHARS = 30000;
+const MAX_EXTRACTED_TEXT_CHARS = 200000;
 const MAX_PDF_PAGES = 100;
 const MAX_WORKSHEETS = 10;
 const MAX_ROWS_PER_WORKSHEET = 2000;
 const MAX_COLUMNS_PER_ROW = 100;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
 const MAX_ZIP_ENTRIES = 5000;
+const textLengths = new WeakMap();
 
 const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.txt', '.csv', '.xlsx']);
 
@@ -22,11 +23,12 @@ function documentError(message, statusCode = 400) {
 function appendText(lines, value) {
   const line = String(value ?? '').trim();
   if (!line) return;
-  const currentLength = lines.reduce((length, part) => length + part.length + 1, 0);
+  const currentLength = textLengths.get(lines) || 0;
   if (currentLength + line.length > MAX_EXTRACTED_TEXT_CHARS) {
     throw documentError(`Le texte extrait dépasse la limite de ${MAX_EXTRACTED_TEXT_CHARS} caractères. Réduisez le document avant de le téléverser.`, 413);
   }
   lines.push(line);
+  textLengths.set(lines, currentLength + line.length + 1);
 }
 
 function decodeUtf8(buffer) {
