@@ -89,6 +89,7 @@ secrets/
 backend/data/
 backend/.wwebjs_auth/
 backend/.env
+backend/uploads/
 frontend/.env
 frontend/dist/
 frontend/build/
