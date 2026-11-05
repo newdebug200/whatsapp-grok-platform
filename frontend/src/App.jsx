@@ -1,10 +1,11 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import axios from 'axios';
 import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/dashboard/Dashboard';
 import InstallPrompt from './components/pwa/InstallPrompt';
+import { showUserAlert } from './utils/showUserAlert';
 import './App.css';
 import './theme-overrides.css';
 
@@ -20,21 +21,42 @@ function AppContent() {
   const { t } = useLanguage();
   const [theme, setTheme] = useState(() => localStorage.getItem('botora-theme') || 'light');
   const [centralStatus, setCentralStatus] = useState({ state: 'checking', message: t('Checking central server…') });
+  const centralStatusRef = useRef('checking');
 
   useEffect(() => {
     let cancelled = false;
+    const updateCentralStatus = (nextStatus) => {
+      const previousStatus = centralStatusRef.current;
+      centralStatusRef.current = nextStatus.state;
+      setCentralStatus(nextStatus);
+      if (nextStatus.state === 'offline' && previousStatus !== 'offline') {
+        showUserAlert({
+          icon: 'error',
+          title: 'Serveur central indisponible',
+          text: nextStatus.message,
+          dedupeKey: 'central-api-offline'
+        });
+      } else if (nextStatus.state === 'online' && previousStatus === 'offline') {
+        showUserAlert({
+          icon: 'success',
+          title: 'Connexion rétablie',
+          text: 'Le serveur central Botora est de nouveau accessible.',
+          dedupeKey: 'central-api-online'
+        });
+      }
+    };
     const checkCentralHealth = async () => {
       try {
-        const response = await axios.get(`${API_URL}/central-health`, { timeout: 10000 });
+        const response = await axios.get(`${API_URL}/central-health`, { timeout: 10000, skipNetworkAlert: true });
         if (cancelled) return;
         if (response.data?.ok) {
-          setCentralStatus({ state: 'online', message: t('Central API connected.') });
+          updateCentralStatus({ state: 'online', message: t('Central API connected.') });
         } else {
-          setCentralStatus({ state: 'offline', message: t('The central server is unavailable. Please try again later.') });
+          updateCentralStatus({ state: 'offline', message: t('The central server is unavailable. Please try again later.') });
         }
       } catch (error) {
         if (!cancelled) {
-          setCentralStatus({
+          updateCentralStatus({
             state: 'offline',
             message: error.response?.data?.error || t('The central server is unavailable. Please try again later.')
           });
@@ -49,6 +71,62 @@ function AppContent() {
       clearInterval(healthCheck);
     };
   }, [t]);
+
+  useEffect(() => {
+    const handleOffline = () => {
+      showUserAlert({
+        icon: 'warning',
+        title: 'Connexion Internet perdue',
+        text: 'Vérifiez votre connexion Internet. Botora se reconnectera lorsque le réseau sera rétabli.',
+        dedupeKey: 'browser-offline',
+        dedupeMs: 30000
+      });
+    };
+    const handleOnline = () => {
+      showUserAlert({
+        icon: 'success',
+        title: 'Connexion Internet rétablie',
+        text: 'Votre appareil est de nouveau connecté à Internet.',
+        dedupeKey: 'browser-online',
+        dedupeMs: 30000,
+        timer: 2500
+      });
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    if (!navigator.onLine) handleOffline();
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    const interceptorId = axios.interceptors.response.use(
+      response => response,
+      error => {
+        if (
+          !error.config?.skipNetworkAlert
+          && !axios.isCancel(error)
+          && (error.code !== 'ERR_CANCELED')
+          && (!error.response || error.response.status >= 500)
+        ) {
+          showUserAlert({
+            icon: 'error',
+            title: navigator.onLine ? 'Service Botora inaccessible' : 'Connexion Internet perdue',
+            text: navigator.onLine
+              ? 'Botora ne peut pas joindre le serveur. Réessayez dans quelques instants.'
+              : 'Vérifiez votre connexion Internet, puis réessayez.',
+            dedupeKey: navigator.onLine ? 'api-connection-error' : 'browser-offline',
+            dedupeMs: 10000
+          });
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(interceptorId);
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

@@ -18,6 +18,7 @@ import Sentiments from './Sentiments';
 import ApiAccess from './ApiAccess';
 import { useLanguage } from '../../context/LanguageContext';
 import { confirmAction } from '../../utils/confirmAction';
+import { showUserAlert } from '../../utils/showUserAlert';
 import { isFeatureEnabled } from '../../utils/featureFlags';
 import './Dashboard.css';
 
@@ -81,6 +82,8 @@ export default function Dashboard() {
   const soundEnabledRef = useRef(soundEnabled);
   const socketRef = useRef(null);
   const activeProfileRef = useRef(activeProfile);
+  const backendConnectionStateRef = useRef('connecting');
+  const whatsappWasConnectedRef = useRef(false);
 
   useEffect(() => { activePanelRef.current = activePanel; }, [activePanel]);
   useEffect(() => { selectedContactRef.current = selectedContact; }, [selectedContact]);
@@ -170,6 +173,7 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    let disposed = false;
     const s = io(SOCKET_URL, {
       auth: { token },
       reconnectionAttempts: 5,
@@ -180,6 +184,15 @@ export default function Dashboard() {
 
     s.on('connect', () => {
       console.log('Socket connecté');
+      if (backendConnectionStateRef.current === 'disconnected') {
+        showUserAlert({
+          icon: 'success',
+          title: 'Connexion au serveur rétablie',
+          text: 'Botora est de nouveau connecté à son serveur.',
+          dedupeKey: 'socket-reconnected'
+        });
+      }
+      backendConnectionStateRef.current = 'connected';
       if (activeProfileRef.current?.id) s.emit('get-status', { profileId: activeProfileRef.current.id });
       else s.emit('get-status');
       if (activeProfileRef.current?.id) {
@@ -196,6 +209,32 @@ export default function Dashboard() {
         s.disconnect();
         setTimeout(() => logout(), 2000);
       } else if (err.message === 'SUBSCRIPTION_REQUIRED' || err.data?.access_type === 'expired') setActivePanel('subscriptions');
+      else if (backendConnectionStateRef.current !== 'disconnected') {
+        backendConnectionStateRef.current = 'disconnected';
+        showUserAlert({
+          icon: 'error',
+          title: navigator.onLine ? 'Connexion au serveur impossible' : 'Connexion Internet perdue',
+          text: navigator.onLine
+            ? 'Botora ne parvient pas à joindre son serveur. Réessayez dans quelques instants.'
+            : 'Vérifiez votre connexion Internet. Botora réessaiera automatiquement.',
+          dedupeKey: navigator.onLine ? 'socket-disconnected' : 'browser-offline',
+          dedupeMs: 15000
+        });
+      }
+    });
+    s.on('disconnect', (reason) => {
+      if (disposed || reason === 'io client disconnect') return;
+      if (backendConnectionStateRef.current === 'connected') {
+        backendConnectionStateRef.current = 'disconnected';
+        if (!navigator.onLine) return;
+        showUserAlert({
+          icon: 'warning',
+          title: 'Connexion au serveur interrompue',
+          text: 'Botora tente de se reconnecter. Certaines actions peuvent être indisponibles pendant ce temps.',
+          dedupeKey: 'socket-disconnected',
+          dedupeMs: 15000
+        });
+      }
     });
     s.on('subscription-required', () => {
       setActivePanel('subscriptions');
@@ -210,15 +249,51 @@ export default function Dashboard() {
     s.on('status', (status) => {
       const activeProfileId = activeProfileRef.current?.id;
       if (status.profileId && activeProfileId && Number(status.profileId) !== Number(activeProfileId)) return;
+      if (status.isConnected === true) whatsappWasConnectedRef.current = true;
+      else if (status.isConnected === false && whatsappWasConnectedRef.current) {
+        whatsappWasConnectedRef.current = false;
+        if (!navigator.onLine) {
+          setWaStatus(status);
+          return;
+        }
+        showUserAlert({
+          icon: 'warning',
+          title: 'Session WhatsApp déconnectée',
+          text: status.message || 'Reconnectez WhatsApp depuis les réglages de l’agent pour reprendre les échanges.',
+          dedupeKey: 'whatsapp-disconnected'
+        });
+      }
       setWaStatus(status);
     });
-    s.on('qr', (qr) => setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false, message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.' })));
-    s.on('ready', () => setWaStatus({ isConnected: true, qrCode: null, status: 'connected', message: 'Session WhatsApp conservée.' }));
+    s.on('qr', (qr) => {
+      whatsappWasConnectedRef.current = false;
+      setWaStatus(prev => ({ ...prev, qrCode: qr, status: 'qr', isConnected: false, message: 'Session WhatsApp perdue ou non reconnue. Scannez le QR code pour reconnecter ce profil.' }));
+    });
+    s.on('ready', () => {
+      whatsappWasConnectedRef.current = true;
+      setWaStatus({ isConnected: true, qrCode: null, status: 'connected', message: 'Session WhatsApp conservée.' });
+    });
     s.on('sync-start', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'syncing', message: data.message || 'Session WhatsApp conservée. Synchronisation en cours…' })));
     s.on('sync-complete', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, qrCode: null, status: 'synced', message: data.message || 'Session WhatsApp conservée. Synchronisation terminée.' })));
     s.on('sync-failed', (data) => setWaStatus(prev => ({ ...prev, isConnected: true, status: 'sync-failed', message: data.message || 'La session WhatsApp est conservée, mais la synchronisation doit être relancée.' })));
-    s.on('disconnected', () => setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message: 'La session WhatsApp de ce profil est perdue. Scannez le QR code pour vous reconnecter.' }));
-    s.on('auth_failure', () => setWaStatus({ isConnected: false, qrCode: null, status: 'auth_failure', message: 'La session WhatsApp est invalide. Scannez le QR code pour reconnecter ce profil.' }));
+    s.on('disconnected', () => {
+      const hadConnection = whatsappWasConnectedRef.current;
+      whatsappWasConnectedRef.current = false;
+      const message = 'La session WhatsApp de ce profil est perdue. Scannez le QR code pour vous reconnecter.';
+      setWaStatus({ isConnected: false, qrCode: null, status: 'disconnected', message });
+      if (hadConnection && navigator.onLine) {
+        showUserAlert({ icon: 'warning', title: 'WhatsApp déconnecté', text: message, dedupeKey: 'whatsapp-disconnected' });
+      }
+    });
+    s.on('auth_failure', () => {
+      const hadConnection = whatsappWasConnectedRef.current;
+      whatsappWasConnectedRef.current = false;
+      const message = 'La session WhatsApp est invalide. Scannez le QR code pour reconnecter ce profil.';
+      setWaStatus({ isConnected: false, qrCode: null, status: 'auth_failure', message });
+      if (hadConnection && navigator.onLine) {
+        showUserAlert({ icon: 'error', title: 'Session WhatsApp invalide', text: message, dedupeKey: 'whatsapp-disconnected' });
+      }
+    });
 
     s.on('profile-ready', async (profile) => {
       selectProfile(profile);
@@ -238,8 +313,13 @@ export default function Dashboard() {
     });
 
     s.on('bot-error', (data) => {
-      setBotError(data);
-      setTimeout(() => setBotError(null), 8000);
+      showUserAlert({
+        icon: 'error',
+        title: 'Problème de l’agent IA',
+        text: data?.error || 'L’agent n’a pas pu traiter ce message. Réessayez ou prenez le relais manuellement.',
+        dedupeKey: `bot-error-${data?.contactPhone || 'general'}`,
+        dedupeMs: 8000
+      });
     });
 
     s.on('human-handoff', (data) => {
@@ -263,6 +343,7 @@ export default function Dashboard() {
 
     s.on('reconnect', () => {
       console.log('Socket reconnecté — resync statut WA');
+      backendConnectionStateRef.current = 'connected';
       if (activeProfileRef.current?.id) s.emit('get-status', { profileId: activeProfileRef.current.id });
       else s.emit('get-status');
       if (activeProfileRef.current?.id) {
@@ -271,7 +352,11 @@ export default function Dashboard() {
     });
 
     setSocket(s);
-    return () => { s.disconnect(); socketRef.current = null; };
+    return () => {
+      disposed = true;
+      s.disconnect();
+      socketRef.current = null;
+    };
   }, [token, handleNewMessage, loadContactsForProfile, selectProfile, loadProfiles]);
 
   useEffect(() => {
@@ -301,6 +386,15 @@ export default function Dashboard() {
   };
 
   const handleConnectWhatsApp = (forceNew = false) => {
+    if (!socketRef.current?.connected) {
+      showUserAlert({
+        icon: 'error',
+        title: 'Serveur Botora inaccessible',
+        text: 'Impossible de lancer la connexion WhatsApp tant que Botora n’est pas connecté à son serveur.',
+        dedupeKey: 'connect-whatsapp-without-server'
+      });
+      return;
+    }
     const profileId = !forceNew && activeProfileRef.current?.id ? activeProfileRef.current.id : null;
     socketRef.current?.emit('connect-whatsapp', profileId ? { profileId } : {});
   };

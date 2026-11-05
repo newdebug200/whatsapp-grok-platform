@@ -72,16 +72,20 @@ test('parses only complete structured assistant replies', () => {
 });
 
 test('identifies direct requests to change or ask the assistant name', () => {
-  for (const message of [
-    'À partir de maintenant tu t’appelles Bobo',
-    'Non à partir de maintenant tu tappel Bobo',
-    'Je vais t’appeler Bobo',
-    'Quel est ton nom ?',
-    'Tu est qui meme ?',
-    'Tu tappel comment ?',
-    'Tu t’appelles comment ?'
+  for (const [message, isRename] of [
+    ['À partir de maintenant tu t’appelles Bobo', true],
+    ['Non à partir de maintenant tu tappel Bobo', true],
+    ['Je vais t’appeler Bobo', true],
+    ["Et moi je t'appel comment ?", false],
+    ['Et moi je t’appel comment ?', false],
+    ['Comment je peux t’appeler ?', false],
+    ['Quel est ton nom ?', false],
+    ['Tu est qui meme ?', false],
+    ['Tu tappel comment ?', false],
+    ['Tu t’appelles comment ?', false]
   ]) {
     assert.equal(messageHandler._isIdentityRequest(message), true, message);
+    assert.equal(messageHandler._isRenameRequest(message), isRename, message);
   }
 
   assert.equal(messageHandler._isIdentityRequest('Quel est le nom du produit ?'), false);
@@ -91,12 +95,14 @@ test('identifies obvious programming requests as outside the business role', () 
   for (const message of [
     'Tu peux m’aider à coder en PHP ?',
     'Donne-moi un exemple Symfony Mailer SMTP',
-    'Écris un script JavaScript pour mon site'
+    'Écris un script JavaScript pour mon site',
+    'Raconte-moi une blague'
   ]) {
     assert.equal(messageHandler._isClearlyOutOfScopeRequest(message), true, message);
   }
 
   assert.equal(messageHandler._isClearlyOutOfScopeRequest('Quels produits sont disponibles ?'), false);
+  assert.equal(messageHandler._isClearlyOutOfScopeRequest('Quel est le code-barres de ce produit ?'), false);
 });
 
 test('recognizes explicit human requests without matching incidental mentions', () => {
@@ -149,6 +155,36 @@ test('keeps the configured name and refuses a direct request to rename the agent
   assert.match(calls.find(([type]) => type === 'send')[1], /Sébasse NOVALYS/);
   assert.doesNotMatch(calls.find(([type]) => type === 'send')[1], /Bobo/);
   assert.ok(calls.some(([type]) => type === 'save'));
+});
+
+test('answers an identity question with the configured name without treating it as a rename', async () => {
+  const sentMessages = [];
+  const waManager = {
+    getFromCache: () => [],
+    sendMessage: async (profileId, from, text) => {
+      sentMessages.push(text);
+      return { id: { _serialized: 'sent-id' } };
+    },
+    trackBotSentId: () => {},
+    addToCache: () => {}
+  };
+  await messageHandler._processTextMessage(
+    "Et moi je t'appel comment ?",
+    { id: 12, phone_number: '0000000000' },
+    {},
+    {
+      contact: { findUnique: async () => ({ id: 12, ia_paused: false }) },
+      message: { create: async () => {} }
+    },
+    3,
+    '0000000000@c.us',
+    waManager,
+    { ia_enabled: true, bot_name: 'Sébasse NOVALYS' }
+  );
+
+  assert.equal(sentMessages.length, 1);
+  assert.match(sentMessages[0], /Sébasse NOVALYS/);
+  assert.doesNotMatch(sentMessages[0], /ne peut pas être modifié/);
 });
 
 test('refuses programming requests without calling the language model', async () => {
