@@ -142,6 +142,7 @@ test('keeps the configured name and refuses a direct request to rename the agent
   const calls = [];
   const prisma = {
     contact: { findUnique: async () => ({ id: 12, ia_paused: false }) },
+    botConfig: { findUnique: async () => ({ ia_enabled: true, bot_name: 'Sébasse NOVALYS' }) },
     message: { create: async ({ data }) => calls.push(['save', data.content]) }
   };
   const waManager = {
@@ -161,8 +162,7 @@ test('keeps the configured name and refuses a direct request to rename the agent
     prisma,
     3,
     '0000000000@c.us',
-    waManager,
-    { ia_enabled: true, bot_name: 'Sébasse NOVALYS' }
+    waManager
   );
 
   assert.match(calls.find(([type]) => type === 'send')[1], /Sébasse NOVALYS/);
@@ -187,17 +187,140 @@ test('answers an identity question with the configured name without treating it 
     {},
     {
       contact: { findUnique: async () => ({ id: 12, ia_paused: false }) },
+      botConfig: { findUnique: async () => ({ ia_enabled: true, bot_name: 'Sébasse NOVALYS' }) },
       message: { create: async () => {} }
     },
     3,
     '0000000000@c.us',
-    waManager,
-    { ia_enabled: true, bot_name: 'Sébasse NOVALYS' }
+    waManager
   );
 
   assert.equal(sentMessages.length, 1);
   assert.match(sentMessages[0], /Sébasse NOVALYS/);
   assert.doesNotMatch(sentMessages[0], /ne peut pas être modifié/);
+});
+
+test('uses the latest bot settings when a queued message starts processing', async (t) => {
+  let botConfig = { ia_enabled: true, bot_name: 'Ancien nom' };
+  const sentMessages = [];
+  const contact = { id: 12, phone_number: '0000000000' };
+  const prisma = {
+    contact: { findUnique: async () => ({ ...contact, ia_paused: false }) },
+    botConfig: { findUnique: async () => botConfig },
+    message: { create: async () => {} }
+  };
+  const waManager = {
+    getFromCache: () => [],
+    sendMessage: async (_profileId, _from, text) => {
+      sentMessages.push(text);
+      return { id: { _serialized: 'sent-id' } };
+    },
+    trackBotSentId: () => {},
+    addToCache: () => {}
+  };
+  const key = `93_${contact.id}`;
+  t.after(() => {
+    const pending = messageHandler.pendingMessages.get(key);
+    if (pending) clearTimeout(pending.timer);
+    messageHandler.pendingMessages.delete(key);
+  });
+
+  messageHandler._queueMessage(
+    'Quel est ton nom ?',
+    '0000000000@c.us',
+    contact,
+    {},
+    prisma,
+    93,
+    waManager,
+    5
+  );
+  botConfig = { ia_enabled: true, bot_name: 'Nouveau nom' };
+
+  await new Promise(resolve => setTimeout(resolve, 30));
+
+  assert.equal(sentMessages.length, 1);
+  assert.match(sentMessages[0], /Nouveau nom/);
+  assert.doesNotMatch(sentMessages[0], /Ancien nom/);
+});
+
+test('keeps in-flight settings unchanged and uses new settings for the next request', async () => {
+  let botConfig = { ia_enabled: true, bot_name: 'Ancien nom' };
+  let releaseFirstReply;
+  let firstReplyStarted;
+  const firstReplyReady = new Promise(resolve => { firstReplyStarted = resolve; });
+  const firstReplyGate = new Promise(resolve => { releaseFirstReply = resolve; });
+  const sentMessages = [];
+  let sendCount = 0;
+  const contact = { id: 14, phone_number: '0000000000' };
+  const prisma = {
+    contact: { findUnique: async () => ({ ...contact, ia_paused: false }) },
+    botConfig: { findUnique: async () => ({ ...botConfig }) },
+    message: { create: async () => {} }
+  };
+  const waManager = {
+    getFromCache: () => [],
+    sendMessage: async (_profileId, _from, text) => {
+      sentMessages.push(text);
+      if (sendCount++ === 0) {
+        firstReplyStarted();
+        await firstReplyGate;
+      }
+      return { id: { _serialized: `sent-${sendCount}` } };
+    },
+    trackBotSentId: () => {},
+    addToCache: () => {}
+  };
+
+  const inFlightReply = messageHandler._processTextMessage(
+    'Quel est ton nom ?',
+    contact,
+    {},
+    prisma,
+    95,
+    '0000000000@c.us',
+    waManager
+  );
+  await firstReplyReady;
+  botConfig = { ia_enabled: true, bot_name: 'Nouveau nom' };
+  releaseFirstReply();
+  await inFlightReply;
+  await messageHandler._processTextMessage(
+    'Quel est ton nom ?',
+    contact,
+    {},
+    prisma,
+    95,
+    '0000000000@c.us',
+    waManager
+  );
+
+  assert.match(sentMessages[0], /Ancien nom/);
+  assert.match(sentMessages[1], /Nouveau nom/);
+});
+
+test('uses the latest response delay when another message joins the queue', async (t) => {
+  const originalProcessTextMessage = messageHandler._processTextMessage;
+  const contact = { id: 13, phone_number: '0000000000' };
+  const key = `94_${contact.id}`;
+  let resolveProcessed;
+  const processed = new Promise(resolve => { resolveProcessed = resolve; });
+  messageHandler._processTextMessage = async messageText => resolveProcessed(messageText);
+  t.after(() => {
+    messageHandler._processTextMessage = originalProcessTextMessage;
+    const pending = messageHandler.pendingMessages.get(key);
+    if (pending) clearTimeout(pending.timer);
+    messageHandler.pendingMessages.delete(key);
+  });
+
+  messageHandler._queueMessage('Premier', '0000000000@c.us', contact, {}, {}, 94, {}, 1000);
+  messageHandler._queueMessage('Second', '0000000000@c.us', contact, {}, {}, 94, {}, 5);
+
+  const result = await Promise.race([
+    processed,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Le nouveau délai de réponse n’a pas été appliqué.')), 200))
+  ]);
+  assert.equal(result, 'Premier\nSecond');
 });
 
 test('refuses programming requests without calling the language model', async () => {
@@ -208,6 +331,7 @@ test('refuses programming requests without calling the language model', async ()
   };
   const prisma = {
     contact: { findUnique: async () => ({ id: 12, ia_paused: false }) },
+    botConfig: { findUnique: async () => ({ ia_enabled: true, bot_name: 'Sébasse NOVALYS' }) },
     message: { create: async ({ data }) => calls.push(['save', data.content]) }
   };
   const waManager = {
@@ -228,8 +352,7 @@ test('refuses programming requests without calling the language model', async ()
       prisma,
       3,
       '0000000000@c.us',
-      waManager,
-      { ia_enabled: true, bot_name: 'Sébasse NOVALYS' }
+      waManager
     );
   } finally {
     require('axios').post = originalPost;
@@ -246,6 +369,7 @@ test('pauses automation and confirms an explicit customer handoff request', asyn
       findUnique: async () => ({ id: 12, ia_paused: false }),
       update: async (args) => calls.push(['pause', args.data.ia_paused])
     },
+    botConfig: { findUnique: async () => ({ ia_enabled: true }) },
     message: {
       create: async (args) => calls.push(['save', args.data.content])
     }
@@ -268,8 +392,7 @@ test('pauses automation and confirms an explicit customer handoff request', asyn
     prisma,
     3,
     '0000000000@c.us',
-    waManager,
-    { ia_enabled: true }
+    waManager
   );
 
   assert.ok(calls.some(([type, value]) => type === 'pause' && value === true));
@@ -379,6 +502,105 @@ test('sends validated reference document text to the model', async (t) => {
 
   assert.ok(systemPrompt.includes('tarifs.txt — catégorie : pricing'));
   assert.ok(systemPrompt.includes('Le savon coûte 12 euros.'));
+});
+
+test('logs Groq rejection details without logging the API key or customer message', async (t) => {
+  const originalApiKey = process.env.GROQ_API_KEY;
+  const originalGrokApiKey = process.env.GROK_API_KEY;
+  const originalPost = require('axios').post;
+  const originalConsoleError = console.error;
+  const loggedErrors = [];
+  const emittedEvents = [];
+  process.env.GROQ_API_KEY = 'test-secret-key';
+  delete process.env.GROK_API_KEY;
+  require('axios').post = async () => {
+    const error = new Error('Request failed with status code 400');
+    error.response = {
+      status: 400,
+      data: {
+        error: {
+          message: 'Invalid response_format parameter',
+          type: 'invalid_request_error',
+          code: 'unsupported_value',
+          param: 'response_format'
+        }
+      }
+    };
+    throw error;
+  };
+  console.error = (...args) => loggedErrors.push(args.join(' '));
+  t.after(() => {
+    if (originalApiKey === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = originalApiKey;
+    if (originalGrokApiKey === undefined) delete process.env.GROK_API_KEY;
+    else process.env.GROK_API_KEY = originalGrokApiKey;
+    require('axios').post = originalPost;
+    console.error = originalConsoleError;
+  });
+
+  await messageHandler._callGroqAPI(
+    'Message privé du client',
+    { id: 12, phone_number: '0000000000' },
+    {},
+    {},
+    3,
+    {},
+    '0000000000@c.us',
+    [],
+    [],
+    { emitToProfileAccount: (...args) => emittedEvents.push(args) },
+    null
+  );
+
+  assert.equal(loggedErrors.length, 1);
+  assert.match(loggedErrors[0], /"status":400/);
+  assert.match(loggedErrors[0], /"providerCode":"unsupported_value"/);
+  assert.match(loggedErrors[0], /Invalid response_format parameter/);
+  assert.doesNotMatch(loggedErrors[0], /test-secret-key|Message privé du client/);
+  assert.equal(emittedEvents[0][2].error, 'Le service IA a refusé cette demande. Si le problème se répète, contactez l’administrateur.');
+});
+
+test('gives an actionable message when Groq rejects an oversized context', async (t) => {
+  const originalApiKey = process.env.GROQ_API_KEY;
+  const originalGrokApiKey = process.env.GROK_API_KEY;
+  const originalPost = require('axios').post;
+  const originalConsoleError = console.error;
+  const emittedEvents = [];
+  process.env.GROQ_API_KEY = 'test-key';
+  delete process.env.GROK_API_KEY;
+  require('axios').post = async () => {
+    const error = new Error('Request failed with status code 400');
+    error.response = {
+      status: 400,
+      data: { error: { message: 'Maximum context length exceeded' } }
+    };
+    throw error;
+  };
+  console.error = () => {};
+  t.after(() => {
+    if (originalApiKey === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = originalApiKey;
+    if (originalGrokApiKey === undefined) delete process.env.GROK_API_KEY;
+    else process.env.GROK_API_KEY = originalGrokApiKey;
+    require('axios').post = originalPost;
+    console.error = originalConsoleError;
+  });
+
+  await messageHandler._callGroqAPI(
+    'Question métier',
+    { id: 12, phone_number: '0000000000' },
+    {},
+    {},
+    3,
+    {},
+    '0000000000@c.us',
+    [],
+    [],
+    { emitToProfileAccount: (...args) => emittedEvents.push(args) },
+    null
+  );
+
+  assert.equal(emittedEvents[0][2].error, 'La demande est trop volumineuse pour le service IA. Réduisez les informations ou documents de référence.');
 });
 
 test('replaces model-generated out-of-scope content with a fixed refusal', async (t) => {

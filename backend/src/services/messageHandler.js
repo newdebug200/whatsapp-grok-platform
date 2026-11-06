@@ -323,7 +323,7 @@ class MessageHandler {
       // They now happen inside _processTextMessage, once we've confirmed the
       // bot is actually going to generate and send a reply (see below).
       const delayMs = (botConfig?.response_delay_seconds ?? 15) * 1000;
-      this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs, botConfig);
+      this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs);
     } catch (error) {
       console.error('Erreur traitement message:', error);
     }
@@ -427,21 +427,21 @@ class MessageHandler {
     }
   }
 
-  _queueMessage(body, from, contact, client, prisma, profileId, waManager, delayMs, botConfig) {
+  _queueMessage(body, from, contact, client, prisma, profileId, waManager, delayMs) {
     const key = `${profileId}_${contact.id}`;
     if (this.pendingMessages.has(key)) {
       const pending = this.pendingMessages.get(key);
       clearTimeout(pending.timer);
       pending.messages.push(body);
     } else {
-      this.pendingMessages.set(key, { messages: [body], timer: null, contact, client, prisma, profileId, from, waManager, delayMs, botConfig });
+      this.pendingMessages.set(key, { messages: [body], timer: null, contact, client, prisma, profileId, from, waManager, delayMs });
     }
     const pending = this.pendingMessages.get(key);
     pending.timer = setTimeout(async () => {
       this.pendingMessages.delete(key);
       const currentMessages = [...pending.messages];
       const concatenated = currentMessages.join('\n');
-      await this._processTextMessage(concatenated, pending.contact, pending.client, pending.prisma, pending.profileId, pending.from, pending.waManager, pending.botConfig, currentMessages);
+      await this._processTextMessage(concatenated, pending.contact, pending.client, pending.prisma, pending.profileId, pending.from, pending.waManager, currentMessages);
     }, delayMs);
   }
 
@@ -539,13 +539,13 @@ class MessageHandler {
     });
   }
 
-  async _processTextMessage(messageText, contact, client, prisma, profileId, from, waManager, cachedBotConfig, currentMessageBodies = [messageText]) {
+  async _processTextMessage(messageText, contact, client, prisma, profileId, from, waManager, currentMessageBodies = [messageText]) {
     const cachedMessages = waManager.getFromCache(profileId, contact.id).slice();
     try {
       const freshContact = await prisma.contact.findUnique({ where: { id: contact.id } });
       if (freshContact?.ia_paused) return;
 
-      const botConfig = cachedBotConfig || await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
+      const botConfig = await prisma.botConfig.findUnique({ where: { profile_id: profileId } });
       if (!botConfig || !botConfig.ia_enabled) return;
 
       if (this._isHumanHandoffRequest(messageText)) {
@@ -711,15 +711,23 @@ class MessageHandler {
 
     const { accountId = null, creditsEnabled = false, isAdminAccount = false, consumeAIUsage = null } = creditInfo;
 
+    let requestDiagnostics = {};
     try {
       const systemPrompt = this._buildSystemPrompt(botConfig, faqs, memorySummary, knowledgeDocuments);
       const historyMessages = this._buildHistoryMessages(recentMessages, currentMessageBodies);
+      const model = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
+      const messages = [{ role: 'system', content: systemPrompt }, ...historyMessages, { role: 'user', content: messageText }];
+      requestDiagnostics = {
+        model,
+        messageCount: messages.length,
+        promptCharacters: messages.reduce((total, item) => total + item.content.length, 0)
+      };
 
       const response = await axios.post(
         'https://api.groq.com/openai/v1/chat/completions',
         {
-          model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
-          messages: [{ role: 'system', content: systemPrompt }, ...historyMessages, { role: 'user', content: messageText }],
+          model,
+          messages,
           response_format: { type: 'json_object' },
           temperature: 0.2,
           max_tokens: 600
@@ -780,11 +788,33 @@ class MessageHandler {
       }
     } catch (error) {
       const status = error.response?.status;
+      const providerError = error.response?.data?.error;
+      const providerDetail = typeof providerError === 'string'
+        ? providerError
+        : providerError?.message || error.message || 'Erreur inconnue';
+      const safeDetail = String(providerDetail)
+        .replace(/Bearer\s+\S+/gi, 'Bearer [masqué]')
+        .replace(/gsk_[A-Za-z0-9_-]+/g, '[clé masquée]')
+        .replaceAll(apiKey, '[clé masquée]')
+        .replace(/[\r\n\t]+/g, ' ')
+        .slice(0, 500);
       let errorMsg = "Le bot IA n'a pas pu répondre.";
       if (status === 401) errorMsg = "Clé API Groq invalide ou expirée. Vérifiez GROQ_API_KEY dans votre .env.";
       else if (status === 429) errorMsg = "Limite de quota Groq atteinte. Réessayez dans quelques instants.";
       else if (status === 503 || status === 502) errorMsg = "API Groq temporairement indisponible. Réessayez dans un moment.";
-      else console.error('Erreur API Groq:', error.message);
+      else if (status === 400 && /context|too many tokens|maximum tokens|prompt.{0,20}too long/i.test(safeDetail)) {
+        errorMsg = "La demande est trop volumineuse pour le service IA. Réduisez les informations ou documents de référence.";
+      } else if (status === 400) {
+        errorMsg = "Le service IA a refusé cette demande. Si le problème se répète, contactez l’administrateur.";
+      }
+      console.error('[AI] Échec appel Groq:', JSON.stringify({
+        status: status || null,
+        ...requestDiagnostics,
+        providerCode: providerError?.code,
+        providerType: providerError?.type,
+        providerParam: providerError?.param,
+        detail: safeDetail
+      }));
       waManager.emitToProfileAccount(profileId, 'bot-error', { profileId, contactPhone: contact.phone_number || from, error: errorMsg });
     }
   }
