@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import FontAwesomeIcon from '../FontAwesomeIcon';
+import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
+import { faCircleQuestion } from '@fortawesome/free-solid-svg-icons/faCircleQuestion';
+import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
 import './DashboardHome.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -152,8 +156,8 @@ export default function DashboardHome({
 
       <div className="dh-info-heading"><div><div className="dh-sections-title">Découvrir Botora</div><div className="dh-sections-subtitle">Comprenez la plateforme et démarrez sereinement.</div></div><span className="dh-settings-pill">Guides</span></div>
       <div className="dh-info-grid">
-        <button className="dh-info-card" onClick={() => onGoTo('about')}><span className="dh-info-icon">✦</span><span><strong>À propos</strong><small>L’esprit et la mission de Botora</small></span><span className="dh-settings-arrow">→</span></button>
-        <button className="dh-info-card" onClick={() => onGoTo('how-it-works')}><span className="dh-info-icon">?</span><span><strong>Comment ça marche ?</strong><small>Le guide en quatre étapes</small></span><span className="dh-settings-arrow">→</span></button>
+        <button className="dh-info-card" onClick={() => onGoTo('about')}><span className="dh-info-icon"><FontAwesomeIcon icon={faStar} aria-hidden="true" /></span><span><strong>À propos</strong><small>L’esprit et la mission de Botora</small></span><span className="dh-settings-arrow"><FontAwesomeIcon icon={faArrowRight} aria-hidden="true" /></span></button>
+        <button className="dh-info-card" onClick={() => onGoTo('how-it-works')}><span className="dh-info-icon"><FontAwesomeIcon icon={faCircleQuestion} aria-hidden="true" /></span><span><strong>Comment ça marche ?</strong><small>Le guide de démarrage en cinq étapes</small></span><span className="dh-settings-arrow"><FontAwesomeIcon icon={faArrowRight} aria-hidden="true" /></span></button>
       </div>
     </div>
   );
