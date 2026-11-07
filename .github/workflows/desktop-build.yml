@@ -25,7 +25,7 @@ jobs:
             file: frontend/release/*.deb
     runs-on: ${{ matrix.os }}
     env:
-      BOTORA_DESKTOP_URL: ${{ vars.BOTORA_DESKTOP_URL }}
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,36 +35,37 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend
 
+      - name: Install backend dependencies for tests
+        run: npm ci
+        working-directory: backend
+
       - name: Test frontend
         run: npm test
         working-directory: frontend
 
-      - name: Build web frontend
-        run: npm run build
-        working-directory: frontend
+      - name: Test backend
+        run: npm test
+        working-directory: backend
 
       - name: Package Windows installer
-        if: runner.os == 'Windows' && env.BOTORA_DESKTOP_URL != ''
+        if: runner.os == 'Windows'
         run: npm run desktop:dist:win
         working-directory: frontend
 
       - name: Package Ubuntu installer
-        if: runner.os == 'Linux' && env.BOTORA_DESKTOP_URL != ''
+        if: runner.os == 'Linux'
         run: npm run desktop:dist:linux
         working-directory: frontend
 
-      - name: Explain skipped packaging
-        if: env.BOTORA_DESKTOP_URL == ''
-        run: echo "Set the repository variable BOTORA_DESKTOP_URL to the public HTTPS user dashboard URL to produce installers."
-
       - name: Upload installer
-        if: env.BOTORA_DESKTOP_URL != ''
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

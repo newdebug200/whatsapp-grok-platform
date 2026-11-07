@@ -8,11 +8,10 @@ const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const whatsappManager = require('../services/whatsappManager');
 const { resetCompletedCampaign } = require('../services/campaignLifecycle');
 const { handleCampaignUpload } = require('../services/campaignMediaUpload');
+const { UPLOADS_DIR: uploadsDir } = require('../config/storagePaths');
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
-
-const uploadsDir = pathModule.join(__dirname, '../../uploads');
 
 // ─── CSV / VCF helpers ────────────────────────────────────────────────────────
 

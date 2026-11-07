@@ -255,7 +255,7 @@ whatsappManager.setIO(io);
 whatsappManager.setPrisma(prisma);
 
 // ── Cron : vérification des campagnes planifiées (chaque minute) ──
-cron.schedule('* * * * *', async () => {
+const scheduledCampaignJob = cron.schedule('* * * * *', async () => {
   try {
     const now = new Date();
     const scheduled = await prisma.campaign.findMany({
@@ -290,7 +290,7 @@ cron.schedule('* * * * *', async () => {
 const GROQ_KEY = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
 const GROQ_PLACEHOLDERS = new Set(['your_groq_api_key_here', 'your-groq-api-key', 'gsk_xxxx', 'votre_clé_groq', 'your_grok_api_key', 'changeme']);
 const isPlaceholder = !GROQ_KEY || GROQ_KEY.trim().length < 20 || GROQ_PLACEHOLDERS.has(GROQ_KEY.trim().toLowerCase());
-if (isPlaceholder) {
+if (isPlaceholder && process.env.BOTORA_ADMIN_AI_PROXY !== 'true') {
   console.error('');
   console.error('╔══════════════════════════════════════════════════════════════════╗');
   console.error('║  ⚠️  ATTENTION : Clé API Groq non configurée                    ║');
@@ -307,7 +307,33 @@ if (isPlaceholder) {
 }
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, async () => {
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, async () => {
   console.log(`Botora Backend démarré sur port ${PORT}`);
   await whatsappManager.restoreExistingSessions();
 });
+
+let shutdownPromise;
+function shutdown(signal) {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = (async () => {
+    console.log(`[Botora] Arrêt demandé (${signal}).`);
+    const timeout = setTimeout(() => {
+      console.error('[Botora] Arrêt forcé après expiration du délai.');
+      process.exit(1);
+    }, 15000);
+    timeout.unref();
+    scheduledCampaignJob.stop();
+    await whatsappManager.shutdown();
+    await new Promise(resolve => io.close(resolve));
+    await prisma.$disconnect();
+    clearTimeout(timeout);
+  })().catch(error => {
+    console.error('[Botora] Erreur pendant l’arrêt:', error);
+    process.exitCode = 1;
+  });
+  return shutdownPromise;
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

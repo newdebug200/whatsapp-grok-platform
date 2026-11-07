@@ -1,6 +1,7 @@
 const axios = require('axios');
 const centralSync = require('./centralSync');
 const { resolveContactName } = require('../utils/contactDisplay');
+const { normalizeResponseDelay } = require('../utils/responseDelay');
 const { persistWhatsAppMedia, deleteStoredMedia, getWhatsAppMessageId } = require('./mediaStorage');
 const PERSONALITY_PROMPTS = {
   autonomous: "Ton objectif est de résoudre la demande avec le minimum d’allers-retours. Identifie l’intention et le contexte, puis adopte la posture la plus utile. Pose une seule question ciblée si une information indispensable manque. Passe à un humain si le client le demande ou si la demande ne peut pas être traitée de façon fiable.",
@@ -16,6 +17,17 @@ class MessageHandler {
   constructor() {
     this.pendingMessages = new Map();
     this.awaySentMap = new Map();
+  }
+
+  async _requestAICompletion(request, apiKey, accountId, timeout = 30000) {
+    if (process.env.BOTORA_ADMIN_AI_PROXY === 'true') {
+      return centralSync.createAICompletion(accountId, request);
+    }
+    return axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      request,
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout }
+    );
   }
 
   _normalizeKeyword(value) {
@@ -45,12 +57,10 @@ class MessageHandler {
     return true;
   }
 
-  async _analyzeSentiment(text, apiKey, onUsage = null) {
-    if (!text || !apiKey) return null;
+  async _analyzeSentiment(text, apiKey, onUsage = null, accountId = null) {
+    if (!text || (!apiKey && process.env.BOTORA_ADMIN_AI_PROXY !== 'true')) return null;
     try {
-      const resp = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
+      const resp = await this._requestAICompletion({
           model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
           messages: [
             {
@@ -62,8 +72,7 @@ class MessageHandler {
           temperature: 0,
           max_tokens: 10
         },
-        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 8000 }
-      );
+        apiKey, accountId, 8000);
       const totalTokens = Number(resp.data.usage?.total_tokens || 0);
       if (onUsage && totalTokens > 0 && !(await onUsage(totalTokens, 'ai.sentiment'))) return null;
       const raw = resp.data.choices[0].message.content.trim().toLowerCase();
@@ -84,8 +93,8 @@ class MessageHandler {
     }
   }
 
-  async _updateMemory(contact, prisma, apiKey, newMessageText, onUsage = null) {
-    if (!apiKey) return;
+  async _updateMemory(contact, prisma, apiKey, newMessageText, onUsage = null, accountId = null) {
+    if (!apiKey && process.env.BOTORA_ADMIN_AI_PROXY !== 'true') return;
     try {
       const existing = await prisma.contactMemory.findUnique({ where: { contact_id: contact.id } });
       const oldSummary = existing?.summary || '';
@@ -93,9 +102,7 @@ class MessageHandler {
         ? `Résumé existant: "${oldSummary}"\nNouveau message du client: "${newMessageText.slice(0, 400)}"\nMets à jour le résumé en 2-3 phrases maximum. Inclus: intérêts, problèmes, demandes, ton général.`
         : `Premier message du client: "${newMessageText.slice(0, 400)}"\nFais un résumé en 1-2 phrases de ce qu'on sait sur ce client.`;
 
-      const resp = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
+      const resp = await this._requestAICompletion({
           model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
           messages: [
             { role: 'system', content: 'Tu es un assistant qui résume les interactions client de manière concise.' },
@@ -104,8 +111,7 @@ class MessageHandler {
           temperature: 0.2,
           max_tokens: 150
         },
-        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 10000 }
-      );
+        apiKey, accountId, 10000);
       const totalTokens = Number(resp.data.usage?.total_tokens || 0);
       if (onUsage && totalTokens > 0 && !(await onUsage(totalTokens, 'ai.memory'))) return;
       const summary = resp.data.choices[0].message.content.trim();
@@ -322,7 +328,7 @@ class MessageHandler {
       // Sentiment analysis and memory update are no longer triggered here.
       // They now happen inside _processTextMessage, once we've confirmed the
       // bot is actually going to generate and send a reply (see below).
-      const delayMs = (botConfig?.response_delay_seconds ?? 15) * 1000;
+      const delayMs = normalizeResponseDelay(botConfig?.response_delay_seconds) * 1000;
       this._queueMessage(message.body || '', waId, dbContact, client, prisma, profileId, waManager, delayMs);
     } catch (error) {
       console.error('Erreur traitement message:', error);
@@ -584,7 +590,8 @@ class MessageHandler {
         return;
       }
 
-      const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+      const useAdminProxy = process.env.BOTORA_ADMIN_AI_PROXY === 'true';
+      const apiKey = useAdminProxy ? 'central-ai-proxy' : process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
       if (!apiKey) {
         waManager.emitToProfileAccount(profileId, 'bot-error', {
           profileId, contactPhone: contact.phone_number || from,
@@ -608,7 +615,7 @@ class MessageHandler {
         if (accountId) {
           const accountRow = await prisma.account.findUnique({ where: { id: accountId }, select: { role: true } });
           isAdminAccount = accountRow?.role === 'admin';
-          if (creditsEnabled && !isAdminAccount) {
+          if (creditsEnabled && !isAdminAccount && !useAdminProxy) {
             const centralCredits = await centralSync.getCredits(accountId);
             if (!centralCredits?.ok) {
               waManager.emitToProfileAccount(profileId, 'bot-error', { profileId, contactPhone: contact.phone_number || from, error: "⚠️ Le service central des crédits est indisponible. Réessayez dans quelques instants." });
@@ -630,6 +637,7 @@ class MessageHandler {
       // Chaque appel Groq est débité avec ses propres tokens. Les comptes admin
       // restent exemptés, comme dans le contrôle de solde historique.
       const consumeAIUsage = async (tokensUsed, eventType, payload = {}) => {
+        if (useAdminProxy) return true;
         if (!creditsEnabled || !accountId || isAdminAccount) return true;
         const result = await centralSync.consumeCredits(accountId, tokensUsed, eventType, { profile_id: profileId, model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b', ...payload });
         if (!result?.ok) {
@@ -644,7 +652,7 @@ class MessageHandler {
       // ── From here on we're committed to generating and sending a reply,
       //    so sentiment analysis and memory update are now safe to run. ──
       const sentimentResult = botConfig?.sentiment_enabled === true
-        ? await this._analyzeSentiment(messageText, apiKey, consumeAIUsage).catch(() => null)
+        ? await this._analyzeSentiment(messageText, apiKey, consumeAIUsage, accountId).catch(() => null)
         : null;
       if (sentimentResult) {
         prisma.message.findFirst({
@@ -669,7 +677,7 @@ class MessageHandler {
         }
       }
 
-      await this._updateMemory(freshContact, prisma, apiKey, messageText, consumeAIUsage).catch(() => {});
+      await this._updateMemory(freshContact, prisma, apiKey, messageText, consumeAIUsage, accountId).catch(() => {});
 
       const faqs = await prisma.fAQ.findMany({ where: { profile_id: profileId } });
       const knowledgeDocuments = await prisma.knowledgeDocument.findMany({
@@ -700,7 +708,8 @@ class MessageHandler {
   }
 
   async _callGroqAPI(messageText, contact, client, prisma, profileId, botConfig, from, faqs, recentMessages, waManager, memorySummary, creditInfo = {}, currentMessageBodies = [messageText], knowledgeDocuments = []) {
-    const apiKey = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
+    const useAdminProxy = process.env.BOTORA_ADMIN_AI_PROXY === 'true';
+    const apiKey = useAdminProxy ? 'central-ai-proxy' : process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
     if (!apiKey) {
       waManager.emitToProfileAccount(profileId, 'bot-error', {
         profileId, contactPhone: contact.phone_number || from,
@@ -723,17 +732,14 @@ class MessageHandler {
         promptCharacters: messages.reduce((total, item) => total + item.content.length, 0)
       };
 
-      const response = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
+      const response = await this._requestAICompletion({
           model,
           messages,
           response_format: { type: 'json_object' },
           temperature: 0.2,
           max_tokens: 600
         },
-        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
-      );
+        apiKey, accountId, 30000);
 
       const assistantResponse = this._parseAssistantResponse(response.data.choices[0].message.content);
       if (!assistantResponse) {
@@ -751,7 +757,7 @@ class MessageHandler {
       }
       const totalTokens = response.data.usage?.total_tokens || 0;
       let centralCreditResult = null;
-      if (creditsEnabled && accountId && !isAdminAccount && totalTokens > 0) {
+      if (!useAdminProxy && creditsEnabled && accountId && !isAdminAccount && totalTokens > 0) {
         if (consumeAIUsage) {
           const consumed = await consumeAIUsage(totalTokens, 'ai.usage');
           if (!consumed) throw new Error('Crédits insuffisants ou API centrale indisponible');
@@ -780,8 +786,9 @@ class MessageHandler {
           : `Je suis ${botConfig.bot_name || 'Botora'}, l’agent de cette entreprise. Je peux vous aider au sujet de ses produits et services, mais pas avec cette demande.`;
       await this._sendAssistantReply(contact, profileId, from, reply, prisma, waManager, 'ai');
 
-      if (centralCreditResult?.ok && accountId) {
-        const centralBalance = Number(centralCreditResult.credits_balance);
+      const currentCentralBalance = centralCreditResult?.credits_balance ?? response.data.botora?.credits_balance;
+      if (currentCentralBalance !== undefined && accountId) {
+        const centralBalance = Number(currentCentralBalance);
         if (Number.isFinite(centralBalance)) {
           await prisma.account.update({ where: { id: accountId }, data: { credit_balance: centralBalance } }).catch(() => {});
         }
@@ -799,7 +806,11 @@ class MessageHandler {
         .replace(/[\r\n\t]+/g, ' ')
         .slice(0, 500);
       let errorMsg = "Le bot IA n'a pas pu répondre.";
-      if (status === 401) errorMsg = "Clé API Groq invalide ou expirée. Vérifiez GROQ_API_KEY dans votre .env.";
+      if (status === 401) errorMsg = useAdminProxy
+        ? 'Votre session IA a expiré. Déconnectez-vous puis reconnectez-vous à Botora.'
+        : "Clé API Groq invalide ou expirée. Vérifiez GROQ_API_KEY dans votre .env.";
+      else if (status === 402) errorMsg = "Votre solde de crédits est épuisé. Rechargez votre compte pour continuer.";
+      else if (status === 403) errorMsg = "Votre compte Botora ne permet pas l’utilisation du service IA.";
       else if (status === 429) errorMsg = "Limite de quota Groq atteinte. Réessayez dans quelques instants.";
       else if (status === 503 || status === 502) errorMsg = "API Groq temporairement indisponible. Réessayez dans un moment.";
       else if (status === 400 && /context|too many tokens|maximum tokens|prompt.{0,20}too long/i.test(safeDetail)) {

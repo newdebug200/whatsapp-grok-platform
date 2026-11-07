@@ -9,8 +9,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-// Register Service Worker for PWA
-if ('serviceWorker' in navigator) {
+// The packaged desktop app is served from file:// and does not use a PWA worker.
+if (import.meta.env.VITE_DESKTOP !== 'true' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })

@@ -5,6 +5,7 @@ const path = require('path');
 const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
+const { UPLOADS_DIR: uploadsDirectory } = require('../config/storagePaths');
 
 router.use(authMiddleware);
 router.use(profileMiddleware);
@@ -177,7 +178,6 @@ router.get('/sentiments', async (req, res) => {
   }
 });
 
-const uploadsDirectory = path.join(__dirname, '../../uploads');
 const getFileSize = (filename) => {
   try { return fs.statSync(path.join(uploadsDirectory, path.basename(filename))).size; } catch (_) { return 0; }
 };

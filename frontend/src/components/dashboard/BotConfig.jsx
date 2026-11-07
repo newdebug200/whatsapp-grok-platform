@@ -33,7 +33,7 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
     bot_info: '',
     bot_behavior: '',
     ia_enabled: false,
-    response_delay_seconds: 15,
+    response_delay_seconds: 120,
     personality: 'autonomous',
     sentiment_enabled: false,
     sentiment_alert: false,
@@ -692,17 +692,17 @@ export default function BotConfig({ waStatus, onConnectWhatsApp, onLogoutWhatsAp
           <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Délai de regroupement des messages</span>
             <span style={{ fontWeight: 600, color: 'var(--accent, #25d366)', fontSize: '0.85rem' }}>
-              {formatDelay(config.response_delay_seconds ?? 15)}
+              {formatDelay(config.response_delay_seconds ?? 120)}
             </span>
           </label>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            Botora attend ce délai après le dernier message reçu afin de regrouper les messages rapprochés en une seule réponse. Le délai par défaut est de 15 secondes.
+            Botora attend après le dernier message reçu pour regrouper les messages rapprochés. Ce délai aide à éviter des réponses trop rapides qui pourraient entraîner un blocage temporaire de WhatsApp. Le réglage par défaut est de 2 minutes.
           </p>
-          <input type="range" min="1" max="300" step="1" value={config.response_delay_seconds ?? 15}
+          <input type="range" min="60" max="300" step="1" value={config.response_delay_seconds ?? 120}
             onChange={e => setConfig({ ...config, response_delay_seconds: parseInt(e.target.value) })}
             style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--accent, #25d366)' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary, #888)', marginTop: 2 }}>
-            <span>1s</span>
+            <span>1 min</span>
             <span style={{ fontSize: '0.7rem' }}>Délai avant que l’agent réponde après le dernier message reçu</span>
             <span>5min</span>
           </div>

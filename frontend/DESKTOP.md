@@ -1,58 +1,81 @@
 # Botora Desktop
 
-Botora Desktop is a small Electron client for the hosted Botora user dashboard.
-It does not include the backend, a database, WhatsApp sessions, or API secrets.
-The installed app and the website use the same hosted service.
+Botora Desktop is a local Electron application for Windows and Ubuntu. It
+packages the Botora web interface, Node.js backend, SQLite schema, WhatsApp
+browser runtime, and WhatsApp session support. The local backend runs only on
+the user's computer; it does not need a public dashboard or public API URL.
+
+Botora Admin at `https://botora.bluelifetech.site` remains the online central
+service for account, subscription, and credit information. Desktop users need
+an Internet connection for central account checks, WhatsApp, and Groq AI.
+
+## User data and AI access
+
+The local database, WhatsApp sessions, uploaded media, and backend log are
+stored in Electron's per-user `userData` directory. They are kept outside the
+installation directory so app upgrades do not erase them.
+
+Desktop AI requests are sent over HTTPS to the Botora Admin proxy. The Groq
+credential and proxy signing secret stay on that server; users never enter a
+Groq key, and neither secret is included in the installer. Users must sign in
+online to receive a seven-day AI session token. The proxy checks account access,
+credits, and rate limits before forwarding a request to Groq.
 
 ## Development
 
-Run the frontend Vite server and backend as usual, then start the desktop shell:
+Install the frontend dependencies, start the Vite server, and then launch
+Electron. Electron starts the local backend and creates its database and data
+directories automatically:
 
 ```powershell
-$env:BOTORA_DESKTOP_URL = "http://localhost:5173/"
+cd frontend
+npm ci
+npm run dev
+```
+
+In another terminal:
+
+```powershell
+cd frontend
 npm run desktop
 ```
 
-The development command allows HTTP only for localhost. Distribution builds
-require an HTTPS URL.
+Development requires the backend dependencies and a Puppeteer Chrome install.
+From `backend/`, run `npm ci`; Puppeteer installs its browser during this step.
 
 ## Build installers
 
-Install dependencies and build the frontend from `frontend/`, then set the
-public HTTPS URL of the **Botora user dashboard** (not the Botora Admin site):
+Build on the target operating system. The packaging script stages the backend,
+installs platform-specific dependencies, downloads the WhatsApp Chromium
+runtime, generates the frontend with its local API URLs, and packages the app:
 
 ```powershell
-$env:BOTORA_DESKTOP_URL = "https://your-public-botora-dashboard.example/"
+cd frontend
 npm ci
 npm run desktop:dist:win
 ```
 
-The Windows NSIS installer is written to `frontend/release/`. Ubuntu packages
-are built on an Ubuntu runner with:
+The Windows NSIS installer is written to `frontend/release/`.
+
+On Ubuntu:
 
 ```bash
-BOTORA_DESKTOP_URL="https://your-public-botora-dashboard.example/" npm ci
-BOTORA_DESKTOP_URL="https://your-public-botora-dashboard.example/" npm run desktop:dist:linux
+cd frontend
+npm ci
+npm run desktop:dist:linux
 ```
 
-The Ubuntu `.deb` package is written to `frontend/release/`. Windows installers
-must be built on Windows, and Linux packages on Linux.
+The `.deb` package is written to `frontend/release/`. Installer generation
+requires an Internet connection and downloads a Chromium runtime, so the
+installers are substantially larger than the website frontend alone.
 
-## GitHub Actions builds
+## GitHub Actions
 
-The **Botora Desktop** workflow runs on pushes to `work_desktop` and can also
-be started manually. Set the repository Actions variable `BOTORA_DESKTOP_URL`
-to the public HTTPS URL of the user dashboard. The workflow builds a Windows
-`.exe` and Ubuntu `.deb`, then makes them available as Actions artifacts for
-30 days. If the variable is missing, tests and the web build still run, but
-installer packaging is skipped.
+The **Botora Desktop** workflow runs tests and builds Windows `.exe` and Ubuntu
+`.deb` artifacts on their native runners. It does not require a public Botora
+dashboard URL. Download the generated Actions artifacts to test or distribute
+them; a download website can be set up later.
 
-Download the artifacts and upload the `.exe` and `.deb` to the downloads area
-of the Botora website. Do not publish an installer until this variable points
-to the public user dashboard; `localhost` and the Botora Admin site are not
-valid distribution targets.
-
-The Windows installer is currently unsigned. Configure an Authenticode
-certificate in the release pipeline before distributing it to customers.
-Signing reduces publisher warnings but does not guarantee SmartScreen will
-have established reputation for a new application.
+The Windows installer is unsigned. An Authenticode certificate is required to
+identify the publisher, and signing does not guarantee SmartScreen reputation
+for a new application.

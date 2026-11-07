@@ -50,12 +50,19 @@ router.post('/register', authLimiter, async (req, res) => {
     if (!centralUser?._centralConfirmed) {
       return res.status(502).json({ error: 'Le compte n’a pas été confirmé par l’API centrale. Inscription non validée.' });
     }
+    if (!centralUser.ai_token) {
+      const authenticatedUser = await centralSync.authenticateAccount(email.toLowerCase(), password);
+      if (authenticatedUser?._centralConfirmed) centralUser = { ...centralUser, ...authenticatedUser };
+    }
+    if (!centralUser.ai_token) {
+      return res.status(502).json({ error: 'Le service IA central n’est pas configuré. Contactez l’administrateur Botora.' });
+    }
     const localPasswordHash = await bcrypt.hash(password, 12);
     const account = await prisma.account.create({
-      data: { email: email.toLowerCase(), password: localPasswordHash, name, role }
+      data: { email: email.toLowerCase(), password: localPasswordHash, name, role, central_ai_token: centralUser.ai_token }
     });
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language), control_center_access: centralUser?.control_center_access ?? null } });
+    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language), control_center_access: centralUser?.control_center_access ?? null, central_ai_available: true } });
   } catch (error) {
     console.error('Erreur register:', error);
     res.status(500).json({ error: "Erreur lors de l'inscription" });
@@ -74,21 +81,29 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!isValid) {
       const centralUser = await centralSync.authenticateAccount(normalizedEmail, password);
       if (centralUser?._centralUnavailable) return res.status(502).json({ error: 'L’API centrale est momentanément indisponible. Réessayez plus tard.' });
-      if (!centralUser?._centralConfirmed || !centralUser?.password_hash) return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      if (!centralUser?._centralConfirmed) return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      const localPasswordHash = await bcrypt.hash(password, 12);
       account = await prisma.account.upsert({
         where: { email: normalizedEmail },
-        update: { name: centralUser.name, password: centralUser.password_hash, is_blocked: false },
-        create: { email: normalizedEmail, name: centralUser.name, password: centralUser.password_hash, role: 'user' }
+        update: { name: centralUser.name, password: localPasswordHash, is_blocked: false, ...(centralUser.ai_token ? { central_ai_token: centralUser.ai_token } : {}) },
+        create: { email: normalizedEmail, name: centralUser.name, password: localPasswordHash, role: 'user', central_ai_token: centralUser.ai_token || null }
       });
     }
     if (account.is_blocked) return res.status(403).json({ error: 'Compte bloqué.' });
     const centralAccess = await centralSync.getAccount(normalizedEmail);
     if (centralAccess?.access_type === 'suspended') return res.status(403).json({ error: 'Votre accès est suspendu. Contactez le support.' });
     if (centralAccess?.access_type === 'banned') return res.status(403).json({ error: 'Cette licence a été bannie. Contactez le support.' });
+    const centralAiSession = await centralSync.authenticateAccount(normalizedEmail, password);
+    if (centralAiSession?._centralConfirmed && centralAiSession.ai_token) {
+      account = await prisma.account.update({
+        where: { id: account.id },
+        data: { central_ai_token: centralAiSession.ai_token }
+      });
+    }
     centralSync.syncAccount(account).catch(() => {});
     centralSync.syncCreditUsage(account.id).catch(() => {});
     const token = jwt.sign({ accountId: account.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language), control_center_access: centralAccess?.control_center_access ?? null } });
+    res.json({ token, account: { id: account.id, email: account.email, name: account.name, role: account.role, language: normalizeLanguage(account.language), control_center_access: centralAccess?.control_center_access ?? null, central_ai_available: Boolean(centralAiSession?.ai_token || account.central_ai_token) } });
   } catch (error) {
     console.error('Erreur login:', error);
     res.status(500).json({ error: 'Erreur lors de la connexion' });

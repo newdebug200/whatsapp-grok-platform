@@ -5,6 +5,7 @@ const messageHandler = require('./messageHandler');
 const centralSync = require('./centralSync');
 const { selectCampaignVariant } = require('./campaignUtils');
 const { persistWhatsAppMedia, getWhatsAppMessageId } = require('./mediaStorage');
+const { UPLOADS_DIR, WHATSAPP_AUTH_DIR } = require('../config/storagePaths');
 
 // ─── Lazy-load whatsapp-web.js ────────────────────────────────────────────────
 let Client = null;
@@ -31,7 +32,7 @@ const REINIT_COOLDOWN_MS = 10000;
 const WHATSAPP_AUTH_TIMEOUT_MS = 120000;
 const QR_INITIALIZATION_TIMEOUT_MS = 150000;
 const RECONNECT_DELAYS_MS = [5000, 15000, 30000, 60000];
-const SESSION_BASE = path.join(__dirname, '../../.wwebjs_auth');
+const SESSION_BASE = WHATSAPP_AUTH_DIR;
 const CONTEXT_MAX = 20;
 
 class WhatsAppManager {
@@ -1834,7 +1835,7 @@ class WhatsAppManager {
                 // ── Send media (with text as caption if present) ──
                 if (msg.media_path) {
                   const fileCandidates = [
-                    path.join(__dirname, '../../uploads', msg.media_path),
+                    path.join(UPLOADS_DIR, msg.media_path),
                     path.join(__dirname, '../../backend/uploads', msg.media_path)
                   ];
                   const filePath = fileCandidates.find(candidate => fs.existsSync(candidate));
@@ -1975,6 +1976,19 @@ class WhatsAppManager {
       await this.prisma.campaign.update({ where: { id: campaignId }, data: { status: 'paused' } });
     } catch (_) {}
     console.log(`[Campaign ${campaignId}] Mis en pause`);
+  }
+
+  async shutdown() {
+    for (const handle of this.runningCampaigns.values()) handle.cancelled = true;
+    this.runningCampaigns.clear();
+
+    const entries = Array.from(this.clients.keys());
+    const results = await Promise.allSettled(entries.map(key => this._destroyEntry(key)));
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Erreur à la fermeture d’une session WhatsApp:', result.reason?.message || result.reason);
+      }
+    }
   }
 }
 

@@ -3,6 +3,10 @@ const router = express.Router();
 const prisma = require('../prisma');
 const { authMiddleware, profileMiddleware } = require('../middleware/auth');
 const centralSync = require('../services/centralSync');
+const {
+  DEFAULT_RESPONSE_DELAY_SECONDS,
+  normalizeResponseDelay
+} = require('../utils/responseDelay');
 
 const VALID_PERSONALITIES = ['autonomous', 'professional', 'friendly', 'commercial', 'support', 'empathetic', 'concise'];
 
@@ -24,7 +28,7 @@ router.get('/bot', async (req, res) => {
           bot_info: '',
           bot_behavior: '',
           ia_enabled: false,
-          response_delay_seconds: 15,
+          response_delay_seconds: DEFAULT_RESPONSE_DELAY_SECONDS,
           business_hours_enabled: false,
           open_days: '1,2,3,4,5',
           open_time: '09:00',
@@ -43,6 +47,7 @@ router.get('/bot', async (req, res) => {
     }
     res.json({
       ...config,
+      response_delay_seconds: normalizeResponseDelay(config.response_delay_seconds),
       personality: VALID_PERSONALITIES.includes(config.personality) ? config.personality : 'autonomous'
     });
   } catch (error) {
@@ -61,7 +66,7 @@ router.put('/bot', async (req, res) => {
     } = req.body;
 
     const delaySeconds = response_delay_seconds !== undefined
-      ? Math.max(1, Math.min(300, parseInt(response_delay_seconds) || 15))
+      ? normalizeResponseDelay(response_delay_seconds)
       : undefined;
 
     const data = {
@@ -95,7 +100,7 @@ router.put('/bot', async (req, res) => {
           bot_info: bot_info || '',
           bot_behavior: bot_behavior || '',
           ia_enabled: ia_enabled !== undefined ? ia_enabled : false,
-          response_delay_seconds: delaySeconds ?? 15,
+          response_delay_seconds: delaySeconds ?? DEFAULT_RESPONSE_DELAY_SECONDS,
           business_hours_enabled: business_hours_enabled ?? false,
           open_days: open_days || '1,2,3,4,5',
           open_time: open_time || '09:00',
@@ -123,7 +128,7 @@ router.put('/bot', async (req, res) => {
         delete safeData.ia_group_enabled;
         config = await prisma.botConfig.upsert({
           where: { profile_id: req.profileId },
-          create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: false, response_delay_seconds: 15 },
+          create: { profile_id: req.profileId, bot_name: bot_name || 'Botora', bot_info: bot_info || '', bot_behavior: bot_behavior || '', ia_enabled: false, response_delay_seconds: delaySeconds ?? DEFAULT_RESPONSE_DELAY_SECONDS },
           update: safeData
         });
       } else throw err;

@@ -9,9 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test",
-    "desktop": "node electron/write-app-url.cjs --allow-local && electron .",
-    "desktop:dist:win": "node electron/write-app-url.cjs && node electron/prepare-icons.cjs && electron-builder --win nsis",
-    "desktop:dist:linux": "node electron/write-app-url.cjs && electron-builder --linux deb"
+    "desktop": "electron .",
+    "desktop:dist:win": "node electron/build-installer.cjs --win",
+    "desktop:dist:linux": "node electron/build-installer.cjs --linux"
   },
   "build": {
     "appId": "com.bluelifetech.botora.desktop",
@@ -20,10 +20,17 @@
       "output": "release"
     },
     "files": [
-      "electron/**/*.cjs",
-      "electron/app-url.json",
+      "electron/**/*",
+      "dist/**/*",
       "public/icons/icon-512.png",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".desktop-staging/backend",
+        "to": "backend",
+        "filter": ["**/*", "**/node_modules/**"]
+      }
     ],
     "win": {
       "icon": "build/icon.ico",
@@ -58,6 +65,13 @@
     "deb": {
       "depends": [
         "libgtk-3-0",
+        "libgbm1",
+        "libatk-bridge2.0-0",
+        "libatspi2.0-0",
+        "libxcomposite1",
+        "libxdamage1",
+        "libxfixes3",
+        "libxrandr2",
         "libnss3",
         "libxss1",
         "libasound2"

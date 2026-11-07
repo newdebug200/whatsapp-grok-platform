@@ -4,8 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-
-const uploadsDir = path.join(__dirname, '../../uploads');
+const { UPLOADS_DIR: uploadsDir } = require('../config/storagePaths');
 const campaignTempDir = path.join(uploadsDir, '.campaign-temp');
 
 const campaignUpload = multer({

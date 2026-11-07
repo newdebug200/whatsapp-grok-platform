@@ -19,6 +19,7 @@ model Account {
   credit_balance     Float     @default(0)
   is_blocked         Boolean   @default(false)
   language           String    @default("fr")
+  central_ai_token   String?
 
   whatsappProfiles     WhatsAppProfile[]
   creditTransactions   CreditTransaction[]
@@ -61,7 +62,7 @@ model BotConfig {
   bot_info               String  @default("")
   bot_behavior           String  @default("")
   ia_enabled             Boolean @default(false)
-  response_delay_seconds Int     @default(15)
+  response_delay_seconds Int     @default(120)
 
   business_hours_enabled Boolean @default(false)
   open_days              String  @default("1,2,3,4,5")

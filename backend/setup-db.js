@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS "Account" (
   "reset_token_expiry" DATETIME,
   "credit_balance"     REAL     NOT NULL DEFAULT 0,
   "is_blocked"         INTEGER NOT NULL DEFAULT 0,
-  "language"           TEXT    NOT NULL DEFAULT 'fr'
+  "language"           TEXT    NOT NULL DEFAULT 'fr',
+  "central_ai_token"   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "WhatsAppProfile" (
@@ -96,7 +97,7 @@ CREATE TABLE IF NOT EXISTS "BotConfig" (
   "bot_info"               TEXT    NOT NULL DEFAULT '',
   "bot_behavior"           TEXT    NOT NULL DEFAULT '',
   "ia_enabled"             INTEGER NOT NULL DEFAULT 0,
-  "response_delay_seconds" INTEGER NOT NULL DEFAULT 5,
+  "response_delay_seconds" INTEGER NOT NULL DEFAULT 120,
   "business_hours_enabled" INTEGER NOT NULL DEFAULT 0,
   "open_days"              TEXT    NOT NULL DEFAULT '1,2,3,4,5',
   "open_time"              TEXT    NOT NULL DEFAULT '09:00',
@@ -298,6 +299,18 @@ CREATE TABLE IF NOT EXISTS "CreditTransaction" (
   "created_at"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY ("account_id") REFERENCES "Account"("id") ON DELETE CASCADE
 );
+`);
+
+// ── Migrations idempotentes ───────────────────────────────────────────────
+const accountColumns = db.prepare('PRAGMA table_info("Account")').all();
+if (!accountColumns.some(column => column.name === 'central_ai_token')) {
+  db.exec('ALTER TABLE "Account" ADD COLUMN "central_ai_token" TEXT');
+}
+
+db.exec(`
+UPDATE "BotConfig" SET "response_delay_seconds" = 120 WHERE "response_delay_seconds" = 15;
+UPDATE "BotConfig" SET "response_delay_seconds" = 60
+  WHERE "response_delay_seconds" < 60 AND "response_delay_seconds" <> 15;
 `);
 
 // ── Ajouter les colonnes manquantes (mises à jour silencieuses) ───────────

@@ -52,12 +52,32 @@ async function authenticateAccount(email, password) {
     const body = response.data || {};
     const user = body.user || body.account || (body.id || body.email ? body : null);
     const confirmed = body.ok === true || body.success === true || (response.status >= 200 && response.status < 300);
-    return confirmed ? { ...(user || {}), _centralConfirmed: true, password_hash: user?.password_hash || user?.passwordHash || null } : null;
+    return confirmed ? { ...(user || {}), ai_token: body.ai_token || user?.ai_token || null, _centralConfirmed: true } : null;
   } catch (error) {
     const status = Number(error.response?.status || 0);
     console.warn(`[CentralSync] Authentification centrale impossible: ${error.message}`);
     return status >= 500 || status === 0 ? { _centralUnavailable: true, _centralStatus: status } : null;
   }
+}
+
+async function createAICompletion(accountId, request) {
+  const account = await prisma.account.findUnique({
+    where: { id: Number(accountId) },
+    select: { central_ai_token: true }
+  });
+  if (!account?.central_ai_token) {
+    const error = new Error('La session IA est indisponible. Reconnectez-vous à Botora.');
+    error.response = { status: 401, data: { error: error.message } };
+    throw error;
+  }
+  return axios.post(`${ADMIN_API}/api/ai-completion.php`, request, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${account.central_ai_token}`
+    },
+    timeout: 50000,
+    maxBodyLength: 300000
+  });
 }
 
 async function syncAccount(account) {
@@ -67,7 +87,7 @@ async function syncAccount(account) {
     const body = response.data || {};
     const user = body.user || body.account || (body.id || body.email ? body : null);
     const confirmed = body.ok === true || body.success === true || (response.status >= 200 && response.status < 300);
-    return confirmed ? { ...(user || {}), _centralConfirmed: true, password_hash: user?.password_hash || user?.passwordHash || null } : null;
+    return confirmed ? { ...(user || {}), _centralConfirmed: true } : null;
   } catch (error) {
     const status = Number(error.response?.status || 0);
     console.warn(`[CentralSync] Compte non synchronisé: ${error.message}`);
@@ -281,4 +301,4 @@ async function getFeature(key, fallback = true) {
   }
 }
 
-module.exports = { reportActivity, authorizeWhatsAppNumber, syncAccount, requestPasswordReset, confirmPasswordReset, requestAccountDeletion, authenticateAccount, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };
+module.exports = { reportActivity, authorizeWhatsAppNumber, syncAccount, requestPasswordReset, confirmPasswordReset, requestAccountDeletion, authenticateAccount, createAICompletion, getAccount, checkHealth, getCredits, getCreditConfig, syncCreditUsage, consumeCredits, getSubscriptionOffer, createSubscription, verifySubscription, syncApiKeyEvent, getKeywordAutoReplies, createKeywordAutoReply, updateKeywordAutoReply, deleteKeywordAutoReply, getFeature };

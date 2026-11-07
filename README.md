@@ -26,14 +26,16 @@ SanRobot est une plateforme web qui permet à chaque utilisateur de connecter so
 
 ## Application Desktop
 
-La branche `work_desktop` ajoute un client Electron qui ouvre le tableau de bord
-Botora hébergé. Le site web reste disponible séparément et utilise le même
-backend. Les installateurs Windows `.exe` et Ubuntu `.deb` se construisent via
-GitHub Actions une fois la variable de dépôt `BOTORA_DESKTOP_URL` définie sur
-l’URL HTTPS publique du tableau de bord utilisateur (pas le site Botora Admin).
-Les artefacts peuvent ensuite être téléchargés puis publiés dans la zone de
-téléchargement de votre site. Consultez [frontend/DESKTOP.md](frontend/DESKTOP.md)
-pour les commandes de développement, de build et les limites de signature.
+La branche `work_desktop` prépare une application Electron locale pour Windows
+et Ubuntu. L’interface, le backend Node.js, la base SQLite, les médias et les
+sessions WhatsApp fonctionnent sur l’ordinateur de l’utilisateur. Botora Admin
+reste le service central en ligne pour les comptes, les abonnements et les
+crédits; un hébergement de l’application Botora elle-même n’est donc pas requis.
+Consultez [frontend/DESKTOP.md](frontend/DESKTOP.md) pour les prérequis, les
+commandes de génération et les limites actuelles.
+Pour l’application Desktop, les appels IA passent également par le proxy HTTPS
+de Botora Admin. La clé Groq reste uniquement sur le serveur Admin et n’est ni
+demandée à l’utilisateur ni intégrée à l’installateur.
 
 ## Installation rapide
 

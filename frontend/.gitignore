@@ -1,6 +1,6 @@
 node_modules/
 dist/
 .env
-electron/app-url.json
+.desktop-staging/
 build/
 release/

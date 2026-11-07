@@ -148,7 +148,7 @@ function AppContent() {
     <ThemeContext.Provider value={{ theme, setTheme }}>
       {centralStatus.state === 'offline' && <div className="central-offline-alert" role="alert">{centralStatus.message}</div>}
       {account ? <Dashboard /> : <AuthPage />}
-      <InstallPrompt />
+      {import.meta.env.VITE_DESKTOP !== 'true' && <InstallPrompt />}
     </ThemeContext.Provider>
   );
 }
