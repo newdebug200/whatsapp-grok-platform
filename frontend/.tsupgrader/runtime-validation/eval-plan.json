@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-11-07T11:51:00Z",
+  "generatedOnPlatform": "win32",
+  "projectType": "electron",
+  "setup": [
+    {
+      "command": "npm",
+      "args": ["ci"],
+      "timeoutSeconds": 600
+    },
+    {
+      "command": "npm",
+      "args": ["--prefix", "../backend", "ci"],
+      "env": {
+        "PUPPETEER_SKIP_DOWNLOAD": "true"
+      },
+      "timeoutSeconds": 600
+    },
+    {
+      "command": "node",
+      "args": [
+        "../backend/node_modules/prisma/build/index.js",
+        "generate",
+        "--schema",
+        "../backend/prisma/schema.prisma"
+      ],
+      "timeoutSeconds": 300
+    }
+  ],
+  "assertions": [
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": ["test"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "backend-tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": ["--prefix", "../backend", "test"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "frontend-builds",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "desktop-starts-and-exits",
+      "kind": "process",
+      "command": ".\\node_modules\\.bin\\electron.cmd",
+      "args": [
+        ".",
+        "--no-sandbox",
+        "--smoke-test",
+        "--user-data-dir=release\\smoke-user-data"
+      ],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    }
+  ]
+}

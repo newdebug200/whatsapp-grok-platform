@@ -1,0 +1,563 @@
+{
+  "schema": "clarification-questions/v1",
+  "generated_at": "2026-11-07T11:21:00Z",
+  "user_input": "Work in C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform on the existing work_desktop branch. User clarified the intended architecture: an installable Windows/Ubuntu desktop product from whatsapp-grok-platform; the Botora Node backend, UI, local DB and WhatsApp session should run on the user's own computer (not require a public hosted dashboard/backend); botora-admin at https://botora.bluelifetech.site remains the online central admin/service for accounts, subscriptions and credits. User's “APK desktop” refers to the desktop deliverable discussed (.exe/.deb), not Android; do not make an Android app unless they ask. Objective: implement a working local-first Electron desktop package if feasible, ensuring backend lifecycle, safe local configuration/storage, persistent user data and WhatsApp runtime/dependency packaging are addressed. First inspect checkpoint context at c:\\Users\\allad\\.copilot\\session-state\\92b7d245-015d-4104-b780-4c563c248077\\checkpoints\\005-pr-parer-botora-desktop.md and the current code in both repos, especially backend central-sync security/config expectations. Then implement the smallest complete design on work_desktop. Do not commit or push. Preserve unrelated work. Run targeted tests/build/package checks and report exact status/blockers, especially whether runtime external assets / Chromium and production admin service auth config prevent claiming fully ready. Do not expose secrets or change botora-admin credentials. Stop after completing this bounded desktop local-backend work; do not make Android support or cloud deployment changes.\n\nClassification: brownfield rewrite/adaptation, in-place; grouping_needed=false. Project facts: existing JavaScript project with backend/, frontend/, docs/, 19,884 LOC; user explicitly specified Electron desktop and local-first backend/runtime, with remote botora-admin still central for accounts/subscriptions/credits. Feasibility: risky/uncertain because Electron packaging of WhatsApp runtime/external Chromium assets and production central-service authentication/configuration need verification; user explicitly wants to proceed if feasible.",
+  "title": "Local-first Botora Desktop Package",
+  "assessment_snapshot": {
+    "intro": "The project profile describes a JavaScript application being adapted into an installable local-first Electron product:",
+    "bullets": [
+      "19,884 lines of JavaScript across backend/, frontend/, and docs/; topology grouping is not required.",
+      "The stated target is Windows and Ubuntu desktop with local backend, UI, database, and WhatsApp runtime; Electron version remains to be determined.",
+      "botora-admin remains the remote central service for accounts, subscriptions, and credits; external runtime assets and production authentication configuration are verification risks."
+    ]
+  },
+  "proposed_outcome": "Package the existing product as a local-first Electron desktop application for Windows and Ubuntu, with its backend, UI, database, persistent user data, and WhatsApp runtime operating on the user's computer, while preserving the remote botora-admin service for central accounts, subscriptions, and credits. Keep the work in-place on work_desktop, preserve unrelated work, avoid Android and cloud deployment changes, and do not commit or push.",
+  "scope": [
+    "frontend",
+    "backend",
+    "generic"
+  ],
+  "status": "answered",
+  "questions": [
+    {
+      "id": "F1",
+      "kit": "frontend",
+      "field": "target.framework",
+      "title": "Desktop framework version",
+      "question": "Which Electron major version should the desktop shell target? The version can also be chosen during implementation after checking compatibility with this project.",
+      "importance": "required",
+      "impact": 5,
+      "recommended": "Electron; choose a compatible supported version during implementation",
+      "default": null,
+      "prefilled": true,
+      "prefilled_value": "Electron; choose a compatible supported version during implementation",
+      "answer": {
+        "value": "Electron; choose a compatible supported version during implementation",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "Electron; choose a compatible supported version during implementation",
+          "label": "Electron; choose a compatible supported version during implementation"
+        },
+        {
+          "value": "Electron 45",
+          "label": "Electron 45"
+        },
+        {
+          "value": "Electron 44",
+          "label": "Electron 44"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "F2",
+      "kit": "frontend",
+      "field": "target.component_library",
+      "title": "UI component library",
+      "question": "Should the desktop package preserve the existing UI as-is, or should the UI be changed to use a specific component library? If a library is required, name it and its version.",
+      "importance": "required",
+      "impact": 4,
+      "recommended": "Keep the existing UI unchanged; no new component library",
+      "default": null,
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Keep the existing UI unchanged; no new component library",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "Keep the existing UI unchanged; no new component library",
+          "label": "Keep the existing UI unchanged; no new component library"
+        },
+        {
+          "value": "Use a named component library (specify in Other)",
+          "label": "Use a named component library (specify in Other)"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "F3",
+      "kit": "frontend",
+      "field": "visual.screenshots",
+      "title": "UI reference",
+      "question": "Are screenshots, recordings, or a reference URL available for the existing UI that the desktop app should preserve? Provide paths or URLs, or indicate none are needed because the UI is only being packaged unchanged.",
+      "importance": "required",
+      "impact": 4,
+      "recommended": null,
+      "default": null,
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Fais juste le nécessaire pour préserve l'intégrité et les fonctionnalité et le fonctionnement de la plateform",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "F4",
+      "kit": "frontend",
+      "field": "visual.design_system",
+      "title": "Design system",
+      "question": "What design system, design-token source, or visual preservation rule should apply to the desktop UI? The catalog default is to match the existing UI pixel-by-pixel using its extracted CSS properties.",
+      "importance": "required",
+      "impact": 3,
+      "recommended": null,
+      "default": "match existing pixel-by-pixel using extracted CSS custom properties",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Fais juste le nécessaire pour préserve l'intégrité et les fonctionnalité et le fonctionnement de la plateform",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "F5",
+      "kit": "frontend",
+      "field": "compliance.accessibility",
+      "title": "Accessibility target",
+      "question": "Which accessibility standard should the desktop UI target?",
+      "importance": "recommended",
+      "impact": 2,
+      "recommended": "WCAG 2.1 AA",
+      "default": "WCAG 2.1 AA",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "WCAG 2.1 AA",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "WCAG 2.1 AA",
+          "label": "WCAG 2.1 AA"
+        },
+        {
+          "value": "WCAG 2.2 AA",
+          "label": "WCAG 2.2 AA"
+        },
+        {
+          "value": "None / not required",
+          "label": "None / not required"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "F6",
+      "kit": "frontend",
+      "field": "compatibility.browsers",
+      "title": "Runtime compatibility",
+      "question": "Which desktop runtime or operating-system compatibility targets should be supported beyond the requested Windows and Ubuntu packages?",
+      "importance": "recommended",
+      "impact": 2,
+      "recommended": "Windows and Ubuntu desktop targets only",
+      "default": "modern evergreen (Chrome, Firefox, Safari, Edge — latest 2 major versions)",
+      "prefilled": true,
+      "prefilled_value": "Windows and Ubuntu desktop targets only",
+      "answer": {
+        "value": "Windows and Ubuntu desktop targets only",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "Windows and Ubuntu desktop targets only",
+          "label": "Windows and Ubuntu desktop targets only"
+        },
+        {
+          "value": "Modern evergreen browsers plus Windows and Ubuntu desktop",
+          "label": "Modern evergreen browsers plus Windows and Ubuntu desktop"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "F7",
+      "kit": "frontend",
+      "field": "responsive.breakpoints",
+      "title": "Responsive behavior",
+      "question": "Should the existing responsive UI be preserved as-is in the desktop app, or should the desktop experience be desktop-only?",
+      "importance": "recommended",
+      "impact": 2,
+      "recommended": "Preserve existing responsive behavior",
+      "default": "mobile-first using existing breakpoints detected from codebase",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Preserve existing responsive behavior",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "Preserve existing responsive behavior",
+          "label": "Preserve existing responsive behavior"
+        },
+        {
+          "value": "Desktop-only layout",
+          "label": "Desktop-only layout"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "F8",
+      "kit": "frontend",
+      "field": "i18n.locales",
+      "title": "Languages",
+      "question": "Which UI locales should the desktop product support?",
+      "importance": "optional",
+      "impact": 1,
+      "recommended": null,
+      "default": "preserve current locales; keep existing i18n library if present",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Fais juste le nécessaire pour préserve l'intégrité et les fonctionnalité et le fonctionnement de la plateform",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "F9",
+      "kit": "frontend",
+      "field": "state_mgmt.preference",
+      "title": "UI state management",
+      "question": "Is there a preferred client-side state-management approach for the desktop product?",
+      "importance": "optional",
+      "impact": 1,
+      "recommended": null,
+      "default": "preserve existing pattern if identifiable; otherwise recommend minimal (component state + server-state library)",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Fais juste le nécessaire pour préserve l'intégrité et les fonctionnalité et le fonctionnement de la plateform",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "F10",
+      "kit": "frontend",
+      "field": "routing.preference",
+      "title": "UI routing",
+      "question": "Is there a preferred routing strategy for the desktop UI?",
+      "importance": "optional",
+      "impact": 1,
+      "recommended": null,
+      "default": "use the de-facto router for the chosen target framework",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Fais juste le nécessaire pour préserve l'intégrité et les fonctionnalité et le fonctionnement de la plateform",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "B1",
+      "kit": "backend",
+      "field": "target.framework",
+      "title": "Backend runtime version",
+      "question": "Which Node.js major version and backend framework should the local backend target? The project profile only identifies a Node.js backend, so this may be selected after checking project compatibility.",
+      "importance": "required",
+      "impact": 5,
+      "recommended": "Node.js backend; choose a compatible supported major during implementation",
+      "default": null,
+      "prefilled": true,
+      "prefilled_value": "Node.js backend; choose a compatible supported major during implementation",
+      "answer": {
+        "value": "Node.js backend; choose a compatible supported major during implementation",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "Node.js backend; choose a compatible supported major during implementation",
+          "label": "Node.js backend; choose a compatible supported major during implementation"
+        },
+        {
+          "value": "Node.js 22; preserve the existing backend framework",
+          "label": "Node.js 22; preserve the existing backend framework"
+        },
+        {
+          "value": "Node.js 24; preserve the existing backend framework",
+          "label": "Node.js 24; preserve the existing backend framework"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "B2",
+      "kit": "backend",
+      "field": "api.contract_preservation",
+      "title": "API compatibility",
+      "question": "What API contract policy should apply while adapting the backend for local desktop operation?",
+      "importance": "required",
+      "impact": 5,
+      "recommended": "must preserve",
+      "default": "must preserve",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "must preserve",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "must preserve",
+          "label": "Must preserve existing API endpoints, payloads, and status codes"
+        },
+        {
+          "value": "can break with versioning",
+          "label": "Breaking changes allowed only with versioning"
+        },
+        {
+          "value": "can break",
+          "label": "Existing API contracts may be redesigned"
+        },
+        {
+          "value": "partial: specify contracts to preserve",
+          "label": "Preserve only specified contracts"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "B3",
+      "kit": "backend",
+      "field": "data.migration_strategy",
+      "title": "Local data migration",
+      "question": "How should existing user data and database state be handled when moving to the local desktop database?",
+      "importance": "required",
+      "impact": 5,
+      "recommended": "TBD / assess in research phase",
+      "default": "TBD / assess in research phase",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "TBD / assess in research phase",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "in-place",
+          "label": "In-place: retain the existing schema/database and update as needed"
+        },
+        {
+          "value": "dual-write",
+          "label": "Dual-write old and new stores during transition"
+        },
+        {
+          "value": "new schema",
+          "label": "Create a new local schema and migrate data"
+        },
+        {
+          "value": "no migration",
+          "label": "No existing data migration; local data starts fresh"
+        },
+        {
+          "value": "TBD / assess in research phase",
+          "label": "Assess migration needs during research"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "B4",
+      "kit": "backend",
+      "field": "auth.framework",
+      "title": "Central service authentication",
+      "question": "How should the local backend authenticate with botora-admin for accounts, subscriptions, and credits? Identify the existing mechanism or state that the current authentication mechanism should be preserved and detected during implementation. Do not provide secrets here.",
+      "importance": "recommended",
+      "impact": 4,
+      "recommended": null,
+      "default": "preserve existing auth mechanism; detect from codebase",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Fais juste le nécessaire pour préserve l'intégrité et les fonctionnalité et le fonctionnement de la plateform",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "B5",
+      "kit": "backend",
+      "field": "nfr.sla",
+      "title": "Performance targets",
+      "question": "Are there latency, availability, or throughput targets for the local backend and central-service synchronization?",
+      "importance": "recommended",
+      "impact": 2,
+      "recommended": null,
+      "default": "match current production baseline; no regression",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "Fais juste le nécessaire pour préserve l'intégrité et les fonctionnalité et le fonctionnement de la plateform",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "G1",
+      "kit": "generic",
+      "field": "success.definition",
+      "title": "Success criteria",
+      "question": "What outcome defines success for this work?",
+      "importance": "required",
+      "impact": 5,
+      "recommended": null,
+      "default": "feature parity with the current system; all existing user-facing behaviors preserved",
+      "prefilled": true,
+      "prefilled_value": "A working local-first Electron desktop package for Windows and Ubuntu, with backend, UI, local DB, persistent user data, and WhatsApp session/runtime on the user's computer; botora-admin remains remote for accounts, subscriptions, and credits; verify targeted tests/build/package status and report blockers, including Chromium/runtime assets and production admin authentication.",
+      "answer": {
+        "value": "A working local-first Electron desktop package for Windows and Ubuntu, with backend, UI, local DB, persistent user data, and WhatsApp session/runtime on the user's computer; botora-admin remains remote for accounts, subscriptions, and credits; verify targeted tests/build/package status and report blockers, including Chromium/runtime assets and production admin authentication.",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "G2",
+      "kit": "generic",
+      "field": "out_of_scope",
+      "title": "Out-of-scope boundaries",
+      "question": "Confirm the explicit boundaries for this work.",
+      "importance": "recommended",
+      "impact": 4,
+      "recommended": null,
+      "default": "no explicit exclusions; agent will infer from project structure",
+      "prefilled": true,
+      "prefilled_value": "No Android app; no cloud deployment changes; do not alter botora-admin credentials; do not commit or push; preserve unrelated work; stop after the bounded local-backend desktop work.",
+      "answer": {
+        "value": "No Android app; no cloud deployment changes; do not alter botora-admin credentials; do not commit or push; preserve unrelated work; stop after the bounded local-backend desktop work.",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    },
+    {
+      "id": "G3",
+      "kit": "generic",
+      "field": "existing_tests.posture",
+      "title": "Test policy",
+      "question": "What test policy should apply to the existing test suite during this work?",
+      "importance": "recommended",
+      "impact": 3,
+      "recommended": "must pass",
+      "default": "must pass",
+      "prefilled": false,
+      "prefilled_value": null,
+      "answer": {
+        "value": "must pass",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "must pass",
+          "label": "All existing tests must pass"
+        },
+        {
+          "value": "can rewrite",
+          "label": "Existing tests may be replaced with equivalent coverage"
+        },
+        {
+          "value": "ignore",
+          "label": "Treat existing tests as outdated; write replacement coverage"
+        },
+        {
+          "value": "partial: specify suites",
+          "label": "Only specified test suites must pass"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "G4",
+      "kit": "generic",
+      "field": "target.output_location",
+      "title": "Change location",
+      "question": "Where should the desktop adaptation be implemented?",
+      "importance": "required",
+      "impact": 3,
+      "recommended": "in-place on the existing work_desktop branch",
+      "default": "new sibling directory: whatsapp-grok-platform-new",
+      "prefilled": true,
+      "prefilled_value": "in-place on the existing work_desktop branch",
+      "answer": {
+        "value": "in-place on the existing work_desktop branch",
+        "source": "user"
+      },
+      "depends_on": null,
+      "options": [
+        {
+          "value": "in-place on the existing work_desktop branch",
+          "label": "In-place on the existing work_desktop branch"
+        },
+        {
+          "value": "new sibling directory: whatsapp-grok-platform-new",
+          "label": "New sibling directory: whatsapp-grok-platform-new"
+        }
+      ],
+      "allow_other": true,
+      "type": "single_select"
+    },
+    {
+      "id": "G5",
+      "kit": "generic",
+      "field": "constraints.additional",
+      "title": "Additional constraints",
+      "question": "Any additional requirements, exclusions, dependencies, compliance rules, or operational constraints not covered above?",
+      "importance": "optional",
+      "impact": 1,
+      "recommended": null,
+      "default": "None beyond the decisions listed in this specification.",
+      "prefilled": true,
+      "prefilled_value": "None beyond the decisions listed in this specification.",
+      "answer": {
+        "value": "None beyond the decisions listed in this specification.",
+        "source": "user"
+      },
+      "depends_on": null,
+      "type": "text",
+      "options": []
+    }
+  ]
+}

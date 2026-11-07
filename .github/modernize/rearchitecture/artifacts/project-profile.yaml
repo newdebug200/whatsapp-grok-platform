@@ -1,0 +1,41 @@
+﻿project:
+  scope_path: "."
+  loc: 19884
+  languages: [javascript]
+  git: true
+  structure:
+    backend: "Node.js local API/backend"
+    frontend: "Browser UI"
+    docs: "Project documentation"
+  notes: "Existing JavaScript application being adapted into a local-first Electron desktop product; central account/subscription/credits service remains remote."
+
+assessment:
+  change_type: rewrite
+  rationale: |
+    The requested change shifts the existing web-oriented Node.js application to an installable desktop product with an Electron shell and local backend/UI/database/WhatsApp runtime, while retaining botora-admin as the remote central service. Recon found 19,884 lines of JavaScript across 109 files and backend/frontend/docs areas.
+  transformations:
+    - fromStack: "Node.js web application"
+      toStack: "Electron desktop application with local Node.js backend"
+      toStackVersion: "Electron version to be determined from current dependency compatibility"
+  grouping_needed: false
+  deep_planning: undecided
+
+progress_sync:
+  run_id: c9129ab4-ff91-48f1-8060-2501246e67e5
+  grouping_mode: none
+  execution_mode: saved
+  plan_start_time: "2026-11-07T11:20:28Z"
+  plan_completed_time: null
+  execution_start_time: null
+  execution_completed_time: null
+  validation_start_time: null
+  validation_completed_time: null
+  total_phases: 0
+  completed_phases: 0
+  total_modules: 2
+  completed_modules: 0
+  total_tasks: 0
+  completed_tasks: 0
+  total_commits: 0
+  build_verified: false
+  test_verified: false

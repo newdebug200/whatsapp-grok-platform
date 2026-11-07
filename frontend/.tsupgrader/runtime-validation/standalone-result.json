@@ -1,0 +1,155 @@
+{
+  "planHash": "5589e743f274d7f50803234f978622f73ea03cc9484170755e695ba6cab3dba2",
+  "phase": "standalone",
+  "recordedAtUtc": "2026-11-07T14:33:55.7621399Z",
+  "retryCount": 3,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 126908,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E whatsapp-grok-frontend@0.1.0 test\r\n\u003E node --test\r\n\r\n\u2714 runs immediately and pauses periodic work while the page is hidden (110.9333ms)\r\n\u2714 does not overlap periodic requests (45.4802ms)\r\n\u2139 tests 2\r\n\u2139 suites 0\r\n\u2139 pass 2\r\n\u2139 fail 0\r\n\u2139 cancelled 0\r\n\u2139 skipped 0\r\n\u2139 todo 0\r\n\u2139 duration_ms 579.0326\r\n",
+        "durationMs": 1814
+      },
+      {
+        "name": "backend-tests-pass",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E whatsapp-grok-backend@1.0.0 test\r\n\u003E node --test\r\n\r\n\u2714 auto mode uses the local Botora Admin API by default (1.825ms)\r\n\u2714 auto mode uses the online API in production (0.4004ms)\r\n\u2714 auto mode detects public and local APP_URL values (1.2039ms)\r\n\u2714 explicit mode can force either API (0.4901ms)\r\n\u2714 an explicit API URL overrides automatic detection (0.5966ms)\r\n\u2714 uses the development service key only for local API communication (0.6117ms)\r\n\u2714 rejects invalid mode, URL and app URL settings (2.4542ms)\r\n\u2714 stores app data beside the backend by default (4.9308ms)\r\n\u2714 puts database support files under the configured user data directory (1.5289ms)\r\nPayloadTooLargeError: request entity too large\r\n    at readStream (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\raw-body\\index.js:163:17)\r\n    at getRawBody (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\raw-body\\index.js:116:12)\r\n    at read (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\body-parser\\lib\\read.js:79:3)\r\n    at jsonParser (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\body-parser\\lib\\types\\json.js:138:5)\r\n    at Layer.handle [as handle_request] (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\express\\lib\\router\\layer.js:95:5)\r\n    at trim_prefix (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\express\\lib\\router\\index.js:328:13)\r\n    at C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\express\\lib\\router\\index.js:286:9\r\n    at router.process_params (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\express\\lib\\router\\index.js:346:12)\r\n    at next (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\express\\lib\\router\\index.js:280:10)\r\n    at expressInit (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\backend\\node_modules\\express\\lib\\middleware\\init.js:40:5)\r\n\u2714 reference documents can be uploaded, reviewed, validated, and deleted per profile (425.4484ms)\r\n\u2714 serves Ogg voice notes as MP3 for browser playback while keeping the archive unchanged (2356.882ms)\r\n\u2714 returns the newest conversation page in chronological order (193.7404ms)\r\n\u2714 recovers older sent media from WhatsApp history and persists its local path (189.2447ms)\r\n\u2714 restores a voice message when its archived file is missing from uploads (199.3437ms)\r\n\u2714 restarting a completed campaign resets all targets and completion state atomically (4.2239ms)\r\n\u2714 campaign upload receives file variants separately from campaign text (246.9675ms)\r\n\u2714 multipart campaign creation preserves its name and can be loaded by id (79.7418ms)\r\n\u2714 campaign selects one variant for each contact (2.2822ms)\r\n\u2714 campaign variant selection rejects an empty message list (2.699ms)\r\n\u2714 extracts UTF-8 text and removes its BOM (1.5484ms)\r\n\u2714 extracts delimited rows from a CSV file (24.5741ms)\r\n\u2714 extracts worksheet rows from an XLSX workbook (119.4042ms)\r\n\u2714 extracts raw text from a DOCX document (223.1089ms)\r\n\u2714 extracts selectable text from a PDF (604.6069ms)\r\n\u2714 asks the business to replace scanned PDFs when no selectable text exists (2.9184ms)\r\n\u2714 rejects unsupported, invalid, empty, and oversized text files (0.552ms)\r\n\u2714 persists incoming media with safe metadata and an on-disk file (25.1974ms)\r\n\u2714 does not download view-once or disappearing media (0.5618ms)\r\n\u2714 retries transient media download failures before persisting (7.5083ms)\r\n\u2714 extracts serialized WhatsApp IDs and finds a recent media message by type and timestamp (1.0199ms)\r\n\u2714 rejects attempts to delete a media path outside the uploads directory (1.3552ms)\r\n\u2714 preserves archived files and reports insufficient disk space without deleting media (2.6947ms)\r\n\u2714 transcodes an Ogg/Opus voice recording into a playable MP3 and cleans its temporary file (1844.0817ms)\r\n\u2714 builds the autonomous bot personality prompt (4.4569ms)\r\n\u2714 builds the professional bot personality prompt (35.9166ms)\r\n\u2714 builds the friendly bot personality prompt (0.3063ms)\r\n\u2714 builds the commercial bot personality prompt\n\u2026[truncated]",
+        "durationMs": 4950
+      },
+      {
+        "name": "frontend-builds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E whatsapp-grok-frontend@0.1.0 build\r\n\u003E vite build\r\n\r\n\u001B[36mvite v5.4.21 \u001B[32mbuilding for production...\u001B[36m\u001B[39m\r\ntransforming...\r\n\u001B[32m\u2713\u001B[39m 1108 modules transformed.\r\nrendering chunks...\r\ncomputing gzip size...\r\n\u001B[2mdist/\u001B[22m\u001B[32mindex.html                  \u001B[39m\u001B[1m\u001B[2m  2.40 kB\u001B[22m\u001B[1m\u001B[22m\u001B[2m \u2502 gzip:   0.83 kB\u001B[22m\r\n\u001B[2mdist/\u001B[22m\u001B[35massets/index-CpEUJrMn.css   \u001B[39m\u001B[1m\u001B[2m268.62 kB\u001B[22m\u001B[1m\u001B[22m\u001B[2m \u2502 gzip:  44.72 kB\u001B[22m\r\n\u001B[2mdist/\u001B[22m\u001B[36massets/browser-BXdiCFWD.js  \u001B[39m\u001B[1m\u001B[2m 24.53 kB\u001B[22m\u001B[1m\u001B[22m\u001B[2m \u2502 gzip:   9.66 kB\u001B[22m\r\n\u001B[2mdist/\u001B[22m\u001B[36massets/socket-BcxXcwBL.js   \u001B[39m\u001B[1m\u001B[2m 41.57 kB\u001B[22m\u001B[1m\u001B[22m\u001B[2m \u2502 gzip:  13.00 kB\u001B[22m\r\n\u001B[2mdist/\u001B[22m\u001B[36massets/utils-CD-LuDOG.js    \u001B[39m\u001B[1m\u001B[2m 66.04 kB\u001B[22m\u001B[1m\u001B[22m\u001B[2m \u2502 gzip:  22.89 kB\u001B[22m\r\n\u001B[2mdist/\u001B[22m\u001B[36massets/vendor-nf7bT_Uh.js   \u001B[39m\u001B[1m\u001B[2m140.87 kB\u001B[22m\u001B[1m\u001B[22m\u001B[2m \u2502 gzip:  45.26 kB\u001B[22m\r\n\u001B[2mdist/\u001B[22m\u001B[36massets/index-Dv1a90fx.js    \u001B[39m\u001B[1m\u001B[2m425.62 kB\u001B[22m\u001B[1m\u001B[22m\u001B[2m \u2502 gzip: 117.15 kB\u001B[22m\r\n\u001B[32m\u2713 built in 3.45s\u001B[39m\r\n",
+        "durationMs": 4624
+      },
+      {
+        "name": "desktop-starts-and-exits",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": false,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 1,
+        "outputSample": "Downloading Electron binary...\r\nC:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend\\electron\\main.cjs:246\r\napp.on(\u0027before-quit\u0027, event =\u003E {\r\n    ^\r\n\r\nTypeError: Cannot read properties of undefined (reading \u0027on\u0027)\r\n    at Object.\u003Canonymous\u003E (C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend\\electron\\main.cjs:246:5)\r\n    at Module._compile (node:internal/modules/cjs/loader:1937:14)\r\n    at Object..js (node:internal/modules/cjs/loader:2070:10)\r\n    at Module.load (node:internal/modules/cjs/loader:1658:32)\r\n    at Module._load (node:internal/modules/cjs/loader:1450:12)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:268:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47\r\n\r\nNode.js v24.22.2\r\n",
+        "durationMs": 15368
+      }
+    ],
+    "executions": [
+      {
+        "source": "setup[0]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "ci"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "setup[1]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "--prefix",
+          "../backend",
+          "ci"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend",
+        "env": {
+          "PUPPETEER_SKIP_DOWNLOAD": "true"
+        },
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "setup[2]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "args": [
+          "../backend/node_modules/prisma/build/index.js",
+          "generate",
+          "--schema",
+          "../backend/prisma/schema.prisma"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "test"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "backend-tests-pass",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "--prefix",
+          "../backend",
+          "test"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "frontend-builds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "build"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "desktop-starts-and-exits",
+        "resolvedExecutable": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend\\node_modules\\.bin\\electron.cmd",
+        "args": [
+          ".",
+          "--no-sandbox",
+          "--smoke-test",
+          "--user-data-dir=release\\smoke-user-data"
+        ],
+        "cwd": "C:\\Users\\allad\\code_staut_200\\whatsapp-grok-platform\\frontend",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      }
+    ]
+  }
+}
