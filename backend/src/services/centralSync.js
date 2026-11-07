@@ -4,10 +4,12 @@ const {
   resolveBotoraAdminApiUrl,
   resolveBotoraAdminServiceKey
 } = require('../config/botoraAdminApi');
+const { createCooldownRunner } = require('../utils/cooldownRunner');
 const ADMIN_API = resolveBotoraAdminApiUrl();
 const SERVICE_KEY = resolveBotoraAdminServiceKey(process.env, ADMIN_API);
 const SERVICE_HEADERS = { 'X-Botora-Service-Key': SERVICE_KEY };
 let featureCache = { at: 0, values: {} };
+const runCreditUsageSync = createCooldownRunner(5 * 60 * 1000);
 
 async function reportActivity(accountId, eventType, payload = {}, tokensUsed = null, creditsUsed = null) {
   if (!accountId || !eventType) return false;
@@ -136,23 +138,28 @@ async function getCredits(accountId) {
 
 async function syncCreditUsage(accountId, page = 1, perPage = 1000) {
   if (!accountId) return false;
-  try {
-    const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
-    if (!account?.email) return false;
-    const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'credit-usage', email: account.email, page, per_page: perPage }, timeout: 15000 });
-    const rows = response.data?.usage || [];
-    for (const row of rows) {
-      let meta = {};
-      try { meta = JSON.parse(row.meta || '{}'); } catch (_) {}
-      const conversion = meta.conversion || {};
-      await prisma.creditUsage.upsert({
-        where: { central_id: Number(row.id) },
-        update: { account_id: Number(accountId), event_type: String(row.event_type || 'ai.usage'), tokens_used: Number(meta.tokens_used || 0), credits_used: Number(row.credits_used || 0), tokens_per_unit: Number(conversion.tokens_per_unit || 100000), credits_per_unit: Number(conversion.credits_per_unit || 1), xof_per_unit: Number(conversion.xof_per_unit ?? 120), metadata: JSON.stringify(meta.payload || {}) },
-        create: { central_id: Number(row.id), account_id: Number(accountId), event_type: String(row.event_type || 'ai.usage'), tokens_used: Number(meta.tokens_used || 0), credits_used: Number(row.credits_used || 0), tokens_per_unit: Number(conversion.tokens_per_unit || 100000), credits_per_unit: Number(conversion.credits_per_unit || 1), xof_per_unit: Number(conversion.xof_per_unit ?? 120), metadata: JSON.stringify(meta.payload || {}) }
-      });
+  return runCreditUsageSync(Number(accountId), async () => {
+    try {
+      const account = await prisma.account.findUnique({ where: { id: Number(accountId) }, select: { email: true } });
+      if (!account?.email) return false;
+      const response = await axios.get(`${ADMIN_API}/api/admin.php`, { params: { resource: 'credit-usage', email: account.email, page, per_page: perPage }, timeout: 15000 });
+      const rows = response.data?.usage || [];
+      for (const row of rows) {
+        let meta = {};
+        try { meta = JSON.parse(row.meta || '{}'); } catch (_) {}
+        const conversion = meta.conversion || {};
+        await prisma.creditUsage.upsert({
+          where: { central_id: Number(row.id) },
+          update: { account_id: Number(accountId), event_type: String(row.event_type || 'ai.usage'), tokens_used: Number(meta.tokens_used || 0), credits_used: Number(row.credits_used || 0), tokens_per_unit: Number(conversion.tokens_per_unit || 100000), credits_per_unit: Number(conversion.credits_per_unit || 1), xof_per_unit: Number(conversion.xof_per_unit ?? 120), metadata: JSON.stringify(meta.payload || {}) },
+          create: { central_id: Number(row.id), account_id: Number(accountId), event_type: String(row.event_type || 'ai.usage'), tokens_used: Number(meta.tokens_used || 0), credits_used: Number(row.credits_used || 0), tokens_per_unit: Number(conversion.tokens_per_unit || 100000), credits_per_unit: Number(conversion.credits_per_unit || 1), xof_per_unit: Number(conversion.xof_per_unit ?? 120), metadata: JSON.stringify(meta.payload || {}) }
+        });
+      }
+      return true;
+    } catch (error) {
+      console.warn(`[CentralSync] Usages non synchronisés: ${error.message}`);
+      return false;
     }
-    return true;
-  } catch (error) { console.warn(`[CentralSync] Usages non synchronisés: ${error.message}`); return false; }
+  });
 }
 
 async function getCreditConfig() {

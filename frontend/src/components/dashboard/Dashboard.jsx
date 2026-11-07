@@ -20,6 +20,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { confirmAction } from '../../utils/confirmAction';
 import { showUserAlert } from '../../utils/showUserAlert';
 import { isFeatureEnabled } from '../../utils/featureFlags';
+import { startVisibilityAwarePolling } from '../../utils/visibilityAwarePolling';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -128,12 +129,11 @@ export default function Dashboard() {
   // Refresh credit balance periodically
   useEffect(() => {
     if (!token) return;
-    const interval = setInterval(() => {
+    return startVisibilityAwarePolling(() => {
       axios.get(`${API_URL}/auth/me`)
         .then(r => setCreditBalance(r.data.credit_balance))
         .catch(() => {});
-    }, 30000);
-    return () => clearInterval(interval);
+    }, 120000);
   }, [token]);
 
   const loadContactsForProfile = useCallback((profileId, sock) => {

@@ -6,6 +6,7 @@ import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/dashboard/Dashboard';
 import InstallPrompt from './components/pwa/InstallPrompt';
 import { showUserAlert } from './utils/showUserAlert';
+import { startVisibilityAwarePolling } from './utils/visibilityAwarePolling';
 import './App.css';
 import './theme-overrides.css';
 
@@ -64,11 +65,12 @@ function AppContent() {
       }
     };
 
-    checkCentralHealth();
-    const healthCheck = setInterval(checkCentralHealth, 30000);
+    const stopHealthCheck = startVisibilityAwarePolling(checkCentralHealth, 60000, {
+      immediate: true
+    });
     return () => {
       cancelled = true;
-      clearInterval(healthCheck);
+      stopHealthCheck();
     };
   }, [t]);
 
