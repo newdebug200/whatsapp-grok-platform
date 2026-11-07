@@ -1,13 +1,68 @@
 {
   "name": "whatsapp-grok-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "desktop": "node electron/write-app-url.cjs --allow-local && electron .",
+    "desktop:dist:win": "node electron/write-app-url.cjs && node electron/prepare-icons.cjs && electron-builder --win nsis",
+    "desktop:dist:linux": "node electron/write-app-url.cjs && electron-builder --linux deb"
+  },
+  "build": {
+    "appId": "com.bluelifetech.botora.desktop",
+    "productName": "Botora",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*.cjs",
+      "electron/app-url.json",
+      "public/icons/icon-512.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Network",
+      "icon": "public/icons/icon-512.png"
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnss3",
+        "libxss1",
+        "libasound2"
+      ]
+    }
   },
   "dependencies": {
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
@@ -23,6 +78,9 @@
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.7.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "png-to-ico": "^3.0.2",
     "vite": "^5.4.21"
   },
   "overrides": {

@@ -24,6 +24,17 @@ SanRobot est une plateforme web qui permet à chaque utilisateur de connecter so
 | WhatsApp | whatsapp-web.js + Puppeteer |
 | PWA | manifest.json, Service Worker manuel |
 
+## Application Desktop
+
+La branche `work_desktop` ajoute un client Electron qui ouvre le tableau de bord
+Botora hébergé. Le site web reste disponible séparément et utilise le même
+backend. Les installateurs Windows `.exe` et Ubuntu `.deb` se construisent via
+GitHub Actions une fois la variable de dépôt `BOTORA_DESKTOP_URL` définie sur
+l’URL HTTPS publique du tableau de bord utilisateur (pas le site Botora Admin).
+Les artefacts peuvent ensuite être téléchargés puis publiés dans la zone de
+téléchargement de votre site. Consultez [frontend/DESKTOP.md](frontend/DESKTOP.md)
+pour les commandes de développement, de build et les limites de signature.
+
 ## Installation rapide
 
 Prérequis : Node.js 22.5 ou plus récent (requis par `node:sqlite` dans le

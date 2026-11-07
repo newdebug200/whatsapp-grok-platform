@@ -1,0 +1,73 @@
+name: Botora Desktop
+
+on:
+  push:
+    branches:
+      - work_desktop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+            artifact: Botora-Windows
+            file: frontend/release/*.exe
+          - os: ubuntu-22.04
+            target: linux
+            artifact: Botora-Ubuntu
+            file: frontend/release/*.deb
+    runs-on: ${{ matrix.os }}
+    env:
+      BOTORA_DESKTOP_URL: ${{ vars.BOTORA_DESKTOP_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Test frontend
+        run: npm test
+        working-directory: frontend
+
+      - name: Build web frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Package Windows installer
+        if: runner.os == 'Windows' && env.BOTORA_DESKTOP_URL != ''
+        run: npm run desktop:dist:win
+        working-directory: frontend
+
+      - name: Package Ubuntu installer
+        if: runner.os == 'Linux' && env.BOTORA_DESKTOP_URL != ''
+        run: npm run desktop:dist:linux
+        working-directory: frontend
+
+      - name: Explain skipped packaging
+        if: env.BOTORA_DESKTOP_URL == ''
+        run: echo "Set the repository variable BOTORA_DESKTOP_URL to the public HTTPS user dashboard URL to produce installers."
+
+      - name: Upload installer
+        if: env.BOTORA_DESKTOP_URL != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.file }}
+          if-no-files-found: error
+          retention-days: 30
