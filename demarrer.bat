@@ -176,7 +176,7 @@ cd /d "%ROOT%\backend"
 
 echo  [INSTALL] Verification et installation des dependances backend...
 echo  Cette etape installe aussi toute nouvelle dependance manquante.
-call npm install --prefer-offline --no-audit --no-fund
+call npm install --prefer-online --no-audit --no-fund
 if %errorlevel% neq 0 (
     echo  [ERREUR] npm install backend a echoue. Verifiez votre connexion.
     cd /d "%ROOT%"
@@ -269,8 +269,8 @@ cd /d "%ROOT%\frontend"
 
 echo  [INSTALL] Verification et installation des dependances frontend...
 echo  SweetAlert2 et toute autre dependance manquante seront installees ici.
-echo  Installation depuis package.json (anciens lockfiles ignores pour eviter les erreurs ETARGET).
-call npm install --package-lock=false --prefer-offline --no-audit --no-fund
+echo  Installation depuis package.json avec verification des versions disponibles en ligne.
+call npm install --package-lock=false --prefer-online --no-audit --no-fund
 if %errorlevel% neq 0 (
     echo  [ERREUR] npm install frontend a echoue.
     cd /d "%ROOT%"
