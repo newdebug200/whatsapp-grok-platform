@@ -11,7 +11,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
-const { fileURLToPath, pathToFileURL } = require('node:url');
+const { fileURLToPath } = require('node:url');
+const { createPrismaSqliteUrl } = require('./sqliteDatabaseUrl.cjs');
 
 const API_ORIGIN = 'http://127.0.0.1:3001';
 const DEV_UI_ORIGIN = 'http://localhost:5173';
@@ -67,7 +68,7 @@ function createBackendEnvironment() {
     BOTORA_ADMIN_API_MODE: 'online',
     BOTORA_ADMIN_AI_PROXY: 'true',
     BOTORA_DATA_DIR: dataPath,
-    DATABASE_URL: pathToFileURL(getDataPath('botora.sqlite')).href,
+    DATABASE_URL: createPrismaSqliteUrl(getDataPath('botora.sqlite')),
     GROQ_API_KEY: '',
     GROK_API_KEY: '',
     HOST: '127.0.0.1',
