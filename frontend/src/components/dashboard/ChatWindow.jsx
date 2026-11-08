@@ -3,6 +3,7 @@ import axios from 'axios';
 import { format } from 'date-fns';
 import { fr, enUS } from 'date-fns/locale';
 import { getContactDisplayName, getContactInitial } from '../../utils/contactDisplay';
+import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { useLanguage } from '../../context/LanguageContext';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const MEDIA_MESSAGE_TYPES = new Set(['image', 'video', 'audio', 'ptt', 'document', 'file', 'sticker']);
@@ -742,7 +743,7 @@ export default function ChatWindow({ contact, socket, waStatus, quickRepliesEnab
       <div className="chat-empty">
         <div className="chat-empty-content">
           <div className="chat-empty-icon">
-            <img src="/icons/icon-192.png" alt="Logo Botora" />
+            <img src={publicAssetUrl('/icons/icon-192.png')} alt="Logo Botora" />
           </div>
           <h3>Botora</h3>
           <p>{t('Select a conversation to view messages')}</p>

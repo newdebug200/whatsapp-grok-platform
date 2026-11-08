@@ -12,7 +12,7 @@
       "command": "npm",
       "args": ["--prefix", "../backend", "ci"],
       "env": {
-        "PUPPETEER_SKIP_DOWNLOAD": "true"
+        "PUPPETEER_CHROME_SKIP_DOWNLOAD": "true"
       },
       "timeoutSeconds": 600
     },
@@ -51,17 +51,27 @@
       "kind": "process",
       "command": "npm",
       "args": ["run", "build"],
+      "env": {
+        "VITE_DESKTOP": "true"
+      },
       "verificationMethod": "exit-code",
       "expected": "0",
       "timeoutSeconds": 300
     },
     {
-      "name": "desktop-starts-and-exits",
+      "name": "desktop-installer-builds",
       "kind": "process",
-      "command": ".\\node_modules\\.bin\\electron.cmd",
+      "command": "npm",
+      "args": ["run", "desktop:dist:win"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 1200
+    },
+    {
+      "name": "desktop-renders-and-exits",
+      "kind": "process",
+      "command": ".\\release\\win-unpacked\\Botora.exe",
       "args": [
-        ".",
-        "--no-sandbox",
         "--smoke-test",
         "--user-data-dir=release\\smoke-user-data"
       ],

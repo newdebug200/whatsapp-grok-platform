@@ -78,6 +78,15 @@ function moveBackendDependencies() {
   );
 }
 
+function removeBuildOnlyBackendFiles() {
+  for (const relativePath of [
+    'node_modules/prisma',
+    'node_modules/.cache/prisma'
+  ]) {
+    fs.rmSync(path.join(stagingDirectory, relativePath), { recursive: true, force: true });
+  }
+}
+
 function build() {
   const target = process.argv[2];
   if (!['--win', '--linux'].includes(target)) {
@@ -88,6 +97,7 @@ function build() {
   const env = {
     ...process.env,
     PUPPETEER_CACHE_DIR: browserCacheDirectory,
+    PUPPETEER_CHROME_SKIP_DOWNLOAD: 'true',
     VITE_API_URL: 'http://127.0.0.1:3001/api',
     VITE_SOCKET_URL: 'http://127.0.0.1:3001',
     VITE_DESKTOP: 'true'
@@ -97,6 +107,8 @@ function build() {
   try {
     runNpm(['ci'], stagingDirectory, env);
     runNpm(['exec', '--', 'prisma', 'generate'], stagingDirectory, env);
+    runNpm(['prune', '--omit=dev'], stagingDirectory, env);
+    removeBuildOnlyBackendFiles();
     moveBackendDependencies();
     runNpm(['run', 'build'], frontendDirectory, env);
     if (target === '--win') {

@@ -21,6 +21,7 @@ import { confirmAction } from '../../utils/confirmAction';
 import { showUserAlert } from '../../utils/showUserAlert';
 import { isFeatureEnabled } from '../../utils/featureFlags';
 import { startVisibilityAwarePolling } from '../../utils/visibilityAwarePolling';
+import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import './Dashboard.css';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
@@ -160,7 +161,7 @@ export default function Dashboard() {
     if (document.hidden && Notification.permission === 'granted') {
       new Notification('Botora — Nouveau message', {
         body: msg?.body || 'Nouveau message WhatsApp reçu',
-        icon: '/icons/icon-96.png',
+        icon: publicAssetUrl('/icons/icon-96.png'),
         silent: true
       });
     }
@@ -335,7 +336,7 @@ export default function Dashboard() {
       if (document.hidden && Notification.permission === 'granted') {
         new Notification('Botora — Reprise humaine requise', {
           body: `Un conseiller doit reprendre la conversation avec ${data.contactName || 'un contact'}.`,
-          icon: '/icons/icon-96.png',
+          icon: publicAssetUrl('/icons/icon-96.png'),
           silent: false
         });
       }
@@ -654,7 +655,7 @@ export default function Dashboard() {
       {(
         <aside className={`app-navigation ${appNavCollapsed ? 'app-navigation-collapsed' : ''}`} aria-label={t('Main navigation')}>
           <button className="app-navigation-brand" onClick={goHome} title="Retour au tableau de bord">
-            <img src="/icons/icon-192.png" alt="Botora" />
+            <img src={publicAssetUrl('/icons/icon-192.png')} alt="Botora" />
             <span>Botora</span>
           </button>
           <button
@@ -742,7 +743,7 @@ export default function Dashboard() {
         <div className="sidebar-header">
           <div className="sidebar-header-top">
             <button className="sidebar-logo sidebar-logo-btn" onClick={goHome} title="Retour au tableau de bord">
-              <img src="/icons/icon-192.png" alt="Botora" className="logo-icon" />
+              <img src={publicAssetUrl('/icons/icon-192.png')} alt="Botora" className="logo-icon" />
               <span className="logo-text">Botora</span>
             </button>
             <div className="sidebar-actions">

@@ -236,9 +236,36 @@ function createWindow() {
     : mainWindow.loadURL(DEV_UI_ORIGIN);
   return loadApp.catch(error => {
     console.error('Impossible de charger Botora Desktop:', error);
-    dialog.showErrorBox('Botora Desktop', `Impossible d’ouvrir l’interface locale.\n${error.message}`);
     if (isSmokeTest) throw error;
+    dialog.showErrorBox('Botora Desktop', `Impossible d’ouvrir l’interface locale.\n${error.message}`);
   });
+}
+
+async function verifyRenderer() {
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const state = await mainWindow.webContents.executeJavaScript(`(() => {
+      const root = document.getElementById('root');
+      const appElement = root?.firstElementChild;
+      const bounds = appElement?.getBoundingClientRect();
+      const images = [...(root?.querySelectorAll('img') ?? [])];
+      return {
+        childCount: root?.childElementCount ?? 0,
+        visible: Boolean(bounds && bounds.width > 0 && bounds.height > 0),
+        imagesReady: images.length > 0 && images.every(image => image.complete),
+        brokenImages: images.filter(image => image.complete && image.naturalWidth === 0).map(image => image.src)
+      };
+    })()`);
+    if (state.visible && state.imagesReady) {
+      if (state.brokenImages.length > 0) {
+        throw new Error(`Ressources d’image manquantes : ${state.brokenImages.join(', ')}`);
+      }
+      console.log(`Botora interface rendered successfully (${state.childCount} root element(s)).`);
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('L’interface Botora ne s’est pas affichée. Les ressources de la page ou le rendu React ont échoué.');
 }
 
 let isShuttingDown = false;
@@ -270,12 +297,15 @@ if (!hasSingleInstanceLock) {
     const appLoaded = createWindow();
     if (process.argv.includes('--smoke-test')) {
       await appLoaded;
+      await verifyRenderer();
       app.quit();
       return;
     }
   }).catch(error => {
     console.error('Botora Desktop n’a pas pu démarrer:', error);
-    dialog.showErrorBox('Démarrage de Botora impossible', error.message);
+    if (!process.argv.includes('--smoke-test')) {
+      dialog.showErrorBox('Démarrage de Botora impossible', error.message);
+    }
     applicationExitCode = 1;
     app.quit();
   });

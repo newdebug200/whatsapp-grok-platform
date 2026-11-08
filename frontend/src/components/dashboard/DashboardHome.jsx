@@ -4,6 +4,7 @@ import FontAwesomeIcon from '../FontAwesomeIcon';
 import { faArrowRight } from '@fortawesome/free-solid-svg-icons/faArrowRight';
 import { faCircleQuestion } from '@fortawesome/free-solid-svg-icons/faCircleQuestion';
 import { faStar } from '@fortawesome/free-solid-svg-icons/faStar';
+import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import './DashboardHome.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -75,7 +76,7 @@ export default function DashboardHome({
     <div className="dh-panel">
       <div className="dh-header">
         <div className="dh-brand">
-          <img src="/icons/icon-192.png" alt="Botora" className="dh-logo" />
+          <img src={publicAssetUrl('/icons/icon-192.png')} alt="Botora" className="dh-logo" />
           <span className="dh-brand-name">Botora</span>
         </div>
         <div className="dh-header-right">

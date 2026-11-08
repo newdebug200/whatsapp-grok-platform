@@ -847,7 +847,7 @@ class WhatsAppManager {
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: sessionId, dataPath: SESSION_BASE }),
       authTimeoutMs: WHATSAPP_AUTH_TIMEOUT_MS,
-      puppeteer: { headless: true, args: puppeteerArgs, protocolTimeout: 600000 }
+      puppeteer: { headless: 'shell', args: puppeteerArgs, protocolTimeout: 600000 }
     });
 
     const entry = {

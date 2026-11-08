@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import './InstallPrompt.css';
 
 export default function InstallPrompt() {
@@ -75,7 +76,7 @@ export default function InstallPrompt() {
           title="Installer Botora"
           aria-label="Installer l'application"
         >
-          <img className="pwa-fab-logo" src="/icons/icon-96.png" alt="" aria-hidden="true" />
+          <img className="pwa-fab-logo" src={publicAssetUrl('/icons/icon-96.png')} alt="" aria-hidden="true" />
           <span>Installer</span>
         </button>
       )}
@@ -83,7 +84,7 @@ export default function InstallPrompt() {
       {showBanner && (
         <div className="pwa-banner">
           <div className="pwa-banner-icon">
-            <img src="/icons/icon-96.png" alt="Botora" />
+            <img src={publicAssetUrl('/icons/icon-96.png')} alt="Botora" />
           </div>
           <div className="pwa-banner-content">
             <div className="pwa-banner-title">Installer Botora</div>
@@ -100,7 +101,7 @@ export default function InstallPrompt() {
         <div className="pwa-ios-overlay" onClick={() => setShowIOSGuide(false)}>
           <div className="pwa-ios-card" onClick={e => e.stopPropagation()}>
             <div className="pwa-ios-header">
-              <img src="/icons/icon-96.png" alt="Botora" />
+              <img src={publicAssetUrl('/icons/icon-96.png')} alt="Botora" />
               <div>
                 <div className="pwa-ios-title">Installer Botora</div>
                 <div className="pwa-ios-sub">sur votre iPhone / iPad</div>

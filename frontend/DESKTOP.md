@@ -40,14 +40,17 @@ cd frontend
 npm run desktop
 ```
 
-Development requires the backend dependencies and a Puppeteer Chrome install.
-From `backend/`, run `npm ci`; Puppeteer installs its browser during this step.
+Development requires the backend dependencies and Puppeteer's Chromium
+headless-shell install. From `backend/`, run `npm ci`; Puppeteer installs its
+browsers during this step.
 
 ## Build installers
 
 Build on the target operating system. The packaging script stages the backend,
-installs platform-specific dependencies, downloads the WhatsApp Chromium
-runtime, generates the frontend with its local API URLs, and packages the app:
+installs only production dependencies, downloads Puppeteer's headless Chromium
+shell for WhatsApp, generates the frontend with relative asset paths and local
+API URLs, and packages the app. It omits the full Chrome browser and Prisma's
+build-only CLI:
 
 ```powershell
 cd frontend
@@ -66,8 +69,7 @@ npm run desktop:dist:linux
 ```
 
 The `.deb` package is written to `frontend/release/`. Installer generation
-requires an Internet connection and downloads a Chromium runtime, so the
-installers are substantially larger than the website frontend alone.
+requires an Internet connection to download the Chromium headless shell.
 
 ## GitHub Actions
 

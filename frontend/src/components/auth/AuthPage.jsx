@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import './AuthPage.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -86,7 +87,7 @@ export default function AuthPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <div className="auth-logo"><img src="/icons/icon-192.png" alt="Botora" className="auth-logo-img" /></div>
+          <div className="auth-logo"><img src={publicAssetUrl('/icons/icon-192.png')} alt="Botora" className="auth-logo-img" /></div>
           <p className="auth-kicker">{t('SMART PLATFORM')}</p>
           <h1 className="auth-title">Botora</h1>
           <p className="auth-subtitle">{t('The intelligence behind your WhatsApp conversations')}</p>
