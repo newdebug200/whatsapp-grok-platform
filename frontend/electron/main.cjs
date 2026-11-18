@@ -112,6 +112,7 @@ function appendBackendLog(stream, chunk) {
 
 async function waitForBackend() {
   const deadline = Date.now() + 60000;
+  let lastHealthError;
   while (Date.now() < deadline) {
     if (backendProcess.exitCode !== null) {
       throw new Error(`Le backend local s’est arrêté (code ${backendProcess.exitCode}). Consultez backend.log dans le dossier Botora de votre profil utilisateur.`);
@@ -121,10 +122,13 @@ async function waitForBackend() {
         signal: AbortSignal.timeout(1500)
       });
       if (response.ok) return;
+      lastHealthError = (await response.text()).slice(0, 300);
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 400));
   }
-  throw new Error('Le backend local n’a pas démarré dans le délai prévu. Consultez backend.log dans le dossier Botora de votre profil utilisateur.');
+  throw new Error(
+    `Le backend local n’a pas démarré dans le délai prévu.${lastHealthError ? ` Dernière vérification : ${lastHealthError}` : ''} Consultez backend.log dans le dossier Botora de votre profil utilisateur.`
+  );
 }
 
 async function startBackend() {

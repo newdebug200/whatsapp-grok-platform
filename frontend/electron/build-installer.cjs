@@ -107,7 +107,10 @@ function build() {
   try {
     runNpm(['ci'], stagingDirectory, env);
     runNpm(['exec', '--', 'prisma', 'generate'], stagingDirectory, env);
-    runNpm(['prune', '--omit=dev'], stagingDirectory, env);
+    runNpm(['prune', '--omit=dev'], stagingDirectory, {
+      ...env,
+      npm_config_ignore_scripts: 'true'
+    });
     removeBuildOnlyBackendFiles();
     moveBackendDependencies();
     runNpm(['run', 'build'], frontendDirectory, env);

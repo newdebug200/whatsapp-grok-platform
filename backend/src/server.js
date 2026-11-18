@@ -80,7 +80,15 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin-central', adminCentralRoutes);
 
-app.get('/api/healthz', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
+app.get('/api/healthz', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', ts: Date.now() });
+  } catch (error) {
+    console.error('[Health] Base de données locale indisponible:', error.message);
+    res.status(503).json({ status: 'error', error: 'Base de données locale indisponible.' });
+  }
+});
 app.get('/api/central-health', async (_req, res) => {
   try {
     const centralSync = require('./services/centralSync');

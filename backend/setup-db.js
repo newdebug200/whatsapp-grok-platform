@@ -299,6 +299,150 @@ CREATE TABLE IF NOT EXISTS "CreditTransaction" (
   "created_at"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY ("account_id") REFERENCES "Account"("id") ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS "KeywordAutoReply" (
+  "id"                 INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "central_id"         INTEGER UNIQUE,
+  "profile_id"         INTEGER  NOT NULL,
+  "keyword"            TEXT     NOT NULL,
+  "keyword_normalized" TEXT     NOT NULL,
+  "response_text"      TEXT     NOT NULL,
+  "is_active"          INTEGER  NOT NULL DEFAULT 1,
+  "central_updated_at" DATETIME,
+  "created_at"         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at"         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("profile_id") REFERENCES "WhatsAppProfile"("id") ON DELETE CASCADE,
+  UNIQUE ("profile_id", "keyword_normalized")
+);
+CREATE INDEX IF NOT EXISTS "KeywordAutoReply_profile_id_is_active_idx"
+  ON "KeywordAutoReply"("profile_id", "is_active");
+
+CREATE TABLE IF NOT EXISTS "DressurQueueItem" (
+  "id"         INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "account_id" INTEGER  NOT NULL,
+  "source_key" TEXT     NOT NULL,
+  "numero"     TEXT     NOT NULL,
+  "message"    TEXT     NOT NULL,
+  "wa_id"      TEXT,
+  "position"   INTEGER  NOT NULL DEFAULT 0,
+  "status"     TEXT     NOT NULL DEFAULT 'pending',
+  "error"      TEXT,
+  "sent_at"    DATETIME,
+  "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("account_id") REFERENCES "Account"("id") ON DELETE CASCADE,
+  UNIQUE ("account_id", "source_key")
+);
+CREATE INDEX IF NOT EXISTS "DressurQueueItem_account_id_status_idx"
+  ON "DressurQueueItem"("account_id", "status");
+
+CREATE TABLE IF NOT EXISTS "PaymentTransaction" (
+  "id"              INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "account_id"      INTEGER  NOT NULL,
+  "provider"        TEXT     NOT NULL DEFAULT 'fedapay',
+  "external_id"     TEXT     NOT NULL UNIQUE,
+  "amount_xof"      INTEGER  NOT NULL,
+  "credits"         REAL     NOT NULL,
+  "status"          TEXT     NOT NULL DEFAULT 'pending',
+  "description"     TEXT,
+  "metadata"        TEXT,
+  "approved_at"     DATETIME,
+  "last_checked_at" DATETIME,
+  "created_at"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("account_id") REFERENCES "Account"("id") ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "PaymentTransaction_account_id_created_at_idx"
+  ON "PaymentTransaction"("account_id", "created_at");
+CREATE INDEX IF NOT EXISTS "PaymentTransaction_account_id_status_idx"
+  ON "PaymentTransaction"("account_id", "status");
+
+CREATE TABLE IF NOT EXISTS "PaymentWebhookEvent" (
+  "id"          INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "payment_id"  INTEGER,
+  "event_id"    TEXT     NOT NULL UNIQUE,
+  "event_type"  TEXT     NOT NULL,
+  "payload"     TEXT     NOT NULL,
+  "received_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("payment_id") REFERENCES "PaymentTransaction"("id") ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS "PaymentWebhookEvent_event_type_received_at_idx"
+  ON "PaymentWebhookEvent"("event_type", "received_at");
+
+CREATE TABLE IF NOT EXISTS "SubscriptionPayment" (
+  "id"              INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "account_id"      INTEGER  NOT NULL,
+  "provider"        TEXT     NOT NULL DEFAULT 'fedapay',
+  "external_id"     TEXT     NOT NULL UNIQUE,
+  "amount_xof"      INTEGER  NOT NULL,
+  "duration_days"   INTEGER  NOT NULL DEFAULT 365,
+  "status"          TEXT     NOT NULL DEFAULT 'pending',
+  "description"     TEXT,
+  "metadata"        TEXT,
+  "approved_at"     DATETIME,
+  "last_checked_at" DATETIME,
+  "created_at"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("account_id") REFERENCES "Account"("id") ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "SubscriptionPayment_account_id_created_at_idx"
+  ON "SubscriptionPayment"("account_id", "created_at");
+CREATE INDEX IF NOT EXISTS "SubscriptionPayment_account_id_status_idx"
+  ON "SubscriptionPayment"("account_id", "status");
+
+CREATE TABLE IF NOT EXISTS "ApiKey" (
+  "id"           INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "key_uid"      TEXT     NOT NULL UNIQUE,
+  "account_id"   INTEGER  NOT NULL,
+  "name"         TEXT     NOT NULL,
+  "prefix"       TEXT     NOT NULL,
+  "key_hash"     TEXT     NOT NULL UNIQUE,
+  "last_used_at" DATETIME,
+  "revoked_at"   DATETIME,
+  "created_at"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("account_id") REFERENCES "Account"("id") ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "ApiKey_account_id_revoked_at_idx"
+  ON "ApiKey"("account_id", "revoked_at");
+
+CREATE TABLE IF NOT EXISTS "CreditUsage" (
+  "id"               INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "central_id"       INTEGER UNIQUE,
+  "account_id"       INTEGER  NOT NULL,
+  "event_type"       TEXT     NOT NULL,
+  "tokens_used"      INTEGER  NOT NULL,
+  "credits_used"     REAL     NOT NULL,
+  "tokens_per_unit"  INTEGER  NOT NULL DEFAULT 100000,
+  "credits_per_unit" REAL     NOT NULL DEFAULT 1,
+  "xof_per_unit"     REAL     NOT NULL DEFAULT 120,
+  "metadata"         TEXT,
+  "created_at"       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("account_id") REFERENCES "Account"("id") ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "CreditUsage_account_id_created_at_idx"
+  ON "CreditUsage"("account_id", "created_at");
+CREATE INDEX IF NOT EXISTS "CreditUsage_created_at_idx"
+  ON "CreditUsage"("created_at");
+
+CREATE TABLE IF NOT EXISTS "SubscriptionPlan" (
+  "id"            INTEGER  NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "name"          TEXT     NOT NULL,
+  "slug"          TEXT     NOT NULL UNIQUE,
+  "description"   TEXT,
+  "price"         REAL     NOT NULL DEFAULT 0,
+  "currency"      TEXT     NOT NULL DEFAULT 'XOF',
+  "credits"       REAL     NOT NULL DEFAULT 0,
+  "duration_days" INTEGER  NOT NULL DEFAULT 30,
+  "max_profiles"  INTEGER  NOT NULL DEFAULT 1,
+  "features"      TEXT,
+  "is_active"     INTEGER  NOT NULL DEFAULT 1,
+  "sort_order"    INTEGER  NOT NULL DEFAULT 0,
+  "created_at"    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at"    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "SubscriptionPlan_is_active_sort_order_idx"
+  ON "SubscriptionPlan"("is_active", "sort_order");
 `);
 
 // ── Migrations idempotentes ───────────────────────────────────────────────
@@ -333,7 +477,9 @@ const migrations = [
   'ALTER TABLE "BotConfig" ADD COLUMN "personality"             TEXT    NOT NULL DEFAULT \'professional\'',
   'ALTER TABLE "BotConfig" ADD COLUMN "system_prompt_override"  TEXT',
   'ALTER TABLE "BotConfig" ADD COLUMN "sentiment_alert"         INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "BotConfig" ADD COLUMN "sentiment_enabled"       INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "BotConfig" ADD COLUMN "media_auto_reply"        INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "BotConfig" ADD COLUMN "ia_group_enabled"        INTEGER NOT NULL DEFAULT 0',
   // Contact
   'ALTER TABLE "Contact" ADD COLUMN "ia_paused"         INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "Contact" ADD COLUMN "sensitive_flagged" INTEGER NOT NULL DEFAULT 0',
@@ -343,11 +489,15 @@ const migrations = [
   'ALTER TABLE "Contact" ADD COLUMN "funnel_stage"      TEXT    NOT NULL DEFAULT \'prospect\'',
   'ALTER TABLE "Contact" ADD COLUMN "unread_count"      INTEGER NOT NULL DEFAULT 0',
   'ALTER TABLE "Contact" ADD COLUMN "is_favorite"       INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE "Contact" ADD COLUMN "is_pinned"         INTEGER NOT NULL DEFAULT 0',
   // Message
   'ALTER TABLE "Message" ADD COLUMN "unread"     INTEGER NOT NULL DEFAULT 1',
   'ALTER TABLE "Message" ADD COLUMN "sentiment"  TEXT',
   'ALTER TABLE "Message" ADD COLUMN "media_path" TEXT',
   'ALTER TABLE "Message" ADD COLUMN "origin"     TEXT NOT NULL DEFAULT \'unknown\'',
+  'ALTER TABLE "Message" ADD COLUMN "wa_msg_id"       TEXT',
+  'ALTER TABLE "Message" ADD COLUMN "media_filename"  TEXT',
+  'ALTER TABLE "Message" ADD COLUMN "media_mime"      TEXT',
   // Campaign
   'ALTER TABLE "Campaign" ADD COLUMN "tag_id"       INTEGER',
   'ALTER TABLE "Campaign" ADD COLUMN "scheduled_at" DATETIME',
@@ -356,6 +506,7 @@ const migrations = [
   // CampaignMessage
   'ALTER TABLE "CampaignMessage" ADD COLUMN "media_url"  TEXT',
   'ALTER TABLE "CampaignMessage" ADD COLUMN "media_type" TEXT',
+  'ALTER TABLE "CampaignMessage" ADD COLUMN "media_path" TEXT',
 ];
 
 for (const stmt of migrations) {
